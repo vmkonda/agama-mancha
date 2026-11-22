@@ -1,0 +1,14 @@
+# Catalog of works the OCR step knows about.
+# The source file lives at data/sources/<id>.pdf (a symlink to the Drive mirror is fine).
+# sha256 pins the exact scan, so OCR results can never silently attach to a different file.
+
+[[work]]
+id = "SL-0001"
+title = "Śrī Mālinīvijayottara Tantra"
+commentary = "Hindi commentary by Paramahaṃsa Miśra"
+languages = ["san", "hin"]
+script = "Devanagari"
+sha256 = "c43bd56b1cb4535506e0b4f9dd9f9d64e2ac4e44368eee7c002162236079d4a6"
+# Page layout seen in the scan: running header, mūla verses, rule,
+# Hindi commentary, footnotes with variant readings (pāṭha).
+notes = "Letterpress, bilevel scan ~300 dpi, stored rotated 270 degrees."

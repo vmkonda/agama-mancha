@@ -1,0 +1,26 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash|Edit|Write|MultiEdit|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "uv run --no-project --quiet python \"$CLAUDE_PROJECT_DIR/.claude/hooks/guard_proton.py\""
+          }
+        ]
+      }
+    ]
+  },
+  "permissions": {
+    "deny": [
+      "Bash(proton-drive filesystem delete:*)",
+      "Bash(proton-drive filesystem trash:*)",
+      "Bash(proton-drive filesystem empty-trash:*)",
+      "Bash(proton-drive filesystem move:*)",
+      "Bash(proton-drive filesystem rename:*)",
+      "Bash(proton-drive filesystem upload:*)",
+      "Bash(proton-drive sharing:*)"
+    ]
+  }
+}

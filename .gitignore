@@ -1,0 +1,8 @@
+# Source books, page images and OCR output are copyrighted material: never commit them.
+data/
+
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.DS_Store

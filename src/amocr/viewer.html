@@ -1,0 +1,266 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OCR Viewer</title>
+<style>
+:root {
+  --bg: #f7f6f3; --panel: #ffffff; --text: #1d1d1b; --muted: #6b6a66; --line: #e3e1dc;
+  --accent: #2f6fd6; --low: #fff1c7; --low-text: #6a4b00; --hl: rgba(47,111,214,.18); --hl-border: #2f6fd6;
+  --del: #fbd9d6; --del-text: #8a1c12; --ins: #d4f0dc; --ins-text: #12602d;
+  --header: #ece9f7; --verse: #e3eefc; --commentary: transparent; --footnote: #f1f0ea; --signature: #f1f0ea; --other: #f1f0ea;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #161615; --panel: #1f1f1d; --text: #e8e6e1; --muted: #9a9890; --line: #33322f;
+    --accent: #7aa7f0; --low: #4a3a0c; --low-text: #f3d68a; --hl: rgba(122,167,240,.22); --hl-border: #7aa7f0;
+    --del: #5a1f1a; --del-text: #ffb4ab; --ins: #173f25; --ins-text: #a6e5b8;
+    --header: #2c2840; --verse: #1d2b40; --footnote: #2a2926; --signature: #2a2926; --other: #2a2926;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #161615; --panel: #1f1f1d; --text: #e8e6e1; --muted: #9a9890; --line: #33322f;
+  --accent: #7aa7f0; --low: #4a3a0c; --low-text: #f3d68a; --hl: rgba(122,167,240,.22); --hl-border: #7aa7f0;
+  --del: #5a1f1a; --del-text: #ffb4ab; --ins: #173f25; --ins-text: #a6e5b8;
+  --header: #2c2840; --verse: #1d2b40; --footnote: #2a2926; --signature: #2a2926; --other: #2a2926;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body { background: var(--bg); color: var(--text); font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; display: flex; flex-direction: column; }
+.deva { font-family: "Kohinoor Devanagari", "Devanagari Sangam MN", "Nirmala UI", "Mangal", "Noto Sans Devanagari", "Lohit Devanagari", sans-serif; font-size: 17px; line-height: 1.8; }
+header { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; padding: 8px 16px; border-bottom: 1px solid var(--line); background: var(--panel); }
+header h1 { font-size: 15px; margin: 0 8px 0 0; font-weight: 600; }
+select, button, input { font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 4px 8px; }
+button { cursor: pointer; }
+button:hover { border-color: var(--accent); }
+button.on { background: var(--accent); color: #fff; border-color: var(--accent); }
+.grow { flex: 1; }
+.muted { color: var(--muted); }
+main { flex: 1; display: grid; grid-template-columns: 1fr 1fr; min-height: 0; }
+.pane { overflow: auto; min-height: 0; }
+#imgpane { background: var(--bg); border-right: 1px solid var(--line); }
+#imgwrap { position: relative; margin: 12px auto; }
+#imgwrap img { display: block; width: 100%; height: auto; background: #fff; }
+#box { position: absolute; border: 2px solid var(--hl-border); background: var(--hl); pointer-events: none; display: none; border-radius: 2px; }
+#textpane { background: var(--panel); padding: 12px 20px 40px; }
+.meta { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-bottom: 10px; font-size: 13px; }
+.ln { padding: 0 6px; border-radius: 4px; white-space: pre-wrap; }
+.ln:hover { background: var(--hl); }
+.ln.low { background: var(--low); color: var(--low-text); }
+.gap { height: 10px; }
+.region { border-radius: 6px; padding: 4px 6px; margin: 6px 0; }
+.region .tag { font: 11px/1 -apple-system, sans-serif; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); padding: 2px 0 4px; }
+.r-header { background: var(--header); } .r-verse { background: var(--verse); } .r-commentary { background: var(--commentary); border: 1px solid var(--line); }
+.r-footnote, .r-signature, .r-other { background: var(--footnote); }
+.diff { white-space: pre-wrap; }
+.diff del { background: var(--del); color: var(--del-text); text-decoration: line-through; }
+.diff ins { background: var(--ins); color: var(--ins-text); text-decoration: none; }
+textarea { width: 100%; min-height: 70vh; resize: vertical; color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 10px; }
+details { margin-top: 16px; font-size: 13px; }
+details li { margin: 2px 0; }
+.legend span { display: inline-block; padding: 0 6px; border-radius: 4px; margin-right: 4px; font-size: 12px; }
+#status { font-size: 13px; }
+@media (max-width: 800px) { main { grid-template-columns: 1fr; } #imgpane { border-right: 0; border-bottom: 1px solid var(--line); max-height: 50vh; } header { padding: 8px 16px; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>OCR Viewer</h1>
+  <select id="work" aria-label="Work"></select>
+  <button id="prev" title="Previous page (←)">◀</button>
+  <select id="page" aria-label="Page"></select>
+  <button id="next" title="Next page (→)">▶</button>
+  <span class="muted">zoom</span><input id="zoom" type="range" min="40" max="250" value="100" aria-label="Image zoom">
+  <span class="grow"></span>
+  <button id="theme" title="Toggle theme">◐</button>
+</header>
+<header>
+  <button id="m-view" class="on">View</button>
+  <button id="m-diff">Compare</button>
+  <button id="m-edit">Proofread</button>
+  <select id="engA" aria-label="Output"></select>
+  <span id="vs" class="muted">vs</span>
+  <select id="engB" aria-label="Compare against"></select>
+  <span class="grow"></span>
+  <span id="status" class="muted"></span>
+</header>
+<main>
+  <div class="pane" id="imgpane"><div id="imgwrap"><img id="img" alt="Page scan"><div id="box"></div></div></div>
+  <div class="pane" id="textpane"></div>
+</main>
+<script>
+const $ = (id) => document.getElementById(id);
+const S = { work: null, page: null, pages: [], data: null, mode: "view" };
+const store = { get(k) { try { return localStorage.getItem(k); } catch { return null; } }, set(k, v) { try { localStorage.setItem(k, v); } catch {} } };
+const esc = (s) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const api = async (u, opt) => { const r = await fetch(u, opt); const j = await r.json(); if (!r.ok) throw new Error(j.error || r.status); return j; };
+const LOW = 70;
+
+function setTheme(t) { if (t) document.documentElement.dataset.theme = t; else delete document.documentElement.dataset.theme; }
+setTheme(store.get("theme"));
+$("theme").onclick = () => { const cur = document.documentElement.dataset.theme || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"); const t = cur === "dark" ? "light" : "dark"; setTheme(t); store.set("theme", t); };
+
+$("zoom").value = store.get("zoom") || 100;
+const applyZoom = () => { $("imgwrap").style.width = $("zoom").value + "%"; store.set("zoom", $("zoom").value); };
+$("zoom").oninput = applyZoom; applyZoom();
+
+async function init() {
+  const works = await api("/api/works");
+  $("work").innerHTML = works.map((w) => `<option value="${esc(w.id)}">${esc(w.id)} · ${esc(w.title)}</option>`).join("");
+  const [hw, hp] = location.hash.slice(1).split("/");
+  if (hw && works.some((w) => w.id === hw)) $("work").value = hw;
+  await loadWork(hp ? +hp : null);
+}
+
+async function loadWork(page) {
+  S.work = $("work").value;
+  S.pages = await api(`/api/${S.work}/pages`);
+  if (!S.pages.length) { $("textpane").innerHTML = `<p class="muted">No OCR results yet. Run <code>uv run amocr ocr ${esc(S.work)} --pages 51</code>.</p>`; return; }
+  $("page").innerHTML = S.pages.map((p) => `<option value="${p.page}">p${p.page} · ${p.engines.length} output${p.engines.length === 1 ? "" : "s"}${p.groundtruth ? " · GT" : ""}</option>`).join("");
+  const want = S.pages.find((p) => p.page === page) ? page : S.pages[0].page;
+  await loadPage(want);
+}
+
+async function loadPage(page) {
+  S.page = page; $("page").value = page;
+  history.replaceState(null, "", `#${S.work}/${page}`);
+  $("img").src = `/img/${S.work}/${page}`;
+  $("box").style.display = "none";
+  S.data = await api(`/api/${S.work}/${page}`);
+  const labels = Object.keys(S.data.results);
+  const order = (l) => (l === "groundtruth" ? "0" : l.startsWith("claude") ? "1" + l : "2" + l);
+  labels.sort((a, b) => order(a).localeCompare(order(b)));
+  const opt = (l) => `<option value="${esc(l)}">${esc(l === "groundtruth" ? "ground truth" : l)}${S.data.results[l].cer != null ? " · CER " + (S.data.results[l].cer * 100).toFixed(1) + "%" : ""}</option>`;
+  const keepA = $("engA").value, keepB = $("engB").value;
+  $("engA").innerHTML = labels.map(opt).join("");
+  $("engB").innerHTML = labels.map(opt).join("");
+  const firstEngine = labels.find((l) => l !== "groundtruth") || labels[0];
+  $("engA").value = labels.includes(keepA) ? keepA : (store.get("engA") && labels.includes(store.get("engA")) ? store.get("engA") : firstEngine);
+  $("engB").value = labels.includes(keepB) && keepB !== $("engA").value ? keepB : (labels.includes("groundtruth") ? "groundtruth" : labels.find((l) => l !== $("engA").value) || labels[0]);
+  render();
+}
+
+function setMode(m) { S.mode = m; for (const k of ["view", "diff", "edit"]) $("m-" + k).classList.toggle("on", k === m); render(); }
+$("m-view").onclick = () => setMode("view");
+$("m-diff").onclick = () => setMode("diff");
+$("m-edit").onclick = () => setMode("edit");
+$("engA").onchange = () => { store.set("engA", $("engA").value); render(); };
+$("engB").onchange = render;
+$("work").onchange = () => loadWork(null);
+$("page").onchange = () => loadPage(+$("page").value);
+const step = (d) => { const i = S.pages.findIndex((p) => p.page === S.page); const n = S.pages[i + d]; if (n) loadPage(n.page); };
+$("prev").onclick = () => step(-1); $("next").onclick = () => step(1);
+document.addEventListener("keydown", (e) => { if (e.target.tagName === "TEXTAREA" || e.target.tagName === "INPUT") return; if (e.key === "ArrowLeft") step(-1); if (e.key === "ArrowRight") step(1); });
+
+function showBox(bbox) {
+  const img = $("img"); if (!bbox || !img.naturalWidth) return;
+  const s = img.clientWidth / img.naturalWidth, b = $("box");
+  Object.assign(b.style, { display: "block", left: bbox[0] * s - 3 + "px", top: bbox[1] * s - 3 + "px", width: (bbox[2] - bbox[0]) * s + 6 + "px", height: (bbox[3] - bbox[1]) * s + 6 + "px" });
+}
+function scrollToBox(bbox) { const img = $("img"); if (!bbox || !img.naturalWidth) return; const s = img.clientWidth / img.naturalWidth; const pane = $("imgpane"); const y = bbox[1] * s; if (y < pane.scrollTop + 40 || y > pane.scrollTop + pane.clientHeight - 60) pane.scrollTo({ top: y - pane.clientHeight / 3, behavior: "smooth" }); }
+
+function metaLine(r) {
+  const bits = [];
+  if (r.engine) bits.push(`<span><b>${esc(r.engine)}</b> ${esc(r.engine_version || "")}</span>`);
+  if (r.config) bits.push(`<span class="muted">${esc(JSON.stringify(r.config))}</span>`);
+  if (r.confidence != null) bits.push(`<span>mean conf ${r.confidence}</span>`);
+  if (r.cer != null) bits.push(`<span>CER vs ground truth <b>${(r.cer * 100).toFixed(2)}%</b></span>`);
+  return `<div class="meta">${bits.join("")}</div>`;
+}
+
+function renderView(label) {
+  const r = S.data.results[label];
+  let h = metaLine(r);
+  for (const w of r.warnings || []) h += `<div class="ln low">⚠ ${esc(w)}</div>`;
+  h += `<div class="deva">`;
+  const lines = r.lines || [];
+  if (lines.length && lines[0].type) {
+    let cur = null;
+    lines.forEach((ln) => {
+      const key = ln.type + "|" + (ln.verse ?? "");
+      if (key !== cur) { if (cur) h += `</div>`; h += `<div class="region r-${esc(ln.type)}"><div class="tag">${esc(ln.type)}${ln.verse ? " · v" + esc(ln.verse) : ""}</div>`; cur = key; }
+      h += `<div class="ln">${esc(ln.text)}</div>`;
+    });
+    if (cur) h += `</div>`;
+  } else if (lines.length && lines[0].bbox) {
+    h = h.replace('<div class="deva">', `<div class="legend muted" style="margin-bottom:8px"><span class="ln low">conf &lt; ${LOW}</span> hover a line to find it on the page</div><div class="deva">`);
+    let prev = null;
+    lines.forEach((ln, i) => {
+      const para = ln.block + "." + ln.par;
+      if (prev && para !== prev) h += `<div class="gap"></div>`;
+      prev = para;
+      h += `<div class="ln${ln.conf < LOW ? " low" : ""}" data-i="${i}" title="conf ${ln.conf}">${esc(ln.text)}</div>`;
+    });
+  } else {
+    h += r.text.split("\n").map((t) => (t.trim() ? `<div class="ln">${esc(t)}</div>` : `<div class="gap"></div>`)).join("");
+  }
+  h += `</div>`;
+  if (r.changes && r.changes.length) h += `<details open><summary>${r.changes.length} changes from Tesseract</summary><ul class="deva" style="font-size:15px">${r.changes.map((c) => `<li><del style="color:var(--del-text)">${esc(c.from)}</del> → <b>${esc(c.to)}</b> <span class="muted" style="font-size:12px">${esc(c.why || "")}</span></li>`).join("")}</ul></details>`;
+  if (r.uncertain && r.uncertain.length) h += `<details open><summary>${r.uncertain.length} uncertain readings</summary><ul class="deva" style="font-size:15px">${r.uncertain.map((u) => `<li>${esc(u)}</li>`).join("")}</ul></details>`;
+  $("textpane").innerHTML = h;
+  if (lines.length && lines[0].bbox) {
+    $("textpane").querySelectorAll(".ln[data-i]").forEach((el) => {
+      const bb = lines[+el.dataset.i].bbox;
+      el.onmouseenter = () => showBox(bb);
+      el.onmouseleave = () => ($("box").style.display = "none");
+      el.onclick = () => { showBox(bb); scrollToBox(bb); };
+    });
+  }
+}
+
+async function renderDiff(a, b) {
+  if (a === b) { $("textpane").innerHTML = `<p class="muted">Pick two different outputs to compare.</p>`; return; }
+  $("textpane").innerHTML = `<p class="muted">Comparing…</p>`;
+  const d = await api(`/api/${S.work}/${S.page}/diff?a=${encodeURIComponent(a)}&b=${encodeURIComponent(b)}`);
+  const name = (l) => (l === "groundtruth" ? "ground truth" : l);
+  let h = `<div class="meta"><span><del style="background:var(--del);color:var(--del-text)">${esc(name(a))}</del> → <ins style="background:var(--ins);color:var(--ins-text);text-decoration:none">${esc(name(b))}</ins></span><span>CER <b>${(d.cer * 100).toFixed(2)}%</b> (${esc(name(a))} against ${esc(name(b))})</span></div><div class="deva diff">`;
+  for (const [op, x, y] of d.ops) {
+    if (op === "equal") h += esc(x);
+    else { if (x) h += `<del>${esc(x)}</del>`; if (y) h += `<ins>${esc(y)}</ins>`; }
+  }
+  $("textpane").innerHTML = h + `</div>`;
+}
+
+function renderEdit() {
+  const res = S.data.results;
+  const src = res.groundtruth ? "groundtruth" : $("engA").value;
+  $("textpane").innerHTML = `
+    <div class="meta"><span>${res.groundtruth ? "Editing the saved ground truth" : `No ground truth yet; starting from <b>${esc(src)}</b>`}</span></div>
+    <p class="muted" style="font-size:13px;margin-top:0">Type what is printed, one printed line per line, blank line between paragraphs. Keep headers, footnote markers and signature marks.</p>
+    <textarea id="gt" class="deva" spellcheck="false"></textarea>
+    <div style="display:flex;flex-wrap:wrap;gap:8px 14px;margin-top:8px;align-items:center">
+      <label><input type="checkbox" id="verified"> I checked every line against the print (verified)</label>
+      <input id="note" placeholder="note for the next reviewer (optional)" style="flex:1;min-width:200px">
+    </div>
+    <div style="display:flex;gap:8px;margin-top:8px;align-items:center"><button id="save">Save</button><span id="saved" class="muted"></span></div>
+    ${res.groundtruth && res.groundtruth.review && res.groundtruth.review.saved ? `<p class="muted" style="font-size:13px">Last saved by ${esc(res.groundtruth.review.reviewer || "unknown")} on ${esc(res.groundtruth.review.saved.slice(0, 10))}${res.groundtruth.review.verified ? " · verified" : " · draft"}${res.groundtruth.review.note ? " · note: " + esc(res.groundtruth.review.note) : ""}</p>` : ""}`;
+  $("gt").value = res[src].text;
+  const rv = (res.groundtruth && res.groundtruth.review) || {};
+  $("verified").checked = !!rv.verified;
+  $("note").value = rv.note || "";
+  $("save").onclick = async () => {
+    try {
+      const r = await api(`/api/${S.work}/${S.page}/groundtruth`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: $("gt").value, verified: $("verified").checked, note: $("note").value }) });
+      $("saved").textContent = `Saved to ${r.saved}`;
+      const keepMode = S.mode; await loadPage(S.page); if (keepMode === "edit") setMode("edit");
+    } catch (e) { $("saved").textContent = "Save failed: " + e.message; }
+  };
+}
+
+function render() {
+  if (!S.data) return;
+  const diff = S.mode === "diff";
+  $("vs").style.display = $("engB").style.display = diff ? "" : "none";
+  $("engA").style.display = S.mode === "edit" ? "none" : "";
+  const nGt = S.pages.filter((p) => p.groundtruth).length;
+  $("status").textContent = `${S.pages.length} pages with output · ${nGt} with ground truth`;
+  if (S.mode === "view") renderView($("engA").value);
+  else if (diff) renderDiff($("engA").value, $("engB").value);
+  else renderEdit();
+}
+
+init().catch((e) => { $("textpane").innerHTML = `<p>Could not load: ${esc(e.message)}</p>`; });
+</script>
+</body>
+</html>
