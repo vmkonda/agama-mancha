@@ -88,6 +88,27 @@ class Proton:
     def version(self) -> str:
         return self._run("version").stdout.strip()
 
+    def list(self, remote: str) -> list[str]:
+        """Names of the items in a remote folder (read-only)."""
+        import json
+
+        out = self._run("filesystem", "list", _norm(remote), "--json").stdout
+        try:
+            items = json.loads(out)
+        except json.JSONDecodeError:
+            return [ln.strip() for ln in out.splitlines() if ln.strip()]
+        names = []
+        for it in items if isinstance(items, list) else []:
+            if isinstance(it, str):
+                names.append(it)
+            elif isinstance(it, dict):
+                n = it.get("name") or (it.get("node") or {}).get("name") or it.get("path")
+                if isinstance(n, dict):  # SDK result wrapper {ok, value}
+                    n = n.get("value")
+                if n:
+                    names.append(str(n))
+        return names
+
     def exists(self, remote: str) -> bool:
         return self._run("filesystem", "info", _norm(remote), "--json", check=False).returncode == 0
 

@@ -16,9 +16,14 @@ class Tesseract(Engine):
     name = "tesseract"
 
     def __init__(self, langs: str = "san+hin", psm: int = 3, oem: int = 1):
+        from ..setup import MODELS_LABEL, models_present, tessdata_dir
+
         if not shutil.which("tesseract"):
-            raise SystemExit("tesseract not found; see docs/volunteer-guide.md section 2 (macOS, Windows, Linux)")
+            raise SystemExit("tesseract not found; see docs/volunteer-guide.md (or ask Claude: \"set me up\")")
         self.langs, self.psm, self.oem = langs, psm, oem
+        # Prefer the pinned models from `amocr setup-models` so every volunteer reads with identical files.
+        self.tessdata = tessdata_dir() if models_present(langs.split("+")) else None
+        self.models = MODELS_LABEL if self.tessdata else "system"
 
     @cache
     def version(self) -> str:
@@ -26,7 +31,7 @@ class Tesseract(Engine):
         return out.splitlines()[0].split()[-1] if out else "unknown"
 
     def config(self) -> dict:
-        return {"langs": self.langs, "psm": self.psm, "oem": self.oem}
+        return {"langs": self.langs, "psm": self.psm, "oem": self.oem, "models": self.models}
 
     @property
     def label(self) -> str:
@@ -35,7 +40,8 @@ class Tesseract(Engine):
     def run(self, image: Path) -> OcrResult:
         t0 = time.monotonic()
         tsv = subprocess.run(
-            ["tesseract", str(image), "stdout", "-l", self.langs, "--psm", str(self.psm), "--oem", str(self.oem), "tsv"],
+            ["tesseract", str(image), "stdout", "-l", self.langs, "--psm", str(self.psm), "--oem", str(self.oem),
+             *(["--tessdata-dir", str(self.tessdata)] if self.tessdata else []), "tsv"],
             capture_output=True,
             text=True,
             encoding="utf-8",  # Tesseract writes UTF-8; Windows' default code page would garble Devanagari

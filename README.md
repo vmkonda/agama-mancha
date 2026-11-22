@@ -25,14 +25,20 @@ page, as a team. Part of Agama Mancha, a library of the Sarvāmnāya literature.
 ## The short version
 
 ```sh
-uv run amocr doctor                                   # what's missing?
-uv run amocr init --operator "Your Name" --proton-root "/shared-with-me/<library>" --mirror "/shared-with-me/OCR Mirror"
-uv run amocr fetch "/shared-with-me/<library>/<path>/book.pdf"
-uv run amocr ocr <book id>                            # Tesseract, all pages
-claude   # then: "Continue OCR on book <book id>"     # Claude, 10 pages at a time
-uv run amocr push <book id>                           # results to OCR Mirror
-uv run amocr serve                                    # scan and text side by side
+git clone https://github.com/vmkonda/agama-mancha-ocr.git
+cd agama-mancha-ocr
+claude          # then say: "Set me up"
 ```
+
+Claude installs what's missing, downloads the Proton Drive tool and the
+pinned Sanskrit/Hindi models, walks you through the Proton sign-in, and saves
+your name and folders. After that:
+
+- "Start OCR on /shared-with-me/<library>/<path>/book.pdf"
+- "Continue OCR on book <id>"
+- "I want to proofread book <id>"
+
+Everything is also available as plain commands (`uv run amocr --help`).
 
 ## Relation to the team's ocrmypdf method
 

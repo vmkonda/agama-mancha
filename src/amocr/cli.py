@@ -1,7 +1,9 @@
 """amocr: OCR for scanned Sanskrit/Hindi books, page by page, shared via Proton Drive.
 
-Volunteer flow
+Volunteer flow (or just ask Claude: "set me up")
   amocr doctor                               check tools, login and settings
+  amocr setup-proton / setup-models          Proton CLI and pinned Tesseract models, no admin rights
+  amocr folders                              what's shared with you on Proton
   amocr init --operator "Name" --proton-root "/shared-with-me/<team folder>"
   amocr fetch "/shared-with-me/<team folder>/<path>/book.pdf"   download + register + pull others' results
   amocr ocr <book>                           Tesseract on every page (free, no Claude)
@@ -291,12 +293,18 @@ def cmd_doctor(args) -> None:
 
     cfg = cfgmod.load()
     print(f"amocr {__version__}, Python {sys.version.split()[0]}")
+    from .setup import MODELS_LABEL, models_present
+
     tess = shutil.which("tesseract")
-    line(bool(tess), "tesseract installed", "macOS: brew install tesseract tesseract-lang · Windows: UB-Mannheim installer · Linux: apt install tesseract-ocr tesseract-ocr-san tesseract-ocr-hin")
-    if tess:
-        langs = set(subprocess.run(["tesseract", "--list-langs"], capture_output=True, text=True, encoding="utf-8", errors="replace").stdout.split())
-        for lang in ("san", "hin"):
-            line(lang in langs, f"tesseract language '{lang}'", "install the Tesseract language packs (Linux: apt install tesseract-ocr-" + lang + ")")
+    line(bool(tess), "tesseract installed", "macOS: brew install tesseract · Windows: winget install UB-Mannheim.TesseractOCR "
+         "· Linux: apt install tesseract-ocr")
+    if models_present(["san", "hin"]):
+        line(True, f"Sanskrit and Hindi models: pinned set {MODELS_LABEL}")
+    elif tess:
+        langs = set(subprocess.run(["tesseract", "--list-langs"], capture_output=True, text=True, encoding="utf-8",
+                                   errors="replace").stdout.split())
+        line({"san", "hin"} <= langs, "Sanskrit and Hindi models", "uv run amocr setup-models")
+        print("       note: `uv run amocr setup-models` gives every volunteer identical, pinned models")
     line(bool(cfg.operator), f"your name for credits: {cfg.operator!r}", 'amocr init --operator "Your Name"')
     line(bool(cfg.proton_root), f"team folder: {cfg.proton_root!r}", 'amocr init --proton-root "/shared-with-me/<team folder>"')
     try:
@@ -318,6 +326,39 @@ def cmd_doctor(args) -> None:
     line(bool(claude), "Claude Code installed (only needed for the Claude step)", "https://claude.com/claude-code")
     print("all good" if ok else "fix the NO lines above")
     sys.exit(0 if ok else 1)
+
+
+def cmd_setup_proton(args) -> None:
+    from .setup import get_proton_cli
+
+    path, sha = get_proton_cli()
+    cfg = cfgmod.load()
+    cfg.proton_bin = str(path)
+    cfgmod.save(cfg)
+    print(f"installed {path}\n  sha256 {sha}\n  saved as proton_bin in {cfgmod.path()}")
+    print(f"next: sign in with  \"{path}\" auth login  (opens a browser, or prints a link to open on any device)")
+
+
+def cmd_setup_models(args) -> None:
+    from .setup import MODELS_LABEL, get_models, tessdata_dir
+
+    got = get_models()
+    print(f"Tesseract models ({MODELS_LABEL}) in {tessdata_dir()}: " + (f"downloaded {', '.join(got)}" if got else "already up to date"))
+
+
+def cmd_folders(args) -> None:
+    from .proton import Proton, ProtonError
+
+    cfg = cfgmod.load()
+    try:
+        names = Proton(cfg.proton_bin).list(args.path)
+    except ProtonError as e:
+        raise SystemExit(f"{e}\n(signed in? run the Proton CLI with `auth login`)") from None
+    print(f"{args.path}:")
+    for n in names:
+        print(f"  {n}")
+    if not names:
+        print("  (empty: ask the coordinator to share the library and OCR Mirror with your Proton account)")
 
 
 def cmd_serve(args) -> None:
@@ -344,6 +385,10 @@ def main(argv: list[str] | None = None) -> None:
         return p
 
     p = plain_cmd("doctor", cmd_doctor, "check tools, Proton login and settings")
+    plain_cmd("setup-proton", cmd_setup_proton, "download the Proton Drive CLI for this machine into data/bin")
+    plain_cmd("setup-models", cmd_setup_models, "download pinned Sanskrit/Hindi Tesseract models into data/tessdata")
+    p = plain_cmd("folders", cmd_folders, "list Proton folders shared with you (read-only)")
+    p.add_argument("path", nargs="?", default="/shared-with-me")
     p = plain_cmd("init", cmd_init, "save your name and the team folder")
     p.add_argument("--operator", help="your name, credited on every page you process")
     p.add_argument("--proton-root", dest="proton_root", help='team folder, e.g. "/shared-with-me/Library"')

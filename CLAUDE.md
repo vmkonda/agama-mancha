@@ -1,8 +1,8 @@
 # agama-mancha-ocr: notes for Claude sessions
 
 Volunteers and proofreaders run this repo in Claude Code with their own
-accounts. The `ocr-book` skill has the step-by-step flow (continue a book,
-start a book, proofread, upload); `ocr-view` starts the viewer. Guides for
+accounts. Skills: `setup` (new machine, "set me up"), `ocr-book` (start or
+continue a book, proofread, upload), `ocr-view` (the viewer). Guides for
 people are in docs/.
 
 ## Claude as an OCR engine (no API)

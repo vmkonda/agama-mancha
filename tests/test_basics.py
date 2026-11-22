@@ -59,3 +59,9 @@ def test_claude_validate():
         validate(res | {"page": 6}, w, 5, None)
     with pytest.raises(ValueError):
         validate(res | {"regions": [{"type": "bogus", "lines": []}]}, w, 5, None)
+
+
+def test_model_checksums_match_git_blob_ids():
+    from amocr.setup import _git_blob_id
+
+    assert _git_blob_id(b"") == "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391"  # git's empty blob

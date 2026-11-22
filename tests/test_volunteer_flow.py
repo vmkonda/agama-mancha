@@ -110,3 +110,11 @@ def test_push_needs_operator_and_team_folder(tmp_path, monkeypatch, drive):
     main(["init", "--proton-root", TEAM, "--proton-bin", str(fake)])
     with pytest.raises(SystemExit, match="outside|not inside"):
         main(["fetch", "/my-files/elsewhere.pdf"])
+
+
+def test_folders_lists_shares(tmp_path, monkeypatch, drive, capsys):
+    root, fake = drive
+    volunteer(tmp_path, monkeypatch, "Anna", fake)
+    capsys.readouterr()
+    main(["folders"])
+    assert "Team" in capsys.readouterr().out

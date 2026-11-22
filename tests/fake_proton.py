@@ -35,6 +35,14 @@ def main(argv):
         print("unsupported", file=sys.stderr)
         return 2
     cmd, args = argv[1], positional(argv[2:])
+    if cmd == "list":
+        import json
+
+        d = local(args[0])
+        if not d.is_dir():
+            return 1
+        print(json.dumps([{"name": c.name} for c in sorted(d.iterdir())]))
+        return 0
     if cmd == "info":
         return 0 if local(args[0]).exists() else 1
     if cmd == "create-folder":
