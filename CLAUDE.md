@@ -5,6 +5,9 @@ accounts. Skills: `setup` (new machine, "set me up"), `ocr-book` (start or
 continue a book, proofread, upload), `ocr-view` (the viewer). Guides for
 people are in docs/.
 
+Code changes: `main` is protected. Work on a branch and open a pull request
+(see docs/developer-guide.md, "Working together"); never push to `main`.
+
 ## Claude as an OCR engine (no API)
 
 Claude reads page packets in-session; there are no API calls and no API key.

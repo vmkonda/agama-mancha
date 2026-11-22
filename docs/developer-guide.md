@@ -86,6 +86,27 @@ arguments change, update `proton.py` and `tests/fake_proton.py` together.
   determined user; the Proton permission split (viewer on originals) is the
   real boundary.
 
+## Working together
+
+`main` is protected, so several people can work at once without stepping on
+each other:
+
+1. Branch from an up-to-date `main`: `git switch -c <your-name>/<topic>`.
+2. Push the branch and open a pull request (`gh pr create`).
+3. CI runs the tests on Linux, Windows and macOS. All three must pass.
+4. Another developer approves it. Changes to the safety rails (files listed in
+   `.github/CODEOWNERS`) need the maintainer's approval.
+5. Resolve review comments, then **squash and merge**. The branch is deleted
+   automatically.
+
+Nobody can push straight to `main`, force-push it or delete it. If `main`
+moved while you worked, merge or rebase it into your branch; GitHub shows
+when that's needed. Keep pull requests small and about one thing, so two
+people rarely touch the same lines.
+
+If you use Claude Code, ask it to work on a branch and open a pull request;
+it shouldn't push to `main`.
+
 ## Tests
 
 ```sh
@@ -97,6 +118,6 @@ fetch against a fake drive in a temp folder. No network, no Proton account.
 
 ## Conventions
 
-- Keep the scans and text out of git; only code, docs and verified answer keys.
+- Keep the scans, book text and answer keys out of git; only code and docs (the repo is public).
 - Never bind the viewer beyond 127.0.0.1. Remote use goes through `ssh -L`.
 - Anything that sends pages off the machine must check `work.restricted`.

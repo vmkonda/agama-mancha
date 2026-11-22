@@ -1,0 +1,7 @@
+# Changes to these files need the maintainer's review (enforced by the main-branch ruleset).
+# They are the safety rails that keep Claude and the tool from damaging the shared drive.
+/src/amocr/proton.py        @vmkonda
+/src/amocr/setup.py         @vmkonda
+/.claude/                   @vmkonda
+/.github/                   @vmkonda
+/tests/test_safety.py       @vmkonda
