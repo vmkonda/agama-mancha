@@ -7,7 +7,7 @@ engine result, so `amocr eval` scores it the same way.
 
 result.json schema:
 {
-  "work": "SL-0001", "page": 231, "mode": "direct" | "correct",
+  "work": "SL-0001", "page": 231, "mode": "direct" | "correct",   # "review": see claude_review.py
   "model": "claude-opus-5-5",
   "regions": [
     {"type": "header|verse|commentary|footnote|signature|other",
@@ -31,7 +31,7 @@ from . import __version__
 from .catalog import Work
 
 REGION_TYPES = {"header", "verse", "commentary", "footnote", "signature", "other"}
-MODES = {"direct", "correct"}
+MODES = {"direct", "correct", "review", "screen"}
 BANDS = [(0.0, 0.38), (0.30, 0.68), (0.60, 1.0)]  # overlapping, so no line is cut in every band
 BASELINE = "tesseract-san+hin-psm3"
 
@@ -40,9 +40,20 @@ def inbox(work: Work, page: int) -> Path:
     return work.workdir / "claude" / f"p{page:04d}"
 
 
-def prep(work: Work, page: int, image: Path) -> Path:
+def prep(work: Work, page: int, image: Path, mode: str = "bands") -> Path:
+    """mode "bands": whole-page strips + Tesseract text. mode "review": numbered line images + Surya's text."""
     d = inbox(work, page)
+    if mode == "review":
+        from .claude_review import prep_review
+
+        return prep_review(work, page, image, d)
+    if mode == "screen":
+        from .claude_review import prep_screen
+
+        return prep_screen(work, page, d)
     d.mkdir(parents=True, exist_ok=True)
+    for old in list(d.glob("sheet*.png")) + [d / "review.txt", d / "lines.json"]:
+        old.unlink(missing_ok=True)
     im = Image.open(image)
     w, h = im.size
     for i, (a, b) in enumerate(BANDS):
@@ -87,25 +98,61 @@ def to_text(res: dict) -> str:
     return "\n\n".join("\n".join(r["lines"]) for r in res["regions"]) + "\n"
 
 
+def _review_record(work: Work, page: int, d: Path, res: dict) -> tuple[str, list[dict], list[dict], list[dict], list[str], dict]:
+    from .claude_review import apply_review, regions
+
+    if res.get("work") != work.id or res.get("page") != page:
+        raise ValueError(f"result is for {res.get('work')} p{res.get('page')}, expected {work.id} p{page}")
+    packet = json.loads((d / "lines.json").read_text(encoding="utf-8"))
+    config = {"mode": res["mode"], "base": packet["base"]}
+    extra: list[str] = []
+    if res["mode"] == "screen":
+        from .claude_review import read_flags
+
+        flags = read_flags(d, work, page)
+        res = {"block_types": flags.get("block_types", {})} | res
+        flagged = {fl["line"] for fl in flags.get("flags", [])}
+        by_tess = {i for i, ln in enumerate(packet["lines"], 1) if ln.get("tess")}
+        checked = flagged | by_tess
+        touched = {c.get("line") for c in res.get("changes", [])} | {x.get("line") for x in res.get("delete", [])}
+        if touched - checked:
+            extra.append(f"changes to lines that weren't checked against an image: {sorted(touched - checked)}")
+        config |= {"flagged_by_claude": sorted(flagged), "flagged_by_tesseract": sorted(by_tess - flagged),
+                   "lines": len(packet["lines"])}
+    lines, changes, warnings = apply_review(res, packet["lines"])
+    regs = regions(lines)
+    out_lines = [{"text": ln["text"], "type": ln["type"], "verse": None, "bbox": ln.get("bbox")} for ln in lines]
+    return to_text({"regions": regs}), regs, out_lines, changes, warnings + extra, config
+
+
 def import_result(work: Work, page: int, force: bool = False, operator: str = "") -> tuple[Path, list[str]]:
     d = inbox(work, page)
     res = json.loads((d / "result.json").read_text(encoding="utf-8"))
+    if res.get("mode") in ("review", "screen"):
+        text, regs, out_lines, changes, warnings, config = _review_record(work, page, d, res)
+        return _store(work, page, res, text, regs, out_lines, changes, warnings, config, force, operator)
     base = d / "tesseract.txt"
     warnings = validate(res, work, page, base.read_text(encoding="utf-8") if base.exists() else None)
+    lines = [{"text": ln, "type": r["type"], "verse": r.get("verse")} for r in res["regions"] for ln in r["lines"]]
+    return _store(work, page, res, to_text(res), res["regions"], lines, res.get("changes", []), warnings,
+                  {"mode": res["mode"]}, force, operator)
+
+
+def _store(work: Work, page: int, res: dict, text: str, regs: list[dict], lines: list[dict], changes: list[dict],
+           warnings: list[str], config: dict, force: bool, operator: str) -> tuple[Path, list[str]]:
     label = f"claude-code-{res['mode']}-{res.get('model', 'unknown')}"
     out = work.page_dir(page) / "ocr" / f"{label}.json"
     if out.exists() and not force:
         raise FileExistsError(f"{out.name} exists; use --force to replace")
-    text = to_text(res)
     rec = {
         "text": text,
         "confidence": None,
         "engine": "claude-code",
         "engine_version": res.get("model", "unknown"),
-        "config": {"mode": res["mode"]},
-        "lines": [{"text": ln, "type": r["type"], "verse": r.get("verse")} for r in res["regions"] for ln in r["lines"]],
-        "regions": res["regions"],
-        "changes": res.get("changes", []),
+        "config": config,
+        "lines": lines,
+        "regions": regs,
+        "changes": changes,
         "uncertain": res.get("uncertain", []),
         "warnings": warnings,
         "seconds": 0.0,

@@ -20,10 +20,14 @@ in the user's own terminal.
 2. `uv run amocr ocr <id>` if Tesseract hasn't run on all pages yet (`amocr status <id>` shows it). Run it in the background for long books.
 3. `uv run amocr claude-import <id> --ready` (anything left from a previous session).
 4. `uv run amocr claude-next <id> -n 10`. It refuses restricted books: stop and tell the user.
-5. For each packet folder it prints: read band0.png, band1.png, band2.png and
-   tesseract.txt, then write result.json following CLAUDE.md exactly
-   (mode "correct", transcribe as printed, every edit in `changes`, unclear
-   readings in `uncertain`, never drop a line, don't read the book's groundtruth/ folder).
+5. For each packet folder it prints, follow CLAUDE.md exactly and don't read the
+   book's groundtruth/ folder:
+   - **review mode** (the default when Surya is installed): read review.txt and
+     every sheet*.png, check each numbered line against its image, and write
+     result.json with mode "review" and only the corrections.
+   - **bands mode**: read band0.png, band1.png, band2.png and tesseract.txt, and
+     write result.json with mode "correct" (transcribe as printed, every edit in
+     `changes`, unclear readings in `uncertain`, never drop a line).
 6. `uv run amocr claude-import <id> --ready`. If a page warns about dropped
    lines, re-read that page and fix result.json, then import with `--force`
    for that page.

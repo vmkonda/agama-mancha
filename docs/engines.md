@@ -15,6 +15,46 @@ person, so this is not an error rate): Tesseract differed by 6.4% of
 characters, Surya by 1.1%. Measure on verified ground truth before relying on
 these numbers.
 
+## Claude review mode
+
+When Surya is installed, `amocr claude-next` prepares **review** packets by
+default: the page's lines as numbered images, plus Surya's reading under the
+same numbers. Claude checks every line against its image and writes only the
+corrections, instead of transcribing the whole page again. The import applies
+them to Surya's lines, so the result keeps a box on the scan for every line.
+
+On p231 of the pilot book, review mode made 5 corrections (footnote markers, one
+consonant, two words) and roughly halved Claude's tokens for the page, almost
+all of it in what Claude writes. The line images still cover the whole text
+area, so image tokens are about the same as whole-page strips. `--mode bands`
+gives the old behaviour.
+
+### Screen mode (experimental)
+
+`--mode screen` goes further: Claude first reads only Surya's text and flags
+lines that may be misread, then `amocr claude-check` builds images of just those
+lines (plus lines where Tesseract disagrees a lot) for Claude to correct.
+
+Compared with a full review on pages 232-235 of the pilot book (Claude did both;
+nothing verified by a person yet):
+
+| | Full review | Screen |
+|---|---|---|
+| Lines checked against an image | 120 of 120 | 52 of 120 (41 flagged from the text, 11 by Tesseract) |
+| Corrections found | 30 | 28 |
+| Image tokens, 4 pages | ~17,700 | ~8,400 |
+| Text read | each page once | each page once, plus the check list |
+
+The two misses are the expected blind spot, readings that look valid as text:
+a dropped द in a verse (तद्वद्वादश for printed तद्वद्द्वादश) and सांचा for
+printed साँचा. In total, screen mode used roughly a quarter fewer tokens per page
+than a full review. It isn't the default: verses need every line checked.
+
+In this typeface ी often looks like ो (भो, सकतो, शरोर). Surya sometimes reads
+the intended ी and sometimes the shape; proofreaders should expect this.
+
+Surya-derived text is still Surya output for licence purposes (see below).
+
 ## Surya
 
 ### Install (optional)

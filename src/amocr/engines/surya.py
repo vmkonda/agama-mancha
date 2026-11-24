@@ -32,11 +32,49 @@ def html_to_lines(h: str) -> list[str]:
 
 
 def split_like(text: str, targets: list[str]) -> list[str]:
-    """Split one re-flowed paragraph into len(targets) lines, in proportion to the targets' lengths.
+    """Split one re-flowed paragraph into len(targets) lines, breaking where the targets break.
 
-    Each word goes to the line where its midpoint falls, so a misread word or two in either
-    reading only moves a break by a word, never more.
+    The two readings are aligned character by character (Levenshtein), each target line end
+    is mapped into `text` and snapped to the nearest space. Misread characters in either
+    reading barely move a break, unlike splitting by length.
     """
+    words = text.split()
+    if len(targets) <= 1 or not words:
+        return [text] if text else []
+    from rapidfuzz.distance import Levenshtein
+
+    text = " ".join(words)
+    joined = "\n".join(targets)
+    ends = [i for i, ch in enumerate(joined) if ch == "\n"]
+    ops = Levenshtein.opcodes(joined, text)
+
+    def mapped(p: int) -> int:
+        for op in ops:
+            if op.src_start <= p < op.src_end:
+                if op.tag == "equal":
+                    return op.dest_start + (p - op.src_start)
+                span = max(1, op.src_end - op.src_start)
+                return op.dest_start + round((p - op.src_start) * (op.dest_end - op.dest_start) / span)
+        return len(text)
+
+    spaces = [i for i, ch in enumerate(text) if ch == " "]
+    cuts, last = [], -1
+    for e in ends:
+        m = mapped(e)
+        options = [s for s in spaces if s > last] or [len(text)]
+        c = min(options, key=lambda s: abs(s - m))
+        cuts.append(c)
+        last = c
+    out, start = [], 0
+    for c in cuts:
+        out.append(text[start:c].strip())
+        start = c + 1
+    out.append(text[start:].strip())
+    return out
+
+
+def split_by_length(text: str, targets: list[str]) -> list[str]:
+    """Fallback split in proportion to the targets' lengths (each word goes where its midpoint falls)."""
     words = text.split()
     if len(targets) <= 1 or not words:
         return [text] if text else []
