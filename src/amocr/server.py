@@ -65,6 +65,19 @@ def _diff(a: str, b: str) -> list[list[str]]:
     return [[op, a[i1:i2], b[j1:j2]] for op, i1, i2, j1, j2 in sm.get_opcodes()]
 
 
+def _crop(work: Work, page: int, b: list[int], pad: int = 8) -> bytes:
+    import io
+
+    from PIL import Image
+
+    img = work.page_dir(page) / "image.png"
+    with Image.open(img) as im:
+        c = im.crop((max(0, b[0] - pad), max(0, b[1] - pad), min(im.width, b[2] + pad), min(im.height, b[3] + pad)))
+        buf = io.BytesIO()
+        c.save(buf, format="PNG")
+    return buf.getvalue()
+
+
 class Handler(BaseHTTPRequestHandler):
     works: dict[str, Work] = {}
 
@@ -103,6 +116,19 @@ class Handler(BaseHTTPRequestHandler):
             if parts[0] == "api" and len(parts) == 3 and parts[2] == "pages":
                 work, _ = self._work_page(parts[1:])
                 return self._json(_pages(work))
+            if parts[0] == "api" and len(parts) == 3 and parts[2] == "patterns":
+                from . import patterns as pat
+
+                work, _ = self._work_page(parts[1:2])
+                data, n = pat.load(work), pat.counts(work)
+                return self._json({"rules": [r | {"pending": n.get(r["id"], 0)} for r in data["rules"]],
+                                   "decided": len(data["decisions"])})
+            if parts[0] == "api" and len(parts) == 3 and parts[2] == "suggestions":
+                from . import patterns as pat
+
+                work, _ = self._work_page(parts[1:2])
+                rule = parse_qs(url.query).get("rule", [None])[0] or None
+                return self._json(pat.suggest(work, rule, limit=300))
             if parts[0] == "api" and len(parts) == 3:
                 work, page = self._work_page(parts[1:])
                 res = _results(work, page)
@@ -119,6 +145,12 @@ class Handler(BaseHTTPRequestHandler):
                 if a not in res or b not in res:
                     return self._err("unknown result label")
                 return self._json({"ops": _diff(res[a]["text"], res[b]["text"]), "cer": round(cer(res[a]["text"], res[b]["text"]), 4)})
+            if parts[0] == "crop" and len(parts) == 3:
+                work, page = self._work_page(parts[1:])
+                b = [int(float(x)) for x in parse_qs(url.query).get("b", [""])[0].split(",")]
+                if len(b) != 4:
+                    raise ValueError("b=x0,y0,x1,y1")
+                return self._send(_crop(work, page, b), "image/png")
             if parts[0] == "img" and len(parts) == 3:
                 work, page = self._work_page(parts[1:])
                 img = work.page_dir(page) / "image.png"
@@ -132,9 +164,42 @@ class Handler(BaseHTTPRequestHandler):
             return self._err(str(e))
         self._err("not found", HTTPStatus.NOT_FOUND)
 
+    def _body(self) -> dict:
+        n = int(self.headers.get("Content-Length", 0))
+        if n > 2_000_000:
+            raise ValueError("too large")
+        return json.loads(self.rfile.read(n) or b"{}")
+
+    def _post_patterns(self, parts) -> None:
+        """POST /api/<work>/patterns/mine | /api/<work>/patterns/<rule>/enabled | /api/<work>/suggestions/decide"""
+        from . import patterns as pat
+
+        work, _ = self._work_page(parts[1:2])
+        body = self._body()
+        if parts[2:] == ["patterns", "mine"]:
+            data = pat.merge_mined(work, include_claude=bool(body.get("include_claude")))
+            return self._json({"rules": len(data["rules"])})
+        if len(parts) == 5 and parts[2] == "patterns" and parts[4] == "enabled":
+            pat.set_enabled(work, parts[3], bool(body.get("enabled")))
+            return self._json({"ok": True})
+        if parts[2:] == ["suggestions", "decide"]:
+            items = body.get("items") or []
+            if not isinstance(items, list) or not items or len(items) > 500:
+                raise ValueError("items: 1-500 suggestions")
+            done = [pat.decide(work, it, bool(body.get("accept"))) for it in items]
+            return self._json({"done": len(done)})
+        raise LookupError("not found")
+
     def do_POST(self):
         parts = [p for p in urlparse(self.path).path.split("/") if p]
-        # Only writes ground truth for a known work and page: POST /api/<work>/<page>/groundtruth
+        if len(parts) >= 3 and parts[0] == "api" and parts[2] in ("patterns", "suggestions"):
+            try:
+                return self._post_patterns(parts)
+            except LookupError as e:
+                return self._err(str(e), HTTPStatus.NOT_FOUND)
+            except (ValueError, KeyError, TypeError, json.JSONDecodeError) as e:
+                return self._err(str(e))
+        # Otherwise only writes ground truth for a known work and page: POST /api/<work>/<page>/groundtruth
         if not (len(parts) == 4 and parts[0] == "api" and parts[3] == GT):
             return self._err("not found", HTTPStatus.NOT_FOUND)
         try:

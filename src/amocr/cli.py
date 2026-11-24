@@ -257,6 +257,67 @@ def cmd_claude_check(work: Work, args) -> None:
           f"then `amocr claude-import {work.id} --ready`.")
 
 
+def cmd_patterns(work: Work, args) -> None:
+    """Rules learned from corrections, with how many places each would still change (text only)."""
+    from . import patterns as pat
+
+    data = pat.merge_mined(work, include_claude=args.include_claude) if args.mine else pat.load(work)
+    n = pat.counts(work)
+    rules = sorted(data["rules"], key=lambda r: (-n.get(r["id"], 0), -r["count"]))
+    print(f"{work.id}: {len(rules)} rules, {sum(n.values())} pending suggestions, {len(data['decisions'])} decided")
+    for r in rules:
+        state = "on " if r["enabled"] else "off"
+        note = f"  ({r['note']})" if r.get("note") else ""
+        print(f"  {state} {r['id']} {r['kind']:8s} {r['from']} → {r['to']}   seen {r['count']}x, pending {n.get(r['id'], 0)}{note}")
+    if args.examples:
+        for r in rules[: args.examples]:
+            for sgg in pat.suggest(work, r["id"], limit=3):
+                print(f"      p{sgg['page']} line {sgg['n']}: {sgg['line']}")
+
+
+def cmd_line(work: Work, args) -> None:
+    """One line's image and current text, for Claude to look at when a proofreader asks."""
+    from . import patterns as pat
+
+    _no_claude_if_restricted(work)
+    d = pat.draft(work, args.page)
+    if not d:
+        raise SystemExit(f"p{args.page}: no text yet")
+    rows = [ln for ln in d["text"].split("\n") if ln.strip()]
+    lines = range(args.line - 1, args.line + args.context) if args.context else [args.line - 1]
+    out_dir = work.workdir / "claude" / "ask"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    from PIL import Image
+
+    _image(work, _inventory(work)[args.page - 1])
+    with Image.open(work.page_dir(args.page) / "image.png") as im:
+        for i in lines:
+            if not 0 <= i < len(rows):
+                continue
+            box = d["boxes"][i] if i < len(d["boxes"]) else None
+            print(f"p{args.page} line {i + 1} ({d['source']}): {rows[i]}")
+            if box:
+                path = out_dir / f"p{args.page:04d}-l{i + 1:02d}.png"
+                im.crop((max(0, box[0] - 8), max(0, box[1] - 8), min(im.width, box[2] + 8), min(im.height, box[3] + 8))).save(path)
+                print(f"  image: {path}")
+
+
+def cmd_rule(work: Work, args) -> None:
+    """Add a rule (Claude or a person generalising a fix), or switch one on or off."""
+    from . import patterns as pat
+
+    if args.action == "add":
+        if not (args.frm and args.to is not None):
+            raise SystemExit("rule add needs --from and --to")
+        r = pat.add_rule(work, args.kind, args.frm, args.to, note=args.note or "", source=args.source)
+        print(f"added {r['id']}: {r['kind']} {r['from']} → {r['to']}; {pat.counts(work).get(r['id'], 0)} places to review in Suggestions")
+    else:
+        if not args.id:
+            raise SystemExit(f"rule {args.action} needs a rule id (see `amocr patterns {work.id}`)")
+        pat.set_enabled(work, args.id, args.action == "on")
+        print(f"{args.id} {args.action}")
+
+
 def cmd_claude_import(work: Work, args) -> None:
     from .claude_session import import_result, ready
 
@@ -499,6 +560,22 @@ def main(argv: list[str] | None = None) -> None:
     p = book_cmd("claude-next", cmd_claude_next, help="prepare the next pages for Claude")
     p.add_argument("-n", type=int, default=10)
     p.add_argument("--mode", choices=["auto", "review", "screen", "bands"], default="auto", help=mode_help)
+    p = book_cmd("patterns", cmd_patterns, help="rules learned from corrections, with pending suggestions")
+    p.add_argument("--mine", action="store_true", help="learn from the corrected pages first")
+    p.add_argument("--include-claude", action="store_true", help="also learn from Claude's review results")
+    p.add_argument("--examples", type=int, default=0, help="show up to 3 example lines for the first N rules")
+    p = book_cmd("line", cmd_line, help="one line's image and text (line numbers count non-blank lines)")
+    p.add_argument("page", type=int)
+    p.add_argument("line", type=int)
+    p.add_argument("--context", type=int, default=0, help="also the next N lines")
+    p = book_cmd("rule", cmd_rule, help="add a rule, or switch one on/off")
+    p.add_argument("action", choices=["add", "on", "off"])
+    p.add_argument("id", nargs="?")
+    p.add_argument("--kind", choices=["word", "fragment", "regex"], default="regex")
+    p.add_argument("--from", dest="frm")
+    p.add_argument("--to")
+    p.add_argument("--note")
+    p.add_argument("--source", default="claude", help="who wrote it: claude or a person's name")
     p = book_cmd("claude-check", cmd_claude_check, help="screen mode: build images of the flagged lines")
     p.add_argument("--force", action="store_true", help="rebuild check packets that already exist")
     p = book_cmd("claude-import", cmd_claude_import, pages=True, help="store Claude's finished pages")

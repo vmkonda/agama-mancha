@@ -121,7 +121,9 @@ def _review_record(work: Work, page: int, d: Path, res: dict) -> tuple[str, list
                    "lines": len(packet["lines"])}
     lines, changes, warnings = apply_review(res, packet["lines"])
     regs = regions(lines)
-    out_lines = [{"text": ln["text"], "type": ln["type"], "verse": None, "bbox": ln.get("bbox")} for ln in lines]
+    out_lines = [{k: v for k, v in {"text": ln["text"], "type": ln["type"], "verse": ln.get("verse"), "explains": ln.get("explains"),
+                                    "bbox": ln.get("bbox"), "words": ln.get("words")}.items() if v is not None or k in ("text", "type")}
+                 for ln in lines]
     return to_text({"regions": regs}), regs, out_lines, changes, warnings + extra, config
 
 

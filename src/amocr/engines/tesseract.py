@@ -59,7 +59,7 @@ class Tesseract(Engine):
             engine=self.name,
             engine_version=self.version(),
             config=self.config(),
-            lines=[{k: ln[k] for k in ("text", "conf", "bbox", "block", "par")} for ln in lines],
+            lines=[{k: ln[k] for k in ("text", "conf", "bbox", "block", "par", "words")} for ln in lines],
             seconds=round(time.monotonic() - t0, 2),
         )
 
@@ -80,9 +80,11 @@ def parse_tsv(tsv: str) -> list[dict]:
             continue
         key = (int(r["block_num"]), int(r["par_num"]), int(r["line_num"]))
         x, y, w, h = (int(r[k]) for k in ("left", "top", "width", "height"))
-        ln = lines.setdefault(key, {"block": key[0], "par": key[1], "words": [], "word_confs": [], "box": [x, y, x + w, y + h]})
+        ln = lines.setdefault(key, {"block": key[0], "par": key[1], "words": [], "word_confs": [], "word_boxes": [],
+                                    "box": [x, y, x + w, y + h]})
         ln["words"].append(word)
         ln["word_confs"].append(conf)
+        ln["word_boxes"].append({"text": unicodedata.normalize("NFC", word), "conf": conf, "bbox": [x, y, x + w, y + h]})
         b = ln["box"]
         ln["box"] = [min(b[0], x), min(b[1], y), max(b[2], x + w), max(b[3], y + h)]
     out = []
@@ -96,6 +98,7 @@ def parse_tsv(tsv: str) -> list[dict]:
                 "conf": round(sum(ln["word_confs"]) / len(ln["word_confs"]), 2),
                 "bbox": ln["box"],
                 "word_confs": ln["word_confs"],
+                "words": ln["word_boxes"],
             }
         )
     return out

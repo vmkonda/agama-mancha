@@ -77,6 +77,13 @@ details li { margin: 2px 0; }
 #romout { min-width: 6em; font-size: 17px; }
 .keys { font-size: 12px; margin: 6px 0 0; }
 .keys kbd { font: 11px/1 -apple-system, sans-serif; border: 1px solid var(--line); border-radius: 4px; padding: 2px 4px; background: var(--bg); }
+.sg { border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; margin: 6px 0; cursor: pointer; }
+.sg.cur { border-color: var(--accent); box-shadow: 0 0 0 2px var(--hl); }
+.sg img { display: block; max-width: 100%; margin: 4px 0; background: #fff; }
+.sg del { background: var(--del); color: var(--del-text); }
+.sg ins { background: var(--ins); color: var(--ins-text); text-decoration: none; }
+.rules { font-size: 13px; border-collapse: collapse; width: 100%; }
+.rules td { border-bottom: 1px solid var(--line); padding: 2px 6px; vertical-align: top; }
 .draftnote { background: var(--low); color: var(--low-text); border-radius: 6px; padding: 4px 8px; margin-bottom: 8px; font-size: 13px; }
 @media (max-width: 800px) { main { grid-template-columns: 1fr; } #imgpane { border-right: 0; border-bottom: 1px solid var(--line); max-height: 50vh; } header { padding: 8px 16px; } }
 </style>
@@ -96,6 +103,7 @@ details li { margin: 2px 0; }
   <button id="m-view" class="on">View</button>
   <button id="m-diff">Compare</button>
   <button id="m-edit">Proofread</button>
+  <button id="m-sugg" title="Fixes learned from corrections, suggested across the book">Suggestions</button>
   <select id="engA" aria-label="Output"></select>
   <span id="vs" class="muted">vs</span>
   <select id="engB" aria-label="Compare against"></select>
@@ -158,17 +166,18 @@ async function loadPage(page) {
   render();
 }
 
-function setMode(m) { S.mode = m; for (const k of ["view", "diff", "edit"]) $("m-" + k).classList.toggle("on", k === m); render(); }
+function setMode(m) { S.mode = m; for (const k of ["view", "diff", "edit", "sugg"]) $("m-" + k).classList.toggle("on", k === m); render(); }
 $("m-view").onclick = () => setMode("view");
 $("m-diff").onclick = () => setMode("diff");
 $("m-edit").onclick = () => setMode("edit");
+$("m-sugg").onclick = () => setMode("sugg");
 $("engA").onchange = () => { store.set("engA", $("engA").value); render(); };
 $("engB").onchange = render;
 $("work").onchange = () => loadWork(null);
 $("page").onchange = () => loadPage(+$("page").value);
 const step = (d) => { const i = S.pages.findIndex((p) => p.page === S.page); const n = S.pages[i + d]; if (n) loadPage(n.page); };
 $("prev").onclick = () => step(-1); $("next").onclick = () => step(1);
-document.addEventListener("keydown", (e) => { if (e.target.tagName === "TEXTAREA" || e.target.tagName === "INPUT") return; if (e.key === "ArrowLeft") step(-1); if (e.key === "ArrowRight") step(1); });
+document.addEventListener("keydown", (e) => { if (e.target.tagName === "TEXTAREA" || e.target.tagName === "INPUT" || S.mode === "sugg") return; if (e.key === "ArrowLeft") step(-1); if (e.key === "ArrowRight") step(1); });
 
 function showBox(bbox) {
   const img = $("img"); if (!bbox || !img.naturalWidth) return;
@@ -382,12 +391,107 @@ document.addEventListener("keydown", (e) => {
   else if (e.altKey && (e.key === "ArrowDown" || e.key === "ArrowUp")) { e.preventDefault(); S.edit.jump(e.key === "ArrowDown" ? 1 : -1); }
 });
 
+// ---- Suggestions: fixes learned from corrections, offered everywhere else in the book ----
+const SG = { rule: "", items: [], i: 0, rules: [] };
+
+async function renderSugg() {
+  const pane = $("textpane");
+  pane.innerHTML = `<p class="muted">Loading suggestions…</p>`;
+  const pr = await api(`/api/${S.work}/patterns`);
+  SG.rules = pr.rules.sort((a, b) => (b.pending - a.pending) || (b.count - a.count));
+  SG.items = await api(`/api/${S.work}/suggestions${SG.rule ? "?rule=" + encodeURIComponent(SG.rule) : ""}`);
+  SG.i = Math.min(SG.i, Math.max(0, SG.items.length - 1));
+  const on = SG.rules.filter((r) => r.enabled);
+  const ruleOpt = (r) => `<option value="${esc(r.id)}"${r.id === SG.rule ? " selected" : ""}>${esc(r.from)} → ${esc(r.to)} (${r.pending})</option>`;
+  const row = (r) => `<tr><td><input type="checkbox" data-rule="${esc(r.id)}"${r.enabled ? " checked" : ""} title="use this rule"></td>
+    <td class="deva" style="font-size:15px">${esc(r.from)} → ${esc(r.to)}</td><td class="muted">${esc(r.kind)}${r.source !== "mined" ? " · " + esc(r.source) : ""}</td>
+    <td>seen ${r.count}×</td><td>${r.pending} pending</td><td class="muted">${esc(r.note || "")}</td></tr>`;
+  pane.innerHTML = `
+    <div class="meta"><span><b>${SG.items.length}${SG.items.length >= 300 ? "+" : ""}</b> suggestions from ${on.length} rules in use</span>
+      <span class="muted">${pr.decided} decided so far</span></div>
+    <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:8px">
+      <select id="sgrule"><option value="">all rules in use</option>${on.map(ruleOpt).join("")}</select>
+      <button id="sgall" ${SG.rule && SG.items.length ? "" : "disabled"} title="accept every suggestion shown for this rule">Accept all shown</button>
+      <button id="sgmine" title="learn rules from the pages corrected so far">Learn from corrections</button>
+      <label class="muted" style="font-size:13px"><input type="checkbox" id="sgclaude"> include Claude's reviews</label>
+    </div>
+    <p class="keys muted"><kbd>j</kbd>/<kbd>↓</kbd> next · <kbd>k</kbd>/<kbd>↑</kbd> previous · <kbd>a</kbd> accept · <kbd>r</kbd> reject · <kbd>o</kbd> open the page in Proofread.
+      Accepting changes only that page's draft; nothing is marked verified. Reject anything that is printed that way.</p>
+    <div id="sglist"></div>
+    <details style="margin-top:14px"><summary>${SG.rules.length} rules (${on.length} in use)</summary>
+      <p class="muted" style="font-size:12px">Word rules match whole words; fragment rules match inside words and can be too broad, so they start off.
+      Claude can add rules from a session with <code>uv run amocr rule add</code>.</p>
+      <table class="rules">${SG.rules.map(row).join("")}</table></details>`;
+  $("sgrule").onchange = () => { SG.rule = $("sgrule").value; SG.i = 0; renderSugg(); };
+  $("sgmine").onclick = async () => { await api(`/api/${S.work}/patterns/mine`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ include_claude: $("sgclaude").checked }) }); renderSugg(); };
+  $("sgall").onclick = () => { if (confirm(`Accept all ${SG.items.length} shown?`)) sgDecide(SG.items.slice(), true); };
+  pane.querySelectorAll("input[data-rule]").forEach((cb) => (cb.onchange = async () => {
+    await api(`/api/${S.work}/patterns/${cb.dataset.rule}/enabled`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ enabled: cb.checked }) });
+    renderSugg();
+  }));
+  sgList();
+}
+
+function sgList() {
+  const box = $("sglist");
+  if (!SG.items.length) { box.innerHTML = `<p class="muted">Nothing to review. Correct some pages in Proofread, then press "Learn from corrections".</p>`; return; }
+  box.innerHTML = SG.items.map((s, i) => {
+    const line = esc(s.line.slice(0, s.start)) + `<del>${esc(s.from)}</del><ins>${esc(s.to)}</ins>` + esc(s.line.slice(s.end));
+    const img = s.bbox && Math.abs(i - SG.i) < 6 ? `<img loading="lazy" alt="line ${s.n} on page ${s.page}" src="/crop/${S.work}/${s.page}?b=${s.bbox.join(",")}">` : "";
+    return `<div class="sg${i === SG.i ? " cur" : ""}" data-i="${i}"><span class="muted" style="font-size:12px">p${s.page} · line ${s.n}${s.source === "groundtruth" ? " · draft" : ""}</span>
+      ${img}<div class="deva">${line}</div>
+      <div style="display:flex;gap:6px;margin-top:4px"><button data-a="1">Accept</button><button data-a="0">Reject</button></div></div>`;
+  }).join("");
+  box.querySelectorAll(".sg").forEach((el) => {
+    el.onclick = (e) => {
+      const i = +el.dataset.i, b = e.target.closest("button");
+      if (b) sgDecide([SG.items[i]], b.dataset.a === "1"); else sgSelect(i);
+    };
+  });
+  sgSelect(SG.i, false);
+}
+
+function sgSelect(i, rerender = true) {
+  if (!SG.items.length) return;
+  SG.i = Math.max(0, Math.min(i, SG.items.length - 1));
+  if (rerender) return sgList();
+  const s = SG.items[SG.i], el = document.querySelector(`.sg[data-i="${SG.i}"]`);
+  if (el) el.scrollIntoView({ block: "nearest" });
+  const img = $("img"), src = `/img/${S.work}/${s.page}`;
+  const mark = () => { if (s.bbox) { showBox(s.bbox); scrollToBox(s.bbox); } };
+  if (!img.src.endsWith(src)) { img.onload = () => { img.onload = null; mark(); }; img.src = src; } else mark();
+}
+
+async function sgDecide(items, accept) {
+  try {
+    await api(`/api/${S.work}/suggestions/decide`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ items, accept }) });
+  } catch (e) { alert("Could not save: " + e.message); }
+  const gone = new Set(items.map((x) => x.id));
+  SG.items = SG.items.filter((x) => !gone.has(x.id));
+  if (accept) { // other suggestions on the same line now point at old text: refresh them
+    const pages = new Set(items.map((x) => x.page));
+    if (SG.items.some((x) => pages.has(x.page))) return renderSugg();
+  }
+  sgSelect(SG.i);
+}
+
+document.addEventListener("keydown", (e) => {
+  if (S.mode !== "sugg" || e.target.tagName === "INPUT" || e.target.tagName === "SELECT" || e.metaKey || e.ctrlKey) return;
+  const s = SG.items[SG.i];
+  if (e.key === "j" || e.key === "ArrowDown") { e.preventDefault(); sgSelect(SG.i + 1); }
+  else if (e.key === "k" || e.key === "ArrowUp") { e.preventDefault(); sgSelect(SG.i - 1); }
+  else if (s && e.key === "a") sgDecide([s], true);
+  else if (s && e.key === "r") sgDecide([s], false);
+  else if (s && e.key === "o") { const p = s.page; setMode("edit"); loadPage(p); }
+});
+
 function render() {
   if (!S.data) return;
   S.edit = null;
   const diff = S.mode === "diff";
   $("vs").style.display = $("engB").style.display = diff ? "" : "none";
-  $("engA").style.display = S.mode === "edit" ? "none" : "";
+  $("engA").style.display = S.mode === "edit" || S.mode === "sugg" ? "none" : "";
+  if (S.mode === "sugg") return renderSugg().catch((e) => { $("textpane").innerHTML = `<p>Could not load suggestions: ${esc(e.message)}</p>`; });
   const nGt = S.pages.filter((p) => p.groundtruth).length;
   $("status").textContent = `${S.pages.length} pages with output · ${nGt} with ground truth`;
   if (S.mode === "view") renderView($("engA").value);

@@ -80,6 +80,44 @@ For typing longer passages, turn on a Devanagari keyboard in your computer's
 settings (on a Mac: System Settings → Keyboard → Input Sources → Devanagari –
 QWERTY) and switch to it while you type.
 
+## Suggestions: fix a mistake once, everywhere
+
+The reading engine (Surya) makes the same mistakes again and again: in this
+typeface आ often comes out as भ (भाता for आता), -त्व as -स्व, a reph (र्) gets
+dropped. Once you've corrected a few pages, the **Suggestions** tab finds the
+same mistake on every other page that isn't verified yet.
+
+1. Press **Learn from corrections**. It compares your corrected pages with what
+   the engine read and turns each fix into a rule.
+2. Go through the list. Each suggestion shows the line from the scan, the text
+   with the change marked, and the page highlighted on the left.
+   **a** accepts, **r** rejects, **j**/**k** move, **o** opens the page in Proofread.
+3. Reject anything that is printed that way: a misprint stays a misprint.
+   Accepting changes only that page's draft. The page still needs its full
+   line-by-line check before you tick *verified*.
+
+Rules that could do harm start switched off, such as a short word that is
+usually right as read, or a fix inside words. The rule list at the bottom of
+the tab shows them, with a note, and lets you switch any rule on or off.
+
+## Working with Claude while you proofread
+
+Proofread in the browser with your Claude Code session open next to it, and
+talk to Claude as you go:
+
+- **"What does line 12 on page 240 say?"** Claude looks at just that line of the
+  scan (`amocr line`) and tells you its reading. Line numbers count lines of text,
+  as in the Suggestions tab.
+- **"I keep fixing भ to आ at the start of words. Can you make a rule?"** Claude
+  looks at your corrections (`amocr patterns`), writes a general rule, and adds
+  it (`amocr rule add`). Its suggestions appear in the Suggestions tab for you to
+  accept or reject; Claude never changes the text itself.
+- **"Are there other mistakes like these?"** Claude reads the rule list and the
+  pending suggestions, and proposes rules or switches off bad ones.
+
+Each question uses your Claude plan, but far less than having Claude read
+whole pages.
+
 ## Conventions: type what is printed
 
 The goal is a faithful record of **this printed edition**, not a corrected

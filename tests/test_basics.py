@@ -103,11 +103,35 @@ def test_surya_split_like():
 def test_surya_place_lines():
     from amocr.engines.surya import place_lines
 
-    tess = [{"text": "क ख", "bbox": [10, 10, 100, 30]}, {"text": "ग घ", "bbox": [10, 40, 100, 60]},
-            {"text": "elsewhere", "bbox": [10, 500, 100, 520]}]
-    assert place_lines(["क ख ग घ"], [0, 0, 120, 70], tess) == [("क ख", [10, 10, 100, 30]), ("ग घ", [10, 40, 100, 60])]
-    # Line counts that can't be matched fall back to the block box.
-    assert place_lines(["a", "b", "c"], [0, 0, 120, 70], tess) == [("a", [0, 0, 120, 70]), ("b", [0, 0, 120, 70]), ("c", [0, 0, 120, 70])]
+    def tl(text, box, words):
+        return {"text": text, "bbox": box, "words": [{"text": t, "bbox": b} for t, b in words]}
+
+    tess = [tl("क ख", [10, 10, 100, 30], [("क", [10, 10, 40, 30]), ("ख", [60, 10, 100, 30])]),
+            tl("ग घ", [10, 40, 100, 60], [("ग", [10, 40, 40, 60]), ("घ", [60, 40, 100, 60])]),
+            tl("elsewhere", [10, 500, 100, 520], [("elsewhere", [10, 500, 100, 520])])]
+    out = place_lines(["क ख ग घ"], [0, 0, 120, 70], tess)
+    assert [(x["text"], x["bbox"], x["box"]) for x in out] == [("क ख", [10, 10, 100, 30], "tesseract"), ("ग घ", [10, 40, 100, 60], "tesseract")]
+    assert [w["bbox"] for w in out[1]["words"]] == [[10, 40, 40, 60], [60, 40, 100, 60]]
+    # A Tesseract line that runs across two blocks (page number + running title) is cut at the block edge.
+    head = [tl("१९८ श्रीमालिनी", [10, 10, 500, 40], [("१९८", [10, 10, 60, 40]), ("श्रीमालिनी", [300, 10, 500, 40])])]
+    assert place_lines(["१९८"], [0, 0, 100, 50], head)[0]["bbox"] == [10, 10, 60, 40]
+    assert place_lines(["श्रीमालिनी"], [250, 0, 520, 50], head)[0]["bbox"] == [300, 10, 500, 40]
+    # Line counts that can't be matched: the block is shared out evenly, and marked as estimated.
+    est = place_lines(["a", "b"], [0, 0, 100, 40], [])
+    assert [(x["bbox"], x["box"]) for x in est] == [([0, 0, 100, 20], "estimated"), ([0, 20, 100, 40], "estimated")]
+    assert est[0]["words"][0]["box"] == "estimated"
+
+
+def test_surya_word_boxes():
+    from amocr.engines.surya import word_boxes
+
+    tw = [{"text": "स्वदेहं", "bbox": [0, 0, 100, 30]}, {"text": "चिन्तयेत्", "bbox": [120, 0, 260, 30]},
+          {"text": "कष्णं", "bbox": [280, 0, 360, 30]}]  # Tesseract misread कृष्णं
+    out = word_boxes("स्वदेहं चिन्तयेत्कृष्णं", [0, 0, 360, 30], tw)
+    assert [w["text"] for w in out] == ["स्वदेहं", "चिन्तयेत्कृष्णं"]
+    assert out[0]["bbox"] == [0, 0, 100, 30] and out[1]["bbox"] == [120, 0, 360, 30]  # one Surya word over two Tesseract words
+    assert all(w["box"] == "tesseract" for w in out)
+    assert word_boxes("एक दो", [0, 0, 100, 20], [])[1]["box"] == "estimated"
 
 
 def _review_base():
@@ -187,3 +211,40 @@ def test_screen_check_packet(tmp_path):
     (tmp_path / "flags.json").write_text(json.dumps({"work": "B-x", "page": 9, "flags": [{"line": 7}]}))
     with pytest.raises(ValueError):
         prep_check(work, 9, page, tmp_path)
+
+
+def test_surya_classify():
+    from amocr.engines.surya import classify
+
+    verse = ["स्वदेहं चिन्तयेत्कृष्णं वृत्तं १षट्बिन्दुलाञ्छितम् ।", "चलं सचूचूशब्दं च वायवीं धारणां श्रितः ॥ ३४ ॥",
+             "चलत्वं कफजव्याधिविच्छेदाद्वायुवद्भवेत् ।", "षण्मासमभ्यसेद्योगी२ तद्गतेनान्तरात्मना ॥ ३५ ॥", "पश्यते वायुतत्त्वेशानशुद्धानखिलानपि ।"]
+    out = classify("Text", verse)
+    assert [x["type"] for x in out] == ["verse"] * 5
+    assert [x.get("verse") for x in out] == ["34", "34", "35", "35", None]  # last line continues on the next page
+    prose = ["यहाँ से वायवी धारणा का वर्णन किया जा रहा है । वायवी धारणा भी", "योगियों की महत्त्वपूर्ण धारणा है ।",
+             "होते थे । आजकल इसका प्रचार नहीं के बराबर है । शास्त्र", "तक इस धारणा की धृति से साधक ॥ ३५-३६ ॥"]
+    assert classify("Text", prose)[0] == {"type": "commentary", "explains": "35-36"}
+    assert classify("PageHeader", ["१९७"]) == [{"type": "header"}]
+    assert classify("Footnote", ["१. क० पु० पाठः"]) == [{"type": "footnote"}]
+    assert classify("Text", ["१. श्रीत० ८।३४४"]) == [{"type": "footnote"}]
+    assert classify("Text", ["मा० वि०—३"]) == [{"type": "signature"}]
+    # Hindi lines that happen to end in daṇḍas are still commentary.
+    hindi = ["इस प्रक्रिया में सिद्ध हो जाने पर उपलब्धि हो जाती है ।", "साधक इसी क्रम में प्राप्त कर लेता है ।",
+             "का ध्यान करने पर तेज की पराकाष्ठा को प्राप्त कर लेता है ॥ ४१-४२ ॥"]
+    assert {x["type"] for x in classify("Text", hindi)} == {"commentary"}
+
+
+def test_patterns_mining_and_matching():
+    from amocr.patterns import _matches, fragment, word_pairs
+
+    base = "जो रङ्ग भाता है, वह भी योगमागियों के लिये ।"
+    fixed = "जो रङ्ग आता है, वह भी योगमार्गियों के लिये ।"
+    assert word_pairs(base, fixed) == [("भाता", "आता"), ("योगमागियों", "योगमार्गियों")]
+    assert fragment("अग्निमन्त्रेश्वरस्व", "अग्निमन्त्रेश्वरत्व") == ("रस्", "रत्")
+    assert fragment("भाता", "आता") == ("भात", "आत")  # would also hit भात (rice): fragment rules start off
+    word = {"kind": "word", "from": "भाता", "to": "आता"}
+    assert [m[:2] for m in _matches(word, "भाता है। अभाता भाता।")] == [(0, 4), (15, 19)]  # whole words only, not अभाता
+    frag = {"kind": "fragment", "from": "रस्व", "to": "रत्व"}
+    assert [m[2] for m in _matches(frag, "मन्त्रेश्वरस्व की")] == ["रत्व"]
+    rx = {"kind": "regex", "from": r"(\S+)स्व\b", "to": r"\1त्व"}
+    assert list(_matches(rx, "महेश्वरस्व"))[0][2] == "महेश्वरत्व"

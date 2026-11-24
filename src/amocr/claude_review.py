@@ -125,7 +125,8 @@ def _base_lines(work: Work, page: int) -> tuple[Path, list[dict]]:
         t = tess_by_box.get(tuple(ln["bbox"]))
         far = bool(t) and cer(normalize(t), normalize(ln["text"]), ignore_space=True) > TESS_HINT
         lines.append({"text": ln["text"], "bbox": ln["bbox"], "block": ln.get("block"), "label": ln.get("label"),
-                      "tess": t if far else None})
+                      "type": ln.get("type"), "verse": ln.get("verse"), "explains": ln.get("explains"),
+                      "words": ln.get("words"), "tess": t if far else None})
     return base, lines
 
 
@@ -242,7 +243,7 @@ def apply_review(res: dict, base_lines: list[dict]) -> tuple[list[dict], list[di
             raise ValueError(f"block {k}: type must be one of {sorted(REGION_TYPES)}")
 
     def typ(ln: dict) -> str:
-        return types.get(str(ln.get("block")), LABEL_TYPES.get(ln.get("label") or "", "other"))
+        return types.get(str(ln.get("block")), ln.get("type") or LABEL_TYPES.get(ln.get("label") or "", "other"))
 
     out, changes = [], []
 
@@ -262,7 +263,9 @@ def apply_review(res: dict, base_lines: list[dict]) -> tuple[list[dict], list[di
                 text = edits[i]["to"].strip()
                 if text != ln["text"]:
                     changes.append({"from": ln["text"], "to": text, "why": edits[i].get("why", ""), "line": i})
-            out.append({"text": text, "bbox": ln.get("bbox"), "block": ln.get("block"), "type": typ(ln)})
+            out.append({"text": text, "bbox": ln.get("bbox"), "block": ln.get("block"), "type": typ(ln),
+                        "verse": ln.get("verse"), "explains": ln.get("explains"),
+                        "words": ln.get("words") if text == ln["text"] else None})
         add_inserts(i, ln)
     if n and len(edits) / n > 0.5:
         warnings.append(f"{len(edits)} of {n} lines changed: is the base reading this poor, or was a line misnumbered?")
@@ -277,8 +280,9 @@ def regions(lines: list[dict]) -> list[dict]:
     for ln in lines:
         if out and out[-1]["_block"] == ln.get("block") and out[-1]["type"] == ln["type"]:
             out[-1]["lines"].append(ln["text"])
+            out[-1]["verse"] = ln.get("verse") or out[-1]["verse"]
         else:
-            out.append({"type": ln["type"], "verse": None, "lines": [ln["text"]], "_block": ln.get("block")})
+            out.append({"type": ln["type"], "verse": ln.get("verse") or ln.get("explains"), "lines": [ln["text"]], "_block": ln.get("block")})
     for r in out:
         del r["_block"]
     return out

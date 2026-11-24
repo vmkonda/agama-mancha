@@ -100,15 +100,140 @@ def _inside(line_box: list[float], block_box: list[float], margin: float = 8) ->
     return block_box[0] - margin <= cx <= block_box[2] + margin and block_box[1] - margin <= cy <= block_box[3] + margin
 
 
-def place_lines(texts: list[str], block_box: list[float], tess_lines: list[dict]) -> list[tuple[str, list[float]]]:
-    """Pair a block's lines with Tesseract line boxes inside it; re-split a re-flowed paragraph."""
-    inside = sorted((t for t in tess_lines if _inside(t["bbox"], block_box)), key=lambda t: (t["bbox"][1], t["bbox"][0]))
-    if len(texts) == 1 and len(inside) > 1:
-        texts = split_like(texts[0], [t["text"] for t in inside])
-    if len(texts) == len(inside):
-        return [(t, b["bbox"]) for t, b in zip(texts, inside) if t]
-    box = [round(v) for v in block_box]
-    return [(t, box) for t in texts if t]
+def _union(boxes: list[list[float]]) -> list[int]:
+    return [round(min(b[0] for b in boxes)), round(min(b[1] for b in boxes)), round(max(b[2] for b in boxes)), round(max(b[3] for b in boxes))]
+
+
+def sub_lines(block_box: list[float], tess_lines: list[dict]) -> list[dict]:
+    """Tesseract's lines restricted to the words inside this block (a Tesseract line that
+    runs across two Surya blocks, like a page number and a running title, is cut in two)."""
+    out = []
+    for t in tess_lines:
+        words = [w for w in t.get("words") or [] if _inside(w["bbox"], block_box)]
+        if not t.get("words") and _inside(t["bbox"], block_box):  # results saved before word boxes were kept
+            words = [{"text": t["text"], "bbox": t["bbox"]}]
+        if words:
+            out.append({"text": " ".join(w["text"] for w in words), "bbox": _union([w["bbox"] for w in words]), "words": words})
+    return sorted(out, key=lambda t: (t["bbox"][1], t["bbox"][0]))
+
+
+def _even_slices(box: list[float], n: int) -> list[list[int]]:
+    h = (box[3] - box[1]) / max(1, n)
+    return [[round(box[0]), round(box[1] + i * h), round(box[2]), round(box[1] + (i + 1) * h)] for i in range(n)]
+
+
+def word_boxes(text: str, line_box: list[int], tess_words: list[dict]) -> list[dict]:
+    """A box for every word of `text`: from the Tesseract words its characters align with,
+    else by its position along the line."""
+    words = text.split()
+    if not words:
+        return []
+    spans, pos = [], 0
+    for w in words:
+        i = text.find(w, pos)
+        spans.append((i, i + len(w)))
+        pos = i + len(w)
+
+    def estimate(i0: int, i1: int) -> list[int]:
+        x0, x1 = line_box[0], line_box[2]
+        n = max(1, len(text))
+        return [round(x0 + (x1 - x0) * i0 / n), line_box[1], round(x0 + (x1 - x0) * i1 / n), line_box[3]]
+
+    if not tess_words:
+        return [{"text": w, "bbox": estimate(a, b), "box": "estimated"} for w, (a, b) in zip(words, spans)]
+    from rapidfuzz.distance import Levenshtein
+
+    tess_words = sorted(tess_words, key=lambda w: w["bbox"][0])
+    joined, owner = "", []
+    for k, w in enumerate(tess_words):
+        if joined:
+            joined += " "
+            owner.append(None)
+        joined += w["text"]
+        owner += [k] * len(w["text"])
+    ops = Levenshtein.opcodes(text, joined)
+
+    def to_tess(p: int) -> int | None:
+        for op in ops:
+            if op.src_start <= p < op.src_end and op.dest_end > op.dest_start:
+                q = op.dest_start + (p - op.src_start if op.tag == "equal" else
+                                     round((p - op.src_start) * (op.dest_end - op.dest_start) / max(1, op.src_end - op.src_start)))
+                q = min(q, len(owner) - 1)
+                for d in range(len(owner)):  # nearest character that belongs to a word
+                    for c in (q - d, q + d):
+                        if 0 <= c < len(owner) and owner[c] is not None:
+                            return owner[c]
+        return None
+
+    out = []
+    for w, (a, b) in zip(words, spans):
+        hits = {k for k in (to_tess(p) for p in range(a, b)) if k is not None}
+        if hits:
+            out.append({"text": w, "bbox": _union([tess_words[k]["bbox"] for k in hits]), "box": "tesseract"})
+        else:
+            out.append({"text": w, "bbox": estimate(a, b), "box": "estimated"})
+    return out
+
+
+def place_lines(texts: list[str], block_box: list[float], tess_lines: list[dict]) -> list[dict]:
+    """One entry per printed line of the block, each with its own line box and word boxes."""
+    subs = sub_lines(block_box, tess_lines)
+    if len(texts) == 1 and len(subs) > 1:
+        texts = split_like(texts[0], [t["text"] for t in subs])
+    if len(texts) == len(subs):
+        pairs = [(t, sub["bbox"], sub["words"], "tesseract") for t, sub in zip(texts, subs)]
+    else:  # can't match Tesseract's lines: share the block out evenly, top to bottom
+        pairs = [(t, box, [w for w in (x for s in subs for x in s["words"]) if _inside(w["bbox"], box, 0)], "estimated")
+                 for t, box in zip(texts, _even_slices(block_box, len(texts)))]
+    return [{"text": t, "bbox": [round(v) for v in box], "box": how, "words": word_boxes(t, [round(v) for v in box], tw)}
+            for t, box, tw, how in pairs if t]
+
+
+DIGITS = str.maketrans("०१२३४५६७८९", "0123456789")
+VERSE_END = re.compile(r"॥\s*([०-९0-9]+(?:\s*[-–]\s*[०-९0-9]+)?[^॥]{0,3})\s*॥\s*$")
+LINE_END = re.compile(r"(।|॥\s*[०-९0-9][^॥]{0,8}॥)\s*$")
+LABEL_TYPES = {"PageHeader": "header", "Footnote": "footnote", "PageFooter": "signature", "Caption": "other",
+               "Picture": "other", "Table": "other"}
+
+
+def _num(s: str) -> str:
+    return re.sub(r"\s+", "", s.translate(DIGITS))
+
+
+FOOTNOTE = re.compile(r"^\s*[०-९0-9]+\s*[.,]\s")
+SIGNATURE = re.compile(r"^\s*\S{1,3}०\s*\S{1,3}०\s*[—–-]+\s*[०-९0-9]+\s*$")
+HINDI = {"है", "हैं", "के", "की", "का", "में", "से", "को", "और", "यह", "वह", "भी", "हो", "जाता", "जाती", "करना", "कि,"}
+
+
+def classify(label: str, lines: list[str]) -> list[dict]:
+    """Structure for one block: its type, and for each line the verse it belongs to (verse)
+    or the verses the block explains (commentary)."""
+    if label in LABEL_TYPES:
+        return [{"type": LABEL_TYPES[label]} for _ in lines]
+    if lines and all(SIGNATURE.match(ln) for ln in lines):
+        return [{"type": "signature"} for _ in lines]
+    if lines and FOOTNOTE.match(lines[0]):
+        return [{"type": "footnote"} for _ in lines]
+    ended = sum(1 for ln in lines if LINE_END.search(ln))
+    hindi = sum(1 for ln in lines for w in ln.split() if w in HINDI)  # Hindi function words: commentary, never verse
+    if lines and ended / len(lines) >= 0.6 and hindi < len(lines):
+        out, pending = [], []
+        for ln in lines:
+            pending.append({"type": "verse"})
+            m = VERSE_END.search(ln)
+            if m:
+                for x in pending:
+                    x["verse"] = _num(m.group(1))
+                out += pending
+                pending = []
+        return out + pending  # a half-verse at the end of the block continues on the next page
+    explains = None
+    for ln in reversed(lines):
+        m = VERSE_END.search(ln)
+        if m:
+            explains = _num(m.group(1))
+            break
+    return [{"type": "commentary"} | ({"explains": explains} if explains else {}) for _ in lines]
 
 
 class Surya(Engine):
@@ -136,7 +261,7 @@ class Surya(Engine):
         return version("surya-ocr")
 
     def config(self) -> dict:
-        return {"model": MODEL, "mode": "full_page", "lines": "split along tesseract line boxes" if self._tess else "as returned",
+        return {"model": MODEL, "mode": "full_page", "positions": "line and word boxes from tesseract words, else estimated" if self._tess else "block boxes only",
                 "weights_license": "modified AI Pubs Open RAIL-M (Datalab)"}
 
     @property
@@ -166,8 +291,9 @@ class Surya(Engine):
             conf = round(100 * b.confidence, 2) if b.confidence is not None else None
             if conf is not None:
                 confs.append(conf)
-            for text, box in place_lines(html_to_lines(b.html or ""), list(b.bbox), tess_lines):
-                lines.append({"text": text, "conf": conf, "bbox": [round(v) for v in box], "block": n, "par": 1, "label": b.label})
+            placed = place_lines(html_to_lines(b.html or ""), list(b.bbox), tess_lines)
+            for ln, meta in zip(placed, classify(b.label, [x["text"] for x in placed])):
+                lines.append(ln | meta | {"conf": conf, "block": n, "par": 1, "label": b.label})
         from .tesseract import lines_to_text
 
         return OcrResult(
