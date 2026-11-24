@@ -74,3 +74,33 @@ def test_model_checksums_match_git_blob_ids():
     from amocr.setup import _git_blob_id
 
     assert _git_blob_id(b"") == "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391"  # git's empty blob
+
+
+def test_surya_html_to_lines():
+    from amocr.engines.surya import html_to_lines
+
+    h = "<p>क ख ग<sup>१</sup> ।<br/>घ ङ ॥ १ ॥</p>"
+    assert html_to_lines(h) == ["क ख ग१ ।", "घ ङ ॥ १ ॥"]
+    assert html_to_lines("<p>a &amp; b</p><p>c</p>") == ["a & b", "c"]
+
+
+def test_surya_split_like():
+    from amocr.engines.surya import split_like
+
+    # Re-flowed paragraph split back along three printed lines of similar length.
+    text = "अ आ इ ई उ ऊ ए ऐ ओ"
+    assert split_like(text, ["अ आ इ", "ई उ ऊ", "ए ऐ ओ"]) == ["अ आ इ", "ई उ ऊ", "ए ऐ ओ"]
+    # Breaks follow line lengths, not exact words, so a misread word in a target line is harmless.
+    assert split_like(text, ["अ आ इ", "ईई उ ऊ", "ए ऐ ओ"])[0] == "अ आ इ"
+    assert split_like("एक", ["x", "y"]) == ["एक", ""]
+    assert split_like("एक दो", ["only one line"]) == ["एक दो"]
+
+
+def test_surya_place_lines():
+    from amocr.engines.surya import place_lines
+
+    tess = [{"text": "क ख", "bbox": [10, 10, 100, 30]}, {"text": "ग घ", "bbox": [10, 40, 100, 60]},
+            {"text": "elsewhere", "bbox": [10, 500, 100, 520]}]
+    assert place_lines(["क ख ग घ"], [0, 0, 120, 70], tess) == [("क ख", [10, 10, 100, 30]), ("ग घ", [10, 40, 100, 60])]
+    # Line counts that can't be matched fall back to the block box.
+    assert place_lines(["a", "b", "c"], [0, 0, 120, 70], tess) == [("a", [0, 0, 120, 70]), ("b", [0, 0, 120, 70]), ("c", [0, 0, 120, 70])]

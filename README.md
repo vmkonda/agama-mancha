@@ -21,6 +21,7 @@ page, as a team. Part of Agama Mancha, a library of the Sarvāmnāya literature.
 | Owner of the team's Proton Drive folders: setup, trust model, decisions | [Drive setup](docs/drive-setup.md) |
 | Coordinating the team: access, assigning books, restricted texts | [Coordinator guide](docs/coordinator-guide.md) |
 | A developer working on the code | [Developer guide](docs/developer-guide.md) |
+| Choosing or installing an OCR engine (Tesseract, Surya, Claude), and their licences | [Engines](docs/engines.md) |
 
 ## The short version
 

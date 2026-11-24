@@ -34,6 +34,9 @@ class Engine(ABC):
     @abstractmethod
     def run(self, image: Path) -> OcrResult: ...
 
+    def close(self) -> None:
+        """Release anything the engine started (e.g. a local inference server)."""
+
     @property
     def label(self) -> str:
         """Filename-safe id for this engine + config, e.g. tesseract-san+hin-psm3."""
