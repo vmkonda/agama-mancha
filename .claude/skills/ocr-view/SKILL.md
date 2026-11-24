@@ -1,6 +1,6 @@
 ---
 name: ocr-view
-description: Show a page's original scan and its OCR output side by side in a browser, compare engines or an engine against ground truth, and edit ground truth. Use when the user asks to see, view, compare, review, check or correct an OCR page (e.g. "show me page 231", "compare Claude and Tesseract on p51").
+description: Show a page's original scan and its OCR output side by side in a browser, compare engines or an engine against ground truth, edit ground truth, and answer the viewer's chat panel. Use when the user asks to see, view, compare, review, check or correct an OCR page (e.g. "show me page 231", "compare Claude and Tesseract on p51"), or says "listen to the viewer chat".
 ---
 
 # ocr-view
@@ -32,3 +32,21 @@ It is never published or exposed on the network: the scans are copyrighted.
 - **Proofread**: edit and save to `data/works/<book>/groundtruth/pNNNN.txt`, with the
   reviewer's name, a note, and a "verified" tick that should be set only once every
   line has been checked against the print.
+- **Suggestions**: fixes learned from corrections, offered across the book (see CLAUDE.md).
+- **Chat**: a panel where the proofreader talks to this Claude session. See below.
+
+## "Listen to the viewer chat"
+
+The viewer can't call Claude; you answer from this session.
+
+1. Run `uv run amocr chat <book> wait` with run_in_background. While it waits, the
+   viewer shows "Claude is listening". It exits when the person sends a message,
+   printing the message, the line it is about (as it stands now) and that line's image.
+2. When it exits, read the line image if there is one, then answer with
+   `uv run amocr chat <book> reply <id> --text "..."`. Add `--fix PAGE:LINE:"whole new line"`
+   to propose a change, or `--rule <id>` after adding a rule with `amocr rule add`.
+   The person applies proposals in the viewer; never edit page text yourself.
+3. Start `chat wait` again straight away, and keep doing so until the person says to
+   stop. If it times out (exit code 3), start it again too.
+
+Each answer uses the person's plan: keep answers short and look only at the lines asked about.

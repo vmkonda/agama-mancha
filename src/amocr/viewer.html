@@ -77,6 +77,22 @@ details li { margin: 2px 0; }
 #romout { min-width: 6em; font-size: 17px; }
 .keys { font-size: 12px; margin: 6px 0 0; }
 .keys kbd { font: 11px/1 -apple-system, sans-serif; border: 1px solid var(--line); border-radius: 4px; padding: 2px 4px; background: var(--bg); }
+#chat { position: fixed; right: 16px; bottom: 16px; width: min(440px, calc(100vw - 32px)); height: min(60vh, 560px); display: none; flex-direction: column;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 8px 30px rgba(0,0,0,.18); z-index: 10; }
+#chat.open { display: flex; }
+#chat .head { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-bottom: 1px solid var(--line); font-size: 13px; }
+#chat .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); flex: none; }
+#chat .dot.on { background: #2e9d55; }
+#chatlog { flex: 1; overflow: auto; padding: 8px 10px; }
+.msg { margin: 6px 0; max-width: 92%; padding: 6px 9px; border-radius: 8px; white-space: pre-wrap; font-size: 14px; }
+.msg.user { margin-left: auto; background: var(--hl); }
+.msg.claude { background: var(--bg); border: 1px solid var(--line); }
+.msg.system { color: var(--muted); font-size: 12px; padding: 0 4px; }
+.msg .where { display: block; font-size: 11px; color: var(--muted); margin-bottom: 2px; }
+.msg .act { margin-top: 6px; padding-top: 6px; border-top: 1px dashed var(--line); }
+.msg del { background: var(--del); color: var(--del-text); } .msg ins { background: var(--ins); color: var(--ins-text); text-decoration: none; }
+#chat .foot { border-top: 1px solid var(--line); padding: 8px 10px; display: flex; flex-direction: column; gap: 6px; }
+#chatin { width: 100%; min-height: 54px; resize: vertical; font-size: 15px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--text); }
 .sg { border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; margin: 6px 0; cursor: pointer; }
 .sg.cur { border-color: var(--accent); box-shadow: 0 0 0 2px var(--hl); }
 .sg img { display: block; max-width: 100%; margin: 4px 0; background: #fff; }
@@ -97,6 +113,7 @@ details li { margin: 2px 0; }
   <button id="next" title="Next page (→)">▶</button>
   <span class="muted">zoom</span><input id="zoom" type="range" min="40" max="250" value="100" aria-label="Image zoom">
   <span class="grow"></span>
+  <button id="chatbtn" title="Talk to Claude in your Claude Code session">Chat</button>
   <button id="theme" title="Toggle theme">◐</button>
 </header>
 <header>
@@ -110,6 +127,15 @@ details li { margin: 2px 0; }
   <span class="grow"></span>
   <span id="status" class="muted"></span>
 </header>
+<div id="chat" role="dialog" aria-label="Chat with Claude">
+  <div class="head"><span class="dot" id="chatdot"></span><span id="chatstate" class="grow">…</span><button id="chatx" title="Close">✕</button></div>
+  <div id="chatlog"></div>
+  <div class="foot">
+    <label class="muted" style="font-size:12px"><input type="checkbox" id="chatctx" checked> about <span id="chatwhere"></span></label>
+    <textarea id="chatin" class="deva" placeholder="Ask Claude about this line, or describe a fix you keep making. ⌘/Ctrl ↵ sends."></textarea>
+    <div style="display:flex;gap:8px;align-items:center"><button id="chatsend">Send</button><span id="chatnote" class="muted" style="font-size:12px"></span></div>
+  </div>
+</div>
 <main>
   <div class="pane" id="imgpane"><div id="imgwrap"><img id="img" alt="Page scan"><div id="box"></div></div></div>
   <div class="pane" id="textpane"></div>
@@ -287,11 +313,38 @@ function tessLines() {
   return [];
 }
 
+// Line positions for the editor: Surya's (a box for every line), else Tesseract's. Tesseract can
+// miss a line entirely (it did on the cover), which would shift every highlight below it.
+// "Unsure" (yellow) still comes from Tesseract's confidence, matched to each line by overlap.
+function positionLines() {
+  const T = tessLines();
+  const surya = Object.entries(S.data.results).filter(([l, r]) => l.startsWith("surya") && r.lines && r.lines.length && r.lines.every((x) => x.bbox)).map(([, r]) => r.lines).pop();
+  if (!surya) return T;
+  const overlap = (a, b) => {
+    const w = Math.min(a[2], b[2]) - Math.max(a[0], b[0]), h = Math.min(a[3], b[3]) - Math.max(a[1], b[1]);
+    return w > 0 && h > 0 ? (w * h) / ((a[2] - a[0]) * (a[3] - a[1])) : 0;
+  };
+  return surya.map((ln) => {
+    let best = null, score = 0.5;
+    for (const t of T) { const o = overlap(ln.bbox, t.bbox); if (o > score) { score = o; best = t; } }
+    return { text: ln.text, bbox: ln.bbox, conf: best ? best.conf : 100 };
+  });
+}
+
+// Same order as patterns.DRAFT_ORDER on the server, so Proofread, Suggestions and chat fixes
+// all start from the same text: Claude's reading, else Surya, else Tesseract.
+const DRAFT_ORDER = ["claude-code-review-", "claude-code-screen-", "claude-code-correct-", "claude-code-direct-", "surya-2.5-", "tesseract-"];
+function bestReading(res) {
+  const labels = Object.keys(res).filter((l) => l !== "groundtruth");
+  for (const p of DRAFT_ORDER) { const hit = labels.filter((l) => l.startsWith(p)).sort().pop(); if (hit) return hit; }
+  return labels[0];
+}
+
 const PALETTE = ["ऽ", "।", "॥", "्", "ं", "ँ", "ः", "ॐ", "०", "१", "२", "३", "४", "५", "६", "७", "८", "९", "—"];
 
 function renderEdit() {
   const res = S.data.results;
-  const src = res.groundtruth ? "groundtruth" : $("engA").value;
+  const src = res.groundtruth ? "groundtruth" : bestReading(res);
   const draftKey = `draft:${S.work}/${S.page}`;
   let draft = null; try { draft = JSON.parse(store.get(draftKey) || "null"); } catch {}
   const rv = (res.groundtruth && res.groundtruth.review) || {};
@@ -311,13 +364,14 @@ function renderEdit() {
     <div style="display:flex;gap:8px;margin-top:8px;align-items:center"><button id="save">Save</button><button id="savenext">Save and next ▶</button><span id="saved" class="muted">${esc(S.flash || "")}</span></div>
     ${rv.saved ? `<p class="muted" style="font-size:13px">Last saved by ${esc(rv.reviewer || "unknown")} on ${esc(rv.saved.slice(0, 10))}${rv.verified ? " · verified" : " · draft"}${rv.note ? " · note: " + esc(rv.note) : ""}</p>` : ""}`;
   S.flash = "";
-  const ta = $("gt"), hl = $("hl"), TL = tessLines();
+  const ta = $("gt"), hl = $("hl"), TL = positionLines();
   ta.value = restored ? draft.text : res[src].text;
   $("verified").checked = restored ? !!draft.verified : !!rv.verified;
   $("note").value = restored ? draft.note || "" : rv.note || "";
 
   const rows = () => { let k = -1; return ta.value.split("\n").map((t) => ({ t, k: t.trim() ? ++k : null })); };
   const curRow = () => ta.value.slice(0, ta.selectionStart).split("\n").length - 1;
+  const curN = () => { const rs = rows(), c = curRow(); return rs[c] && rs[c].k != null ? rs[c].k + 1 : null; };
   const tl = (r) => (r && r.k != null ? TL[r.k] : null);
   const isLow = (r) => { const x = tl(r); return !!x && x.conf < LOW; };
   const sync = () => { hl.scrollTop = ta.scrollTop; hl.scrollLeft = ta.scrollLeft; };
@@ -378,7 +432,7 @@ function renderEdit() {
   $("save").onclick = () => save(false);
   $("savenext").onclick = () => save(true);
   if (restored) $("discard").onclick = () => { store.del(draftKey); renderEdit(); };
-  S.edit = { save, jump };
+  S.edit = { save, jump, curN };
   paint(false);
 }
 
@@ -476,7 +530,7 @@ async function sgDecide(items, accept) {
 }
 
 document.addEventListener("keydown", (e) => {
-  if (S.mode !== "sugg" || e.target.tagName === "INPUT" || e.target.tagName === "SELECT" || e.metaKey || e.ctrlKey) return;
+  if (S.mode !== "sugg" || ["INPUT", "SELECT", "TEXTAREA"].includes(e.target.tagName) || e.metaKey || e.ctrlKey) return;
   const s = SG.items[SG.i];
   if (e.key === "j" || e.key === "ArrowDown") { e.preventDefault(); sgSelect(SG.i + 1); }
   else if (e.key === "k" || e.key === "ArrowUp") { e.preventDefault(); sgSelect(SG.i - 1); }
@@ -484,6 +538,83 @@ document.addEventListener("keydown", (e) => {
   else if (s && e.key === "r") sgDecide([s], false);
   else if (s && e.key === "o") { const p = s.page; setMode("edit"); loadPage(p); }
 });
+
+
+// ---- Chat with the volunteer's Claude Code session (no API: messages go through the server) ----
+const CH = { open: false, timer: null, last: "" };
+
+function chatContext() {
+  if (S.mode === "edit" && S.edit && S.edit.curN) { const n = S.edit.curN(); return { page: S.page, n }; }
+  if (S.mode === "sugg" && SG.items[SG.i]) return { page: SG.items[SG.i].page, n: SG.items[SG.i].n };
+  return { page: S.page, n: null };
+}
+function chatWhere() {
+  const c = chatContext();
+  $("chatwhere").textContent = c.page ? `p${c.page}` + (c.n ? ` line ${c.n}` : "") : "this book";
+}
+
+async function chatLoad() {
+  if (!S.work) return;
+  let d;
+  try { d = await api(`/api/${S.work}/chat`); } catch (e) { $("chatstate").textContent = "Can't reach the viewer server"; return; }
+  $("chatdot").classList.toggle("on", d.listening);
+  $("chatstate").innerHTML = d.listening ? "Claude is listening" :
+    "Claude isn't listening. In your Claude Code session, say <b>listen to the viewer chat</b>.";
+  const key = JSON.stringify([d.messages.length && d.messages[d.messages.length - 1].id, d.applied.length]);
+  if (key === CH.last) return;
+  CH.last = key;
+  const applied = new Set(d.applied), log = $("chatlog");
+  const atEnd = log.scrollTop + log.clientHeight >= log.scrollHeight - 20;
+  log.innerHTML = d.messages.length ? d.messages.map((m) => {
+    if (m.role === "system") return `<div class="msg system">${esc(m.text)}</div>`;
+    const where = m.page ? `<span class="where">p${m.page}${m.n ? " · line " + m.n : ""}</span>` : "";
+    const acts = (m.actions || []).map((a, i) => {
+      if (a.type === "line") {
+        const done = applied.has(`${m.id}:${i}`);
+        return `<div class="act"><span class="where">p${a.page} · line ${a.n}</span><div class="deva"><del>${esc(a.from)}</del><br><ins>${esc(a.to)}</ins></div>
+          <button data-apply="${esc(m.id)}:${i}" ${done ? "disabled" : ""}>${done ? "Applied" : "Apply to the draft"}</button></div>`;
+      }
+      return `<div class="act">Rule <code>${esc(a.id)}</code> <button data-rule="${esc(a.id)}">Review its matches in Suggestions</button></div>`;
+    }).join("");
+    return `<div class="msg ${m.role}">${where}<span class="deva">${esc(m.text)}</span>${acts}</div>`;
+  }).join("") : `<p class="muted" style="font-size:13px">Ask about a line you can't read, or describe a fix you keep making. Claude answers here, and proposes changes for you to apply; it never edits the text itself.</p>`;
+  if (atEnd) log.scrollTop = log.scrollHeight;
+  log.querySelectorAll("button[data-apply]").forEach((b) => (b.onclick = async () => {
+    const [msg, index] = b.dataset.apply.split(":");
+    try {
+      const r = await api(`/api/${S.work}/chat/apply`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ msg, index: +index }) });
+      $("chatnote").textContent = `Applied to p${r.page} line ${r.n} (draft).`;
+      if (r.page === S.page && S.mode !== "sugg") await loadPage(S.page);
+    } catch (e) { $("chatnote").textContent = "Not applied: " + e.message; }
+    CH.last = ""; chatLoad();
+  }));
+  log.querySelectorAll("button[data-rule]").forEach((b) => (b.onclick = () => { SG.rule = b.dataset.rule; SG.i = 0; setMode("sugg"); }));
+}
+
+async function chatSend() {
+  const text = $("chatin").value.trim();
+  if (!text) return;
+  const c = $("chatctx").checked ? chatContext() : {};
+  try {
+    await api(`/api/${S.work}/chat`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text, page: c.page || null, n: c.n || null }) });
+    $("chatin").value = ""; $("chatnote").textContent = "";
+  } catch (e) { $("chatnote").textContent = "Not sent: " + e.message; }
+  CH.last = ""; chatLoad();
+}
+
+function chatToggle(open) {
+  CH.open = open ?? !CH.open;
+  $("chat").classList.toggle("open", CH.open);
+  $("chatbtn").classList.toggle("on", CH.open);
+  clearInterval(CH.timer);
+  if (CH.open) { chatWhere(); chatLoad(); CH.timer = setInterval(() => { chatWhere(); chatLoad(); }, 3000); $("chatin").focus(); }
+  store.set("chat", CH.open ? "1" : "");
+}
+$("chatbtn").onclick = () => chatToggle();
+$("chatx").onclick = () => chatToggle(false);
+$("chatsend").onclick = chatSend;
+$("chatin").addEventListener("keydown", (e) => { if ((e.metaKey || e.ctrlKey) && e.key === "Enter") { e.preventDefault(); e.stopPropagation(); chatSend(); } });
+if (store.get("chat")) setTimeout(() => chatToggle(true), 300);
 
 function render() {
   if (!S.data) return;

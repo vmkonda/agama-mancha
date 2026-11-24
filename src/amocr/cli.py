@@ -302,6 +302,55 @@ def cmd_line(work: Work, args) -> None:
                 print(f"  image: {path}")
 
 
+def cmd_chat(work: Work, args) -> None:
+    """The proofreader's chat panel, from Claude's side: wait for a message, reply, or show history."""
+    from . import chat
+
+    if args.action == "show":
+        for m in chat.load(work)[-args.last:]:
+            where = f" p{m['page']}" + (f" line {m['n']}" if m.get("n") else "") if m.get("page") else ""
+            print(f"[{m['at'][11:16]}] {m['role']}{where}: {m['text']}")
+            for a in m.get("actions", []):
+                print(f"    action: {a}")
+        return
+    if args.action == "wait":
+        _no_claude_if_restricted(work)
+        print(f"listening for {work.id} (the viewer shows Claude as listening) ...", flush=True)
+        m = chat.wait(work, timeout=args.timeout)
+        if not m:
+            print("no message before the timeout. Run `amocr chat <book> wait` again to keep listening.")
+            sys.exit(3)
+        print(f"message {m['id']}" + (f" (p{m['page']}" + (f" line {m['n']}" if m.get("n") else "") + ")" if m.get("page") else "") + ":")
+        print(f"  {m['text']}")
+        if m.get("page") and m.get("n"):
+            try:
+                ctx = chat.line_context(work, m["page"], m["n"])
+                print(f"line {m['n']} as it stands ({ctx['source']}{', verified' if ctx['verified'] else ''}): {ctx['text']}")
+                if ctx.get("image"):
+                    print(f"line image: {ctx['image']}")
+            except ValueError as e:
+                print(f"(no line context: {e})")
+        print(f"\nReply with `uv run amocr chat {work.id} reply {m['id']} --text \"...\"`"
+              f" [--fix PAGE:LINE:\"whole new line\"] [--rule RULE_ID], then wait again.")
+        return
+    # reply
+    if not args.msg:
+        raise SystemExit("chat reply needs the message id")
+    if not any(m["id"] == args.msg and m["role"] == "user" for m in chat.load(work)):
+        raise SystemExit(f"no message {args.msg} from the proofreader")
+    actions = []
+    for f in args.fix or []:
+        try:
+            page, n, to = f.split(":", 2)
+        except ValueError:
+            raise SystemExit("--fix is PAGE:LINE:new text") from None
+        actions.append(chat.check_action(work, {"type": "line", "page": page, "n": n, "to": to}))
+    for rid in args.rule or []:
+        actions.append(chat.check_action(work, {"type": "rule", "id": rid}))
+    m = chat.post(work, "claude", args.text or "", reply_to=args.msg, actions=actions or None)
+    print(f"replied ({m['id']}) with {len(actions)} action(s); the proofreader applies them in the viewer")
+
+
 def cmd_rule(work: Work, args) -> None:
     """Add a rule (Claude or a person generalising a fix), or switch one on or off."""
     from . import patterns as pat
@@ -568,6 +617,14 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("page", type=int)
     p.add_argument("line", type=int)
     p.add_argument("--context", type=int, default=0, help="also the next N lines")
+    p = book_cmd("chat", cmd_chat, help="the viewer's chat panel, from Claude's side: wait, reply, show")
+    p.add_argument("action", choices=["wait", "reply", "show"])
+    p.add_argument("msg", nargs="?", help="reply: the message id that `chat wait` printed")
+    p.add_argument("--text")
+    p.add_argument("--fix", action="append", help='reply: propose a line, PAGE:LINE:"whole new line" (repeatable)')
+    p.add_argument("--rule", action="append", help="reply: point to a rule to review in Suggestions (repeatable)")
+    p.add_argument("--timeout", type=float, default=1800, help="wait: seconds before giving up (default 30 min)")
+    p.add_argument("--last", type=int, default=20, help="show: how many messages")
     p = book_cmd("rule", cmd_rule, help="add a rule, or switch one on/off")
     p.add_argument("action", choices=["add", "on", "off"])
     p.add_argument("id", nargs="?")
