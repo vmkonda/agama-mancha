@@ -53,6 +53,33 @@ enlarge the scan.
    damaged in this copy", "check against the Kashmir edition").
 5. Press **Save**. Your name and the date are recorded with the page.
 
+### Helpers in Proofread
+
+- **The scan follows your cursor.** The line you're on is outlined on the
+  scan, which scrolls to it. This uses Tesseract's line positions, matched
+  line by line, so after you add or remove lines it can be one line off.
+- **Unsure lines are yellow.** These are the lines Tesseract was least sure
+  of, where most mistakes are. **F2** (or **Alt ↓**) jumps to the next one
+  and selects it; **Shift F2** (or **Alt ↑**) goes back.
+- **Hard characters.** The button row inserts ऽ । ॥ ् ं ँ ः ॐ, the
+  Devanagari digits and a dash at the cursor.
+- **Romanised typing.** Type in the box above the text and press Enter to
+  insert it in Devanagari. It accepts IAST (`kṛṣṇa`, `prathamo'dhikāraḥ`)
+  and Harvard-Kyoto (`kRSNa`, `prathamo'dhikAraH`), but not loose spellings
+  like `krishna`, where `ri` could be ऋ or रि.
+- **Look-alikes are fixed for you.** A vertical bar `|` becomes `।` and `||`
+  becomes `॥` as you type. On save, Latin digits in verse numbers
+  (`॥ 39 ॥`) become Devanagari (`॥ ३९ ॥`).
+- **Keyboard.** **⌘S** (Ctrl S on Windows and Linux) saves; **⌘↵** saves and
+  opens the next page in Proofread.
+- **Nothing is lost.** Unsaved edits are kept in your browser. If you close
+  the tab or move to another page, they come back when you return, with an
+  option to discard them.
+
+For typing longer passages, turn on a Devanagari keyboard in your computer's
+settings (on a Mac: System Settings → Keyboard → Input Sources → Devanagari –
+QWERTY) and switch to it while you type.
+
 ## Conventions: type what is printed
 
 The goal is a faithful record of **this printed edition**, not a corrected
