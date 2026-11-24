@@ -248,3 +248,69 @@ def test_patterns_mining_and_matching():
     assert [m[2] for m in _matches(frag, "मन्त्रेश्वरस्व की")] == ["रत्व"]
     rx = {"kind": "regex", "from": r"(\S+)स्व\b", "to": r"\1त्व"}
     assert list(_matches(rx, "महेश्वरस्व"))[0][2] == "महेश्वरत्व"
+
+
+def test_chat_round_trip(tmp_path, monkeypatch):
+    import json
+
+    import pytest
+
+    from amocr import chat
+    from amocr.catalog import Work
+
+    monkeypatch.setenv("AMOCR_DATA", str(tmp_path))
+    w = Work(id="B-chat", title="t", languages=["san"], sha256="x")
+    ocr = w.page_dir(7) / "ocr"
+    ocr.mkdir(parents=True)
+    rec = {"text": "शीर्षक\n\nजो रङ्ग भाता है ।\nदूसरी पंक्ति ।\n",
+           "lines": [{"text": "शीर्षक", "bbox": [0, 0, 10, 10]}, {"text": "जो रङ्ग भाता है ।", "bbox": [0, 20, 10, 30]},
+                     {"text": "दूसरी पंक्ति ।", "bbox": [0, 40, 10, 50]}]}
+    (ocr / "surya-2.5-0.24.0.json").write_text(json.dumps(rec, ensure_ascii=False), encoding="utf-8")
+
+    q = chat.post(w, "user", "line 2 looks wrong", page=7, n=2)
+    assert [m["id"] for m in chat.pending(w)] == [q["id"]]
+    assert chat.line_context(w, 7, 2)["text"] == "जो रङ्ग भाता है ।"  # n counts lines of text, not blank lines
+    act = chat.check_action(w, {"type": "line", "page": "7", "n": "2", "to": "जो रङ्ग आता है ।"})
+    assert act["from"] == "जो रङ्ग भाता है ।"
+    with pytest.raises(ValueError):
+        chat.check_action(w, {"type": "rule", "id": "nope"})
+    r = chat.post(w, "claude", "It reads आता.", reply_to=q["id"], actions=[act])
+    assert chat.pending(w) == []
+    assert chat.apply(w, r["id"], 0) == {"page": 7, "n": 2}
+    assert (w.gt_dir / "p0007.txt").read_text(encoding="utf-8").split("\n")[2] == "जो रङ्ग आता है ।"
+    meta = json.loads((w.gt_dir / "p0007.meta.json").read_text(encoding="utf-8"))
+    assert meta["verified"] is False and meta["chat_fixes_applied"] == 1
+    assert f"{r['id']}:0" in chat.applied(w)
+    with pytest.raises(ValueError):
+        chat.apply(w, r["id"], 0)  # only once
+    # A fix proposed against text that has since changed is refused.
+    stale = chat.post(w, "claude", "x", reply_to=q["id"], actions=[{"type": "line", "page": 7, "n": 3, "from": "old", "to": "new"}])
+    with pytest.raises(ValueError):
+        chat.apply(w, stale["id"], 0)
+    assert not chat.listening(w)
+    chat.heartbeat(w)
+    assert chat.listening(w)
+
+
+def test_draft_starts_from_claude_then_surya(tmp_path, monkeypatch):
+    import json
+
+    from amocr import patterns as pat
+    from amocr.catalog import Work
+
+    monkeypatch.setenv("AMOCR_DATA", str(tmp_path))
+    w = Work(id="B-d", title="t", languages=["san"], sha256="x")
+    ocr = w.page_dir(3) / "ocr"
+    ocr.mkdir(parents=True)
+
+    def put(name, text):
+        (ocr / f"{name}.json").write_text(json.dumps({"text": text, "lines": [{"text": text.strip(), "bbox": [0, 0, 9, 9]}]},
+                                                     ensure_ascii=False), encoding="utf-8")
+
+    put("tesseract-san+hin-psm3-5.5.4", "t\n")
+    assert pat.draft(w, 3)["source"].startswith("tesseract")
+    put("surya-2.5-0.24.0", "s\n")
+    assert pat.draft(w, 3)["text"] == "s\n"
+    put("claude-code-review-claude-opus-5-5", "c\n")
+    assert pat.draft(w, 3)["text"] == "c\n"  # what Proofread starts from
+    assert pat.base_result(w, 3)[0].startswith("surya")  # mining still compares against the engine

@@ -116,6 +116,12 @@ class Handler(BaseHTTPRequestHandler):
             if parts[0] == "api" and len(parts) == 3 and parts[2] == "pages":
                 work, _ = self._work_page(parts[1:])
                 return self._json(_pages(work))
+            if parts[0] == "api" and len(parts) == 3 and parts[2] == "chat":
+                from . import chat
+
+                work, _ = self._work_page(parts[1:2])
+                return self._json({"messages": chat.load(work)[-200:], "listening": chat.listening(work),
+                                   "applied": sorted(chat.applied(work))})
             if parts[0] == "api" and len(parts) == 3 and parts[2] == "patterns":
                 from . import patterns as pat
 
@@ -171,7 +177,7 @@ class Handler(BaseHTTPRequestHandler):
         return json.loads(self.rfile.read(n) or b"{}")
 
     def _post_patterns(self, parts) -> None:
-        """POST /api/<work>/patterns/mine | /api/<work>/patterns/<rule>/enabled | /api/<work>/suggestions/decide"""
+        """POST /api/<work>/patterns/mine | patterns/<rule>/enabled | suggestions/decide | chat | chat/apply"""
         from . import patterns as pat
 
         work, _ = self._work_page(parts[1:2])
@@ -182,6 +188,16 @@ class Handler(BaseHTTPRequestHandler):
         if len(parts) == 5 and parts[2] == "patterns" and parts[4] == "enabled":
             pat.set_enabled(work, parts[3], bool(body.get("enabled")))
             return self._json({"ok": True})
+        if parts[2:] == ["chat"]:
+            from . import chat
+
+            page, n = body.get("page"), body.get("n")
+            m = chat.post(work, "user", str(body.get("text", "")), page=int(page) if page else None, n=int(n) if n else None)
+            return self._json(m)
+        if parts[2:] == ["chat", "apply"]:
+            from . import chat
+
+            return self._json(chat.apply(work, str(body.get("msg", "")), int(body.get("index", -1))))
         if parts[2:] == ["suggestions", "decide"]:
             items = body.get("items") or []
             if not isinstance(items, list) or not items or len(items) > 500:
@@ -192,7 +208,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         parts = [p for p in urlparse(self.path).path.split("/") if p]
-        if len(parts) >= 3 and parts[0] == "api" and parts[2] in ("patterns", "suggestions"):
+        if len(parts) >= 3 and parts[0] == "api" and parts[2] in ("patterns", "suggestions", "chat"):
             try:
                 return self._post_patterns(parts)
             except LookupError as e:

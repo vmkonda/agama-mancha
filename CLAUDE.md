@@ -53,6 +53,9 @@ When a person is proofreading in the viewer and asks for help:
   `uv run amocr rule <book> add --kind regex --from '<pattern>' --to '<replacement>' --note '<why>'`
   (or `--kind word`). Check the pending count it prints: if it's huge, the rule is
   too broad. Switch bad rules off with `uv run amocr rule <book> off <id>`.
+- **The viewer's chat panel:** when asked to "listen to the viewer chat", follow the
+  ocr-view skill: `amocr chat <book> wait` in the background, answer with
+  `amocr chat <book> reply`, wait again.
 - Never edit page text or ground truth yourself, and never accept suggestions:
   the person decides in the Suggestions tab. Text printed "wrong" stays as printed.
 

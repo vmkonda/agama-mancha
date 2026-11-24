@@ -102,8 +102,19 @@ the tab shows them, with a note, and lets you switch any rule on or off.
 
 ## Working with Claude while you proofread
 
-Proofread in the browser with your Claude Code session open next to it, and
-talk to Claude as you go:
+The **Chat** button (top right of the viewer) opens a panel for talking to your
+own Claude Code session. Start it once: in your Claude Code session, say
+**listen to the viewer chat**. The panel then shows "Claude is listening".
+
+- Questions are about the line your cursor is on in Proofread (or the current
+  suggestion); untick "about …" to ask about the book in general.
+- **⌘/Ctrl ↵** sends. Answers appear in the panel within a few seconds.
+- When Claude proposes a new line, it shows the old and new text with
+  **Apply to the draft**. Nothing changes until you press it, and the page still
+  needs your full check before it's verified. A rule Claude adds has a button
+  that opens its matches in Suggestions.
+
+You can also type the same requests into the Claude Code session directly:
 
 - **"What does line 12 on page 240 say?"** Claude looks at just that line of the
   scan (`amocr line`) and tells you its reading. Line numbers count lines of text,

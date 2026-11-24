@@ -54,17 +54,36 @@ def gt_paths(work: Work, page: int) -> tuple[Path, Path]:
     return t, t.with_suffix(".meta.json")
 
 
+# What Proofread starts from when a page has no saved text: Claude's reading, else Surya, else Tesseract.
+DRAFT_ORDER = ("claude-code-review-", "claude-code-screen-", "claude-code-correct-", "claude-code-direct-") + BASES
+
+
+def best_reading(work: Work, page: int) -> tuple[str, dict] | None:
+    ocr = work.page_dir(page) / "ocr"
+    for prefix in DRAFT_ORDER:
+        found = sorted(ocr.glob(f"{prefix}*.json"))
+        if found:
+            return found[-1].stem, json.loads(found[-1].read_text(encoding="utf-8"))
+    return None
+
+
 def draft(work: Work, page: int) -> dict | None:
-    """The text a proofreader would work on: saved ground truth, else the base reading."""
+    """The text a proofreader works on, the same as the viewer's Proofread starts from:
+    saved ground truth, else the best reading. Boxes come from that reading's lines when it
+    has them, else from the base engine's."""
     t, m = gt_paths(work, page)
-    base = base_result(work, page)
-    boxes = [ln.get("bbox") for ln in (base[1].get("lines") or [])] if base else []
+    best, base = best_reading(work, page), base_result(work, page)
+
+    def boxes_of(rec):
+        return [ln.get("bbox") for ln in (rec.get("lines") or [])]
+
+    boxes = boxes_of(best[1]) if best and all(boxes_of(best[1])) and boxes_of(best[1]) else (boxes_of(base[1]) if base else [])
     if t.exists():
         meta = json.loads(m.read_text(encoding="utf-8")) if m.exists() else {}
         return {"text": t.read_text(encoding="utf-8"), "source": "groundtruth", "verified": bool(meta.get("verified")),
                 "meta": meta, "boxes": boxes}
-    if base:
-        return {"text": base[1]["text"], "source": base[0], "verified": False, "meta": {}, "boxes": boxes}
+    if best:
+        return {"text": best[1]["text"], "source": best[0], "verified": False, "meta": {}, "boxes": boxes}
     return None
 
 
@@ -253,6 +272,28 @@ def counts(work: Work) -> dict[str, int]:
     return dict(c)
 
 
+def write_draft(work: Work, page: int, d: dict, lines: list[str], counter: str) -> None:
+    """Save a page's draft text (never verified) and count what changed it."""
+    t, m = gt_paths(work, page)
+    t.parent.mkdir(parents=True, exist_ok=True)
+    t.write_text("\n".join(lines).rstrip("\n") + "\n", encoding="utf-8")
+    meta = d["meta"] | {"reviewer": d["meta"].get("reviewer") or cfgmod.load().operator, "verified": False,
+                        "saved": _now(), "base": d["meta"].get("base") or (d["source"] if d["source"] != "groundtruth" else None),
+                        counter: d["meta"].get(counter, 0) + 1}
+    m.write_text(json.dumps(meta, ensure_ascii=False, indent=1), encoding="utf-8")
+
+
+def line_index(text: str, n: int) -> int | None:
+    """Raw line index of the nth non-blank line (1-based), as counted in the viewer and `amocr line`."""
+    k = 0
+    for i, ln in enumerate(text.split("\n")):
+        if ln.strip():
+            k += 1
+            if k == n:
+                return i
+    return None
+
+
 def decide(work: Work, occ: dict, accept: bool) -> dict:
     """Record a decision; on accept, apply the fix to the page's draft text."""
     data = load(work)
@@ -266,13 +307,7 @@ def decide(work: Work, occ: dict, accept: bool) -> dict:
         if line != occ["line"] or line[start:start + len(occ["from"])] != occ["from"]:
             raise ValueError(f"p{page} line {line_no + 1} changed since this suggestion was made; reload")
         lines[line_no] = line[:start] + occ["to"] + line[start + len(occ["from"]):]
-        t, m = gt_paths(work, page)
-        t.parent.mkdir(parents=True, exist_ok=True)
-        t.write_text("\n".join(lines).rstrip("\n") + "\n", encoding="utf-8")
-        meta = d["meta"] | {"reviewer": d["meta"].get("reviewer") or cfgmod.load().operator, "verified": False,
-                            "saved": _now(), "base": d["meta"].get("base") or (d["source"] if d["source"] != "groundtruth" else None),
-                            "suggestions_applied": d["meta"].get("suggestions_applied", 0) + 1}
-        m.write_text(json.dumps(meta, ensure_ascii=False, indent=1), encoding="utf-8")
+        write_draft(work, page, d, lines, "suggestions_applied")
     data["decisions"][occ["id"]] = {"accept": accept, "from": occ["from"], "to": occ["to"], "at": _now()}
     save(work, data)
     return {"page": page, "accepted": accept}
