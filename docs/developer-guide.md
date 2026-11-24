@@ -56,13 +56,15 @@ engine, config and version, e.g. `tesseract-san+hin-psm3-5.5.4`,
 
 1. Subclass `engines.base.Engine`: `version()`, `config()`, `run(image) -> OcrResult`,
    and a `label` that encodes config. Set `paid = True` and
-   `price_per_page_usd` for paid engines.
+   `price_per_page_usd` for paid engines. Override `close()` if the engine
+   starts something that must be stopped (Surya's local inference server).
 2. Register it in `engines/__init__.py`.
 3. Wire it into `cmd_ocr`. Paid engines must pass `amocr estimate` (budget cap)
    before running.
 4. Run it on the pilot pages and compare with `amocr eval`.
 
-Surya and a Google/Azure engine are the obvious next candidates.
+Surya is in (`engines/surya.py`, optional; see [engines.md](engines.md)).
+A Google/Azure engine is the obvious next candidate.
 
 ## Proton Drive
 

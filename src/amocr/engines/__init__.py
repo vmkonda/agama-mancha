@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 from .base import Engine, OcrResult
+from .surya import Surya
 from .tesseract import Tesseract
 
-ENGINES: dict[str, type[Engine]] = {"tesseract": Tesseract}
+ENGINES: dict[str, type[Engine]] = {"tesseract": Tesseract, "surya": Surya}
 
 
 def get_engine(name: str, **kwargs) -> Engine:

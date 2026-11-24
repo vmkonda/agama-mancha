@@ -11,6 +11,10 @@ dependencies = [
     "rapidfuzz>=3.0",
 ]
 
+[project.optional-dependencies]
+# Local Surya OCR engine. Code Apache-2.0; model weights under a modified OpenRAIL-M licence (docs/engines.md).
+surya = ["surya-ocr>=0.24,<0.25"]
+
 [project.scripts]
 amocr = "amocr.cli:main"
 

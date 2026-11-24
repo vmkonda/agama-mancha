@@ -6,7 +6,7 @@ Volunteer flow (or just ask Claude: "set me up")
   amocr folders                              what's shared with you on Proton
   amocr init --operator "Name" --proton-root "/shared-with-me/<team folder>"
   amocr fetch "/shared-with-me/<team folder>/<path>/book.pdf"   download + register + pull others' results
-  amocr ocr <book>                           Tesseract on every page (free, no Claude)
+  amocr ocr <book> [--engine surya]          Tesseract (or local Surya) on every page (free, no Claude)
   amocr claude-next <book> -n 10             prepare the next 10 pages for Claude
   amocr claude-import <book> --ready         store every page Claude finished
   amocr push <book>                          upload results to OCR Mirror on Proton Drive
@@ -71,7 +71,17 @@ def _image(work: Work, row: dict) -> Path:
 
 
 def _tesseract(work: Work, rows: list[dict], pages: list[int], langs="san+hin", psm=3, force=False, quiet=False) -> None:
-    engine = get_engine("tesseract", langs=langs, psm=psm)
+    _run_engine(work, rows, pages, get_engine("tesseract", langs=langs, psm=psm), force, quiet)
+
+
+def _run_engine(work: Work, rows: list[dict], pages: list[int], engine, force=False, quiet=False) -> None:
+    try:
+        _run_pages(work, rows, pages, engine, force, quiet)
+    finally:
+        engine.close()
+
+
+def _run_pages(work: Work, rows: list[dict], pages: list[int], engine, force=False, quiet=False) -> None:
     operator = cfgmod.load().operator
     for p in pages:
         row = rows[p - 1]
@@ -90,7 +100,7 @@ def _tesseract(work: Work, rows: list[dict], pages: list[int], langs="san+hin", 
         out.parent.mkdir(parents=True, exist_ok=True)
         out.write_text(json.dumps(rec, ensure_ascii=False, indent=1), encoding="utf-8")
         out.with_suffix(".txt").write_text(res.text, encoding="utf-8")
-        print(f"p{p}: conf {res.confidence}  {res.seconds}s")
+        print(f"p{p}: {engine.name} conf {res.confidence}  {res.seconds}s")
 
 
 # ---- per-book commands ------------------------------------------------------
@@ -117,10 +127,14 @@ def cmd_render(work: Work, args) -> None:
 
 
 def cmd_ocr(work: Work, args) -> None:
-    if args.engine != "tesseract":
-        raise SystemExit("only the tesseract engine runs from `amocr ocr`; Claude runs via claude-next/claude-import")
     rows = _inventory(work)
-    _tesseract(work, rows, parse_pages(args.pages, len(rows)), args.langs, args.psm, args.force)
+    pages = parse_pages(args.pages, len(rows))
+    if args.engine == "tesseract":
+        _tesseract(work, rows, pages, args.langs, args.psm, args.force)
+    elif args.engine == "surya":
+        _run_engine(work, rows, pages, get_engine("surya"), args.force)
+    else:
+        raise SystemExit(f"unknown engine {args.engine!r} for `amocr ocr`: tesseract or surya (Claude runs via claude-next/claude-import)")
 
 
 def cmd_eval(work: Work, args) -> None:
@@ -410,8 +424,9 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--no-browser", action="store_true")
     p.add_argument("--open", help="start at a page, e.g. B-1a2b3c4d5e/231")
 
-    p = book_cmd("ocr", cmd_ocr, pages=True, help="Tesseract on pages (default: all)")
-    p.add_argument("--engine", default="tesseract")
+    p = book_cmd("ocr", cmd_ocr, pages=True, help="OCR pages with Tesseract or Surya (default: all pages)")
+    p.add_argument("--engine", default="tesseract", choices=["tesseract", "surya"],
+                   help="surya: local Surya 2.5 model (optional install, see docs/engines.md)")
     p.add_argument("--langs", default="san+hin")
     p.add_argument("--psm", type=int, default=3)
     p.add_argument("--force", action="store_true", help="redo pages that already have a result")
