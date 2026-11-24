@@ -41,6 +41,15 @@ def test_parse_tsv():
     assert [ln["text"] for ln in lines] == ["फलम् ।", "इसी"]
     assert lines[0]["conf"] == 85.0
     assert lines_to_text(lines) == "फलम् ।\n\nइसी\n"
+    assert parse_tsv("") == []
+
+
+def test_parse_tsv_rejects_plain_text():
+    import pytest
+
+    # What Tesseract prints when the "tsv" config isn't found: plain text, not TSV.
+    with pytest.raises(RuntimeError):
+        parse_tsv("फलम् ।\n")
 
 
 def test_claude_validate():
