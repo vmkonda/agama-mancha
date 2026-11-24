@@ -41,7 +41,10 @@ class Tesseract(Engine):
         t0 = time.monotonic()
         tsv = subprocess.run(
             ["tesseract", str(image), "stdout", "-l", self.langs, "--psm", str(self.psm), "--oem", str(self.oem),
-             *(["--tessdata-dir", str(self.tessdata)] if self.tessdata else []), "tsv"],
+             *(["--tessdata-dir", str(self.tessdata)] if self.tessdata else []),
+             # Not the "tsv" config file: Tesseract looks for it under --tessdata-dir, the pinned
+             # model folder has no configs/, and it then silently falls back to plain text.
+             "-c", "tessedit_create_tsv=1"],
             capture_output=True,
             text=True,
             encoding="utf-8",  # Tesseract writes UTF-8; Windows' default code page would garble Devanagari
@@ -63,6 +66,9 @@ class Tesseract(Engine):
 
 def parse_tsv(tsv: str) -> list[dict]:
     """Group Tesseract word rows into lines, keeping block/paragraph structure."""
+    if tsv.strip() and not tsv.startswith("level\t"):
+        # Plain text instead of TSV would otherwise parse as "no words" on every page.
+        raise RuntimeError("tesseract did not return TSV output: " + tsv[:80].replace("\n", " "))
     reader = csv.DictReader(io.StringIO(tsv), delimiter="\t", quoting=csv.QUOTE_NONE)
     lines: dict[tuple, dict] = {}
     for r in reader:
