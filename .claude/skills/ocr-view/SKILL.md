@@ -46,6 +46,10 @@ The viewer can't call Claude; you answer from this session.
    `uv run amocr chat <book> reply <id> --text "..."`. Add `--fix PAGE:LINE:"whole new line"`
    to propose a change, or `--rule <id>` after adding a rule with `amocr rule add`.
    The person applies proposals in the viewer; never edit page text yourself.
+   **CHECK REQUEST** messages come from the "Check with Claude" button: `wait` prints every
+   line in the range and one image covering them. Compare each line with the image and reply
+   in one message: say which lines match, and add a `--fix PAGE:LINE:"whole line as printed"`
+   for each line that differs (misprints stay as printed; say what you're unsure of).
 3. Start `chat wait` again straight away, and keep doing so until the person says to
    stop. If it times out (exit code 3), start it again too.
 

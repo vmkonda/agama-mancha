@@ -314,3 +314,30 @@ def test_draft_starts_from_claude_then_surya(tmp_path, monkeypatch):
     put("claude-code-review-claude-opus-5-5", "c\n")
     assert pat.draft(w, 3)["text"] == "c\n"  # what Proofread starts from
     assert pat.base_result(w, 3)[0].startswith("surya")  # mining still compares against the engine
+
+
+def test_chat_check_range(tmp_path, monkeypatch):
+    import json
+
+    import pytest
+    from PIL import Image
+
+    from amocr import chat
+    from amocr.catalog import Work
+
+    monkeypatch.setenv("AMOCR_DATA", str(tmp_path))
+    w = Work(id="B-rng", title="t", languages=["san"], sha256="x")
+    ocr = w.page_dir(2) / "ocr"
+    ocr.mkdir(parents=True)
+    Image.new("L", (400, 300), 255).save(w.page_dir(2) / "image.png")
+    lines = [{"text": f"पंक्ति {i}", "bbox": [10, 10 + 40 * i, 300, 40 + 40 * i]} for i in range(5)]
+    (ocr / "surya-2.5-0.24.0.json").write_text(json.dumps({"text": "\n".join(x["text"] for x in lines) + "\n", "lines": lines},
+                                                          ensure_ascii=False), encoding="utf-8")
+    m = chat.post(w, "user", "Check lines 2–4", page=2, n=2, n2=4, kind="check")
+    assert m["kind"] == "check" and m["n2"] == 4
+    ctx = chat.range_context(w, 2, 2, 4)
+    assert [x["n"] for x in ctx["lines"]] == [2, 3, 4] and ctx["image"].endswith("p0002-l02-04.png")
+    assert Image.open(ctx["image"]).size == (310, 130)  # the three lines' boxes, plus a margin
+    assert "n2" not in chat.post(w, "user", "one line", page=2, n=3, n2=3)
+    with pytest.raises(ValueError):
+        chat.post(w, "user", "backwards", page=2, n=4, n2=2)

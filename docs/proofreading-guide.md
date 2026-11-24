@@ -109,8 +109,12 @@ own Claude Code session. Start it once: in your Claude Code session, say
 - Questions are about the line your cursor is on in Proofread (or the current
   suggestion); untick "about …" to ask about the book in general.
 - **⌘/Ctrl ↵** sends. Answers appear in the panel within a few seconds.
+- **Check with Claude** (next to Save in Proofread, or **⌘/Ctrl K**) asks Claude to
+  compare the line your cursor is on with the print. Select several lines to check
+  them together. Your unsaved edits are saved first, so Claude sees what you see.
 - When Claude proposes a new line, it shows the old and new text with
-  **Apply to the draft**. Nothing changes until you press it, and the page still
+  **Apply to the draft** (or **Apply all** when there are several), and
+  **⌘/Ctrl ⇧ ↵** applies Claude's latest proposal from the keyboard. Nothing changes until you press it, and the page still
   needs your full check before it's verified. A rule Claude adds has a button
   that opens its matches in Suggestions.
 
