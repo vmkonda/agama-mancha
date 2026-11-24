@@ -198,17 +198,17 @@ def test_screen_check_packet(tmp_path):
     work = SimpleNamespace(id="B-x")
     lines = [{"text": f"पंक्ति {i}", "bbox": [10, 10 + 50 * i, 900, 50 + 50 * i], "block": 1, "label": "Text",
               "tess": "भिन्न" if i == 4 else None} for i in range(1, 7)]
-    (tmp_path / "lines.json").write_text(json.dumps({"base": "surya-2.5-x", "lines": lines}, ensure_ascii=False))
+    (tmp_path / "lines.json").write_text(json.dumps({"base": "surya-2.5-x", "lines": lines}, ensure_ascii=False), encoding="utf-8")
     assert "  3  पंक्ति 3" in screen_text(9, lines) and "T:" not in screen_text(9, lines)
     page = tmp_path / "page.png"
     Image.new("L", (1000, 400), 255).save(page)
-    (tmp_path / "flags.json").write_text(json.dumps({"work": "B-x", "page": 9, "flags": [{"line": 2, "why": "non-word"}]}))
+    (tmp_path / "flags.json").write_text(json.dumps({"work": "B-x", "page": 9, "flags": [{"line": 2, "why": "non-word"}]}), encoding="utf-8")
     by_claude, by_tess = prep_check(work, 9, page, tmp_path)
     assert (by_claude, by_tess) == ([2], [4])
-    check = (tmp_path / "check.txt").read_text()
+    check = (tmp_path / "check.txt").read_text(encoding="utf-8")
     assert "  2  पंक्ति 2" in check and "flagged: non-word" in check and "T: भिन्न" in check and "  3  " not in check
     assert list(tmp_path.glob("check*.png"))
-    (tmp_path / "flags.json").write_text(json.dumps({"work": "B-x", "page": 9, "flags": [{"line": 7}]}))
+    (tmp_path / "flags.json").write_text(json.dumps({"work": "B-x", "page": 9, "flags": [{"line": 7}]}), encoding="utf-8")
     with pytest.raises(ValueError):
         prep_check(work, 9, page, tmp_path)
 
