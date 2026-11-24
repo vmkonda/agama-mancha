@@ -7,7 +7,7 @@ engine result, so `amocr eval` scores it the same way.
 
 result.json schema:
 {
-  "work": "SL-0001", "page": 231, "mode": "direct" | "correct",
+  "work": "SL-0001", "page": 231, "mode": "direct" | "correct",   # "review": see claude_review.py
   "model": "claude-opus-5-5",
   "regions": [
     {"type": "header|verse|commentary|footnote|signature|other",
@@ -31,7 +31,7 @@ from . import __version__
 from .catalog import Work
 
 REGION_TYPES = {"header", "verse", "commentary", "footnote", "signature", "other"}
-MODES = {"direct", "correct"}
+MODES = {"direct", "correct", "review"}
 BANDS = [(0.0, 0.38), (0.30, 0.68), (0.60, 1.0)]  # overlapping, so no line is cut in every band
 BASELINE = "tesseract-san+hin-psm3"
 
@@ -40,9 +40,16 @@ def inbox(work: Work, page: int) -> Path:
     return work.workdir / "claude" / f"p{page:04d}"
 
 
-def prep(work: Work, page: int, image: Path) -> Path:
+def prep(work: Work, page: int, image: Path, mode: str = "bands") -> Path:
+    """mode "bands": whole-page strips + Tesseract text. mode "review": numbered line images + Surya's text."""
     d = inbox(work, page)
+    if mode == "review":
+        from .claude_review import prep_review
+
+        return prep_review(work, page, image, d)
     d.mkdir(parents=True, exist_ok=True)
+    for old in list(d.glob("sheet*.png")) + [d / "review.txt", d / "lines.json"]:
+        old.unlink(missing_ok=True)
     im = Image.open(image)
     w, h = im.size
     for i, (a, b) in enumerate(BANDS):
@@ -87,25 +94,46 @@ def to_text(res: dict) -> str:
     return "\n\n".join("\n".join(r["lines"]) for r in res["regions"]) + "\n"
 
 
+def _review_record(work: Work, page: int, d: Path, res: dict) -> tuple[str, list[dict], list[dict], list[dict], list[str], dict]:
+    from .claude_review import apply_review, regions
+
+    if res.get("work") != work.id or res.get("page") != page:
+        raise ValueError(f"result is for {res.get('work')} p{res.get('page')}, expected {work.id} p{page}")
+    packet = json.loads((d / "lines.json").read_text(encoding="utf-8"))
+    lines, changes, warnings = apply_review(res, packet["lines"])
+    regs = regions(lines)
+    out_lines = [{"text": ln["text"], "type": ln["type"], "verse": None, "bbox": ln.get("bbox")} for ln in lines]
+    return to_text({"regions": regs}), regs, out_lines, changes, warnings, {"mode": "review", "base": packet["base"]}
+
+
 def import_result(work: Work, page: int, force: bool = False, operator: str = "") -> tuple[Path, list[str]]:
     d = inbox(work, page)
     res = json.loads((d / "result.json").read_text(encoding="utf-8"))
+    if res.get("mode") == "review":
+        text, regs, out_lines, changes, warnings, config = _review_record(work, page, d, res)
+        return _store(work, page, res, text, regs, out_lines, changes, warnings, config, force, operator)
     base = d / "tesseract.txt"
     warnings = validate(res, work, page, base.read_text(encoding="utf-8") if base.exists() else None)
+    lines = [{"text": ln, "type": r["type"], "verse": r.get("verse")} for r in res["regions"] for ln in r["lines"]]
+    return _store(work, page, res, to_text(res), res["regions"], lines, res.get("changes", []), warnings,
+                  {"mode": res["mode"]}, force, operator)
+
+
+def _store(work: Work, page: int, res: dict, text: str, regs: list[dict], lines: list[dict], changes: list[dict],
+           warnings: list[str], config: dict, force: bool, operator: str) -> tuple[Path, list[str]]:
     label = f"claude-code-{res['mode']}-{res.get('model', 'unknown')}"
     out = work.page_dir(page) / "ocr" / f"{label}.json"
     if out.exists() and not force:
         raise FileExistsError(f"{out.name} exists; use --force to replace")
-    text = to_text(res)
     rec = {
         "text": text,
         "confidence": None,
         "engine": "claude-code",
         "engine_version": res.get("model", "unknown"),
-        "config": {"mode": res["mode"]},
-        "lines": [{"text": ln, "type": r["type"], "verse": r.get("verse")} for r in res["regions"] for ln in r["lines"]],
-        "regions": res["regions"],
-        "changes": res.get("changes", []),
+        "config": config,
+        "lines": lines,
+        "regions": regs,
+        "changes": changes,
         "uncertain": res.get("uncertain", []),
         "warnings": warnings,
         "seconds": 0.0,

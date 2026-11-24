@@ -163,18 +163,48 @@ def _no_claude_if_restricted(work: Work) -> None:
         raise SystemExit(f"{work.id} is marked restricted: its pages must not be sent to Claude. Use Tesseract only.")
 
 
-def cmd_claude_prep(work: Work, args) -> None:
+def _claude_mode(requested: str) -> str:
+    """auto: review Surya's reading line by line when Surya is installed, else whole-page strips."""
+    if requested != "auto":
+        return requested
+    try:
+        import surya  # noqa: F401
+        return "review"
+    except ImportError:
+        return "bands"
+
+
+def _prep_pages(work: Work, rows: list[dict], pages: list[int], mode: str) -> list[tuple[int, Path]]:
+    from .claude_review import base_result
     from .claude_session import prep
 
+    for p in pages:
+        _tesseract(work, rows, [p], quiet=True)
+    if mode == "review":
+        missing = [p for p in pages if not base_result(work, p)]
+        if missing:
+            print(f"Surya on {len(missing)} page(s) first ...")
+            _run_engine(work, rows, missing, get_engine("surya"))
+    return [(p, prep(work, p, _image(work, rows[p - 1]), mode)) for p in pages]
+
+
+def _packet_help(mode: str) -> str:
+    if mode == "review":
+        return "Read review.txt and the sheet*.png images, write result.json (mode \"review\", rules in CLAUDE.md)"
+    return "Read band*.png and tesseract.txt, write result.json (rules in CLAUDE.md)"
+
+
+def cmd_claude_prep(work: Work, args) -> None:
     _no_claude_if_restricted(work)
     rows = _inventory(work)
-    for p in parse_pages(args.pages, len(rows)):
-        _tesseract(work, rows, [p], quiet=True)
-        print(prep(work, p, _image(work, rows[p - 1])))
+    mode = _claude_mode(args.mode)
+    for p, d in _prep_pages(work, rows, parse_pages(args.pages, len(rows)), mode):
+        print(f"p{p}: {d}")
+    print(_packet_help(mode) + ".")
 
 
 def cmd_claude_next(work: Work, args) -> None:
-    from .claude_session import next_pages, prep, ready
+    from .claude_session import next_pages, ready
 
     _no_claude_if_restricted(work)
     waiting = ready(work)
@@ -186,11 +216,10 @@ def cmd_claude_next(work: Work, args) -> None:
     if not pages:
         print(f"{work.id}: every page has a Claude result. Run `amocr push {work.id}`.")
         return
-    for p in pages:
-        _tesseract(work, rows, [p], quiet=True)
-        d = prep(work, p, _image(work, rows[p - 1]))
+    mode = _claude_mode(args.mode)
+    for p, d in _prep_pages(work, rows, pages, mode):
         print(f"p{p}: {d}")
-    print(f"\n{len(pages)} page(s) ready for Claude. Write result.json in each folder (rules in CLAUDE.md), "
+    print(f"\n{len(pages)} page(s) ready for Claude ({mode} mode). {_packet_help(mode)} in each folder, "
           f"then `amocr claude-import {work.id} --ready`.")
 
 
@@ -430,12 +459,15 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--langs", default="san+hin")
     p.add_argument("--psm", type=int, default=3)
     p.add_argument("--force", action="store_true", help="redo pages that already have a result")
+    mode_help = "review: Claude checks Surya's reading line by line (fewer tokens); bands: Claude reads whole-page strips; auto: review if Surya is installed"
     p = book_cmd("claude-next", cmd_claude_next, help="prepare the next pages for Claude")
     p.add_argument("-n", type=int, default=10)
+    p.add_argument("--mode", choices=["auto", "review", "bands"], default="auto", help=mode_help)
     p = book_cmd("claude-import", cmd_claude_import, pages=True, help="store Claude's finished pages")
     p.add_argument("--ready", action="store_true", help="every page with a result.json not yet imported")
     p.add_argument("--force", action="store_true")
-    book_cmd("claude-prep", cmd_claude_prep, pages=True, help="prepare specific pages for Claude")
+    p = book_cmd("claude-prep", cmd_claude_prep, pages=True, help="prepare specific pages for Claude")
+    p.add_argument("--mode", choices=["auto", "review", "bands"], default="auto", help=mode_help)
     book_cmd("push", cmd_push, help="upload results to the team's OCR Mirror")
     book_cmd("pull", cmd_pull, help="download results others pushed")
     book_cmd("eval", cmd_eval, help="CER of every result vs ground truth")

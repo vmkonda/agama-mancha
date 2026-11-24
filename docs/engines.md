@@ -15,6 +15,22 @@ person, so this is not an error rate): Tesseract differed by 6.4% of
 characters, Surya by 1.1%. Measure on verified ground truth before relying on
 these numbers.
 
+## Claude review mode
+
+When Surya is installed, `amocr claude-next` prepares **review** packets by
+default: the page's lines as numbered images, plus Surya's reading under the
+same numbers. Claude checks every line against its image and writes only the
+corrections, instead of transcribing the whole page again. The import applies
+them to Surya's lines, so the result keeps a box on the scan for every line.
+
+On p231 of the pilot book, review mode made 5 corrections (footnote markers, one
+consonant, two words) and roughly halved Claude's tokens for the page, almost
+all of it in what Claude writes. The line images still cover the whole text
+area, so image tokens are about the same as whole-page strips. `--mode bands`
+gives the old behaviour.
+
+Surya-derived text is still Surya output for licence purposes (see below).
+
 ## Surya
 
 ### Install (optional)
