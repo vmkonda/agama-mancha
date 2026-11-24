@@ -49,7 +49,8 @@ def _append(work: Work, msg: dict) -> dict:
 
 
 def post(work: Work, role: str, text: str, page: int | None = None, n: int | None = None,
-         reply_to: str | None = None, actions: list[dict] | None = None) -> dict:
+         reply_to: str | None = None, actions: list[dict] | None = None, n2: int | None = None,
+         kind: str | None = None) -> dict:
     if role not in ("user", "claude", "system"):
         raise ValueError("bad role")
     text = (text or "").strip()
@@ -58,7 +59,9 @@ def post(work: Work, role: str, text: str, page: int | None = None, n: int | Non
     if len(text) > MAX_TEXT:
         raise ValueError(f"message longer than {MAX_TEXT} characters")
     msg = {"id": f"{int(time.time() * 1000):x}{secrets.token_hex(2)}", "at": _now(), "role": role, "text": text}
-    for k, v in (("page", page), ("n", n), ("reply_to", reply_to), ("actions", actions)):
+    if n2 is not None and (n is None or n2 < n or n2 - n > 30):
+        raise ValueError("a line range is n..n2, at most 31 lines")
+    for k, v in (("page", page), ("n", n), ("n2", n2 if n2 != n else None), ("kind", kind), ("reply_to", reply_to), ("actions", actions)):
         if v is not None:
             msg[k] = v
     return _append(work, msg)
@@ -129,6 +132,23 @@ def line_context(work: Work, page: int, n: int) -> dict:
         crop.parent.mkdir(parents=True, exist_ok=True)
         with Image.open(img) as im:
             im.crop((max(0, box[0] - 8), max(0, box[1] - 8), min(im.width, box[2] + 8), min(im.height, box[3] + 8))).save(crop)
+        out["image"] = str(crop)
+    return out
+
+
+def range_context(work: Work, page: int, n1: int, n2: int) -> dict:
+    """Lines n1..n2 as they stand, with one image of the scan covering all of them."""
+    lines = [line_context(work, page, n) for n in range(n1, n2 + 1)]
+    boxes = [x["bbox"] for x in lines if x.get("bbox")]
+    out = {"lines": lines}
+    img = work.page_dir(page) / "image.png"
+    if boxes and img.exists():
+        from PIL import Image
+
+        b = [min(x[0] for x in boxes), min(x[1] for x in boxes), max(x[2] for x in boxes), max(x[3] for x in boxes)]
+        crop = work.workdir / "claude" / "ask" / f"p{page:04d}-l{n1:02d}-{n2:02d}.png"
+        with Image.open(img) as im:
+            im.crop((max(0, b[0] - 10), max(0, b[1] - 10), min(im.width, b[2] + 10), min(im.height, b[3] + 10))).save(crop)
         out["image"] = str(crop)
     return out
 

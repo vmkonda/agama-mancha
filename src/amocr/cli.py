@@ -320,9 +320,21 @@ def cmd_chat(work: Work, args) -> None:
         if not m:
             print("no message before the timeout. Run `amocr chat <book> wait` again to keep listening.")
             sys.exit(3)
-        print(f"message {m['id']}" + (f" (p{m['page']}" + (f" line {m['n']}" if m.get("n") else "") + ")" if m.get("page") else "") + ":")
+        where = (f" (p{m['page']}" + (f" lines {m['n']}-{m['n2']}" if m.get("n2") else f" line {m['n']}" if m.get("n") else "") + ")") if m.get("page") else ""
+        print(f"message {m['id']}{where}" + (" CHECK REQUEST" if m.get("kind") == "check" else "") + ":")
         print(f"  {m['text']}")
-        if m.get("page") and m.get("n"):
+        if m.get("kind") == "check" and m.get("page") and m.get("n"):
+            try:
+                ctx = chat.range_context(work, m["page"], m["n"], m.get("n2") or m["n"])
+                for x in ctx["lines"]:
+                    print(f"line {x['n']} ({x['source']}{', verified' if x['verified'] else ''}): {x['text']}")
+                if ctx.get("image"):
+                    print(f"image of these lines: {ctx['image']}")
+                print("Check each line against the image. Reply with what matches, and a --fix for every line that differs "
+                      "(whole line, as printed; misprints stay). Put anything unsure in the text.")
+            except ValueError as e:
+                print(f"(no line context: {e})")
+        elif m.get("page") and m.get("n"):
             try:
                 ctx = chat.line_context(work, m["page"], m["n"])
                 print(f"line {m['n']} as it stands ({ctx['source']}{', verified' if ctx['verified'] else ''}): {ctx['text']}")

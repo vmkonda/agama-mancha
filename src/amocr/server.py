@@ -191,8 +191,9 @@ class Handler(BaseHTTPRequestHandler):
         if parts[2:] == ["chat"]:
             from . import chat
 
-            page, n = body.get("page"), body.get("n")
-            m = chat.post(work, "user", str(body.get("text", "")), page=int(page) if page else None, n=int(n) if n else None)
+            page, n, n2 = body.get("page"), body.get("n"), body.get("n2")
+            m = chat.post(work, "user", str(body.get("text", "")), page=int(page) if page else None, n=int(n) if n else None,
+                          n2=int(n2) if n2 else None, kind="check" if body.get("kind") == "check" else None)
             return self._json(m)
         if parts[2:] == ["chat", "apply"]:
             from . import chat
@@ -233,7 +234,10 @@ class Handler(BaseHTTPRequestHandler):
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(text.rstrip("\n") + "\n", encoding="utf-8")
             # Who reviewed it and whether they checked every line against the print.
-            path.with_suffix(".meta.json").write_text(json.dumps({
+            meta_path = path.with_suffix(".meta.json")
+            old_meta = json.loads(meta_path.read_text(encoding="utf-8")) if meta_path.exists() else {}
+            # Keep what's already recorded (the reading it started from, fixes applied); update the review.
+            meta_path.write_text(json.dumps(old_meta | {
                 "reviewer": cfgmod.load().operator, "verified": verified,
                 "note": str(body.get("note", ""))[:2000],
                 "saved": datetime.now(timezone.utc).isoformat(timespec="seconds"),
