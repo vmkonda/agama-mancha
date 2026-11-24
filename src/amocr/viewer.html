@@ -313,6 +313,24 @@ function tessLines() {
   return [];
 }
 
+// Line positions for the editor: Surya's (a box for every line), else Tesseract's. Tesseract can
+// miss a line entirely (it did on the cover), which would shift every highlight below it.
+// "Unsure" (yellow) still comes from Tesseract's confidence, matched to each line by overlap.
+function positionLines() {
+  const T = tessLines();
+  const surya = Object.entries(S.data.results).filter(([l, r]) => l.startsWith("surya") && r.lines && r.lines.length && r.lines.every((x) => x.bbox)).map(([, r]) => r.lines).pop();
+  if (!surya) return T;
+  const overlap = (a, b) => {
+    const w = Math.min(a[2], b[2]) - Math.max(a[0], b[0]), h = Math.min(a[3], b[3]) - Math.max(a[1], b[1]);
+    return w > 0 && h > 0 ? (w * h) / ((a[2] - a[0]) * (a[3] - a[1])) : 0;
+  };
+  return surya.map((ln) => {
+    let best = null, score = 0.5;
+    for (const t of T) { const o = overlap(ln.bbox, t.bbox); if (o > score) { score = o; best = t; } }
+    return { text: ln.text, bbox: ln.bbox, conf: best ? best.conf : 100 };
+  });
+}
+
 // Same order as patterns.DRAFT_ORDER on the server, so Proofread, Suggestions and chat fixes
 // all start from the same text: Claude's reading, else Surya, else Tesseract.
 const DRAFT_ORDER = ["claude-code-review-", "claude-code-screen-", "claude-code-correct-", "claude-code-direct-", "surya-2.5-", "tesseract-"];
@@ -346,7 +364,7 @@ function renderEdit() {
     <div style="display:flex;gap:8px;margin-top:8px;align-items:center"><button id="save">Save</button><button id="savenext">Save and next ▶</button><span id="saved" class="muted">${esc(S.flash || "")}</span></div>
     ${rv.saved ? `<p class="muted" style="font-size:13px">Last saved by ${esc(rv.reviewer || "unknown")} on ${esc(rv.saved.slice(0, 10))}${rv.verified ? " · verified" : " · draft"}${rv.note ? " · note: " + esc(rv.note) : ""}</p>` : ""}`;
   S.flash = "";
-  const ta = $("gt"), hl = $("hl"), TL = tessLines();
+  const ta = $("gt"), hl = $("hl"), TL = positionLines();
   ta.value = restored ? draft.text : res[src].text;
   $("verified").checked = restored ? !!draft.verified : !!rv.verified;
   $("note").value = restored ? draft.note || "" : rv.note || "";
