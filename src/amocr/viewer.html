@@ -61,6 +61,23 @@ details { margin-top: 16px; font-size: 13px; }
 details li { margin: 2px 0; }
 .legend span { display: inline-block; padding: 0 6px; border-radius: 4px; margin-right: 4px; font-size: 12px; }
 #status { font-size: 13px; }
+/* Proofread editor: a highlight layer drawn line for line behind a transparent textarea. */
+.ed { position: relative; --lh: 31px; background: var(--bg); border: 1px solid var(--line); border-radius: 6px; }
+.ed textarea, #hl { font-size: 17px; line-height: var(--lh); padding: 10px; margin: 0; border: 0; white-space: pre; tab-size: 4; overflow-wrap: normal; }
+.ed textarea { position: relative; display: block; width: 100%; min-height: 70vh; resize: vertical; background: transparent; border-radius: 6px; }
+#hl { position: absolute; inset: 0; overflow: hidden; color: transparent; pointer-events: none; padding-bottom: 80px; }
+#hl > div { height: var(--lh); border-radius: 3px; }
+#hl .lowl { background: var(--low); }
+#hl .cur { box-shadow: inset 3px 0 0 var(--accent); }
+#hl .cur:not(.lowl) { background: var(--hl); }
+.pal { display: flex; flex-wrap: wrap; gap: 4px; margin: 0 0 6px; }
+.pal button { padding: 1px 8px; min-width: 30px; font-size: 16px; }
+.rom { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 8px; }
+#rom { flex: 1; min-width: 200px; }
+#romout { min-width: 6em; font-size: 17px; }
+.keys { font-size: 12px; margin: 6px 0 0; }
+.keys kbd { font: 11px/1 -apple-system, sans-serif; border: 1px solid var(--line); border-radius: 4px; padding: 2px 4px; background: var(--bg); }
+.draftnote { background: var(--low); color: var(--low-text); border-radius: 6px; padding: 4px 8px; margin-bottom: 8px; font-size: 13px; }
 @media (max-width: 800px) { main { grid-template-columns: 1fr; } #imgpane { border-right: 0; border-bottom: 1px solid var(--line); max-height: 50vh; } header { padding: 8px 16px; } }
 </style>
 </head>
@@ -92,7 +109,7 @@ details li { margin: 2px 0; }
 <script>
 const $ = (id) => document.getElementById(id);
 const S = { work: null, page: null, pages: [], data: null, mode: "view" };
-const store = { get(k) { try { return localStorage.getItem(k); } catch { return null; } }, set(k, v) { try { localStorage.setItem(k, v); } catch {} } };
+const store = { get(k) { try { return localStorage.getItem(k); } catch { return null; } }, set(k, v) { try { localStorage.setItem(k, v); } catch {} }, del(k) { try { localStorage.removeItem(k); } catch {} } };
 const esc = (s) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 const api = async (u, opt) => { const r = await fetch(u, opt); const j = await r.json(); if (!r.ok) throw new Error(j.error || r.status); return j; };
 const LOW = 70;
@@ -222,34 +239,152 @@ async function renderDiff(a, b) {
   $("textpane").innerHTML = h + `</div>`;
 }
 
+// Romanised (IAST or Harvard-Kyoto) to Devanagari, for typing short insertions.
+const translit = (() => {
+  const V = [["ai", "ऐ", "ै"], ["au", "औ", "ौ"], ["aa", "आ", "ा"], ["ii", "ई", "ी"], ["uu", "ऊ", "ू"], ["RR", "ॠ", "ॄ"], ["lR", "ऌ", "ॢ"],
+    ["r̥̄", "ॠ", "ॄ"], ["r̥", "ऋ", "ृ"], ["l̥", "ऌ", "ॢ"], ["a", "अ", ""], ["A", "आ", "ा"], ["ā", "आ", "ा"], ["i", "इ", "ि"], ["I", "ई", "ी"], ["ī", "ई", "ी"],
+    ["u", "उ", "ु"], ["U", "ऊ", "ू"], ["ū", "ऊ", "ू"], ["R", "ऋ", "ृ"], ["ṛ", "ऋ", "ृ"], ["ṝ", "ॠ", "ॄ"], ["ḷ", "ऌ", "ॢ"],
+    ["e", "ए", "े"], ["ē", "ए", "े"], ["o", "ओ", "ो"], ["ō", "ओ", "ो"]];
+  const C = [["kh", "ख"], ["gh", "घ"], ["ch", "छ"], ["jh", "झ"], ["Th", "ठ"], ["ṭh", "ठ"], ["Dh", "ढ"], ["ḍh", "ढ"], ["th", "थ"], ["dh", "ध"],
+    ["ph", "फ"], ["bh", "भ"], ["sh", "श"], ["Sh", "ष"], ["k", "क"], ["g", "ग"], ["G", "ङ"], ["ṅ", "ङ"], ["c", "च"], ["j", "ज"], ["J", "ञ"], ["ñ", "ञ"],
+    ["T", "ट"], ["ṭ", "ट"], ["D", "ड"], ["ḍ", "ड"], ["N", "ण"], ["ṇ", "ण"], ["t", "त"], ["d", "द"], ["n", "न"], ["p", "प"], ["b", "ब"], ["m", "म"],
+    ["y", "य"], ["r", "र"], ["l", "ल"], ["v", "व"], ["w", "व"], ["z", "श"], ["ś", "श"], ["S", "ष"], ["ṣ", "ष"], ["s", "स"], ["h", "ह"], ["L", "ळ"], ["ḻ", "ळ"]];
+  const O = [["OM", "ॐ"], ["M", "ं"], ["ṃ", "ं"], ["ṁ", "ं"], ["H", "ः"], ["ḥ", "ः"], ["m̐", "ँ"], ["~", "ँ"], ["'", "ऽ"], ["’", "ऽ"], ["||", "॥"], ["|", "।"],
+    ..."0123456789".split("").map((d) => [d, "०१२३४५६७८९"[d]])];
+  const T = [...V.map(([k, i, m]) => [k.normalize("NFC"), "v", i, m]), ...C.map(([k, c]) => [k.normalize("NFC"), "c", c]), ...O.map(([k, o]) => [k.normalize("NFC"), "o", o])]
+    .sort((a, b) => b[0].length - a[0].length);
+  return (s) => {
+    s = s.normalize("NFC");
+    let out = "", afterC = false;
+    for (let i = 0; i < s.length;) {
+      const t = T.find(([k]) => s.startsWith(k, i));
+      if (t && t[1] === "c") { if (afterC) out += "्"; out += t[2]; afterC = true; }
+      else if (t && t[1] === "v") { out += afterC ? t[3] : t[2]; afterC = false; }
+      else { if (afterC) out += "्"; out += t ? t[2] : s[i]; afterC = false; }
+      i += t ? t[0].length : 1;
+    }
+    return afterC ? out + "्" : out;
+  };
+})();
+
+// Look-alikes that are never right in the text: a vertical bar for a daṇḍa (fixed as you type),
+// Latin digits inside verse numbers (fixed on save).
+const fixBars = (s) => s.replace(/\|\|/g, "॥").replace(/\|/g, "।").replace(/।।/g, "॥");
+const fixVerseDigits = (s) => s.replace(/([।॥])([^।॥\n]{0,12}?)॥/g, (m, a, mid) => a + mid.replace(/[0-9]/g, (d) => "०१२३४५६७८९"[d]) + "॥");
+
+// The Tesseract result with line boxes; the nth non-blank text line maps to its nth line.
+function tessLines() {
+  for (const [l, r] of Object.entries(S.data.results)) if (l.startsWith("tesseract") && r.lines && r.lines.length && r.lines[0].bbox) return r.lines;
+  return [];
+}
+
+const PALETTE = ["ऽ", "।", "॥", "्", "ं", "ँ", "ः", "ॐ", "०", "१", "२", "३", "४", "५", "६", "७", "८", "९", "—"];
+
 function renderEdit() {
   const res = S.data.results;
   const src = res.groundtruth ? "groundtruth" : $("engA").value;
+  const draftKey = `draft:${S.work}/${S.page}`;
+  let draft = null; try { draft = JSON.parse(store.get(draftKey) || "null"); } catch {}
+  const rv = (res.groundtruth && res.groundtruth.review) || {};
+  const restored = draft && draft.text !== res[src].text;
   $("textpane").innerHTML = `
     <div class="meta"><span>${res.groundtruth ? "Editing the saved ground truth" : `No ground truth yet; starting from <b>${esc(src)}</b>`}</span></div>
     <p class="muted" style="font-size:13px;margin-top:0">Type what is printed, one printed line per line, blank line between paragraphs. Keep headers, footnote markers and signature marks.</p>
-    <textarea id="gt" class="deva" spellcheck="false"></textarea>
+    ${restored ? `<div class="draftnote">Restored your unsaved edits from ${esc(new Date(draft.at).toLocaleString())}. <button id="discard">Discard them</button></div>` : ""}
+    <div class="pal" id="pal">${PALETTE.map((c) => `<button class="deva" data-c="${c}" title="insert ${c}">${c}</button>`).join("")}</div>
+    <div class="rom"><input id="rom" placeholder="romanised (IAST kṛṣṇa or Harvard-Kyoto kRSNa), Enter inserts" autocomplete="off" spellcheck="false"><span id="romout" class="deva"></span></div>
+    <div class="ed"><div id="hl" class="deva" aria-hidden="true"></div><textarea id="gt" class="deva" spellcheck="false" wrap="off"></textarea></div>
+    <p class="keys muted"><span class="ln low" style="padding:0 4px">yellow</span> Tesseract was unsure · <kbd>F2</kbd> or <kbd>Alt ↓</kbd> next unsure line, with <kbd>Shift</kbd> / <kbd>Alt ↑</kbd> previous · <kbd>⌘/Ctrl S</kbd> save · <kbd>⌘/Ctrl ↵</kbd> save and next page · edits are kept in this browser until saved</p>
     <div style="display:flex;flex-wrap:wrap;gap:8px 14px;margin-top:8px;align-items:center">
       <label><input type="checkbox" id="verified"> I checked every line against the print (verified)</label>
       <input id="note" placeholder="note for the next reviewer (optional)" style="flex:1;min-width:200px">
     </div>
-    <div style="display:flex;gap:8px;margin-top:8px;align-items:center"><button id="save">Save</button><span id="saved" class="muted"></span></div>
-    ${res.groundtruth && res.groundtruth.review && res.groundtruth.review.saved ? `<p class="muted" style="font-size:13px">Last saved by ${esc(res.groundtruth.review.reviewer || "unknown")} on ${esc(res.groundtruth.review.saved.slice(0, 10))}${res.groundtruth.review.verified ? " · verified" : " · draft"}${res.groundtruth.review.note ? " · note: " + esc(res.groundtruth.review.note) : ""}</p>` : ""}`;
-  $("gt").value = res[src].text;
-  const rv = (res.groundtruth && res.groundtruth.review) || {};
-  $("verified").checked = !!rv.verified;
-  $("note").value = rv.note || "";
-  $("save").onclick = async () => {
+    <div style="display:flex;gap:8px;margin-top:8px;align-items:center"><button id="save">Save</button><button id="savenext">Save and next ▶</button><span id="saved" class="muted">${esc(S.flash || "")}</span></div>
+    ${rv.saved ? `<p class="muted" style="font-size:13px">Last saved by ${esc(rv.reviewer || "unknown")} on ${esc(rv.saved.slice(0, 10))}${rv.verified ? " · verified" : " · draft"}${rv.note ? " · note: " + esc(rv.note) : ""}</p>` : ""}`;
+  S.flash = "";
+  const ta = $("gt"), hl = $("hl"), TL = tessLines();
+  ta.value = restored ? draft.text : res[src].text;
+  $("verified").checked = restored ? !!draft.verified : !!rv.verified;
+  $("note").value = restored ? draft.note || "" : rv.note || "";
+
+  const rows = () => { let k = -1; return ta.value.split("\n").map((t) => ({ t, k: t.trim() ? ++k : null })); };
+  const curRow = () => ta.value.slice(0, ta.selectionStart).split("\n").length - 1;
+  const tl = (r) => (r && r.k != null ? TL[r.k] : null);
+  const isLow = (r) => { const x = tl(r); return !!x && x.conf < LOW; };
+  const sync = () => { hl.scrollTop = ta.scrollTop; hl.scrollLeft = ta.scrollLeft; };
+  function paint(follow = true) {
+    const rs = rows(), c = curRow();
+    hl.innerHTML = rs.map((r, i) => `<div class="${[isLow(r) ? "lowl" : "", i === c ? "cur" : ""].join(" ").trim()}">${esc(r.t) || " "}</div>`).join("");
+    sync();
+    if (!follow) return;
+    const x = tl(rs[c]);
+    if (x) { showBox(x.bbox); scrollToBox(x.bbox); } else $("box").style.display = "none";
+  }
+  const keepDraft = () => store.set(draftKey, JSON.stringify({ text: ta.value, verified: $("verified").checked, note: $("note").value, at: new Date().toISOString() }));
+  function onInput() {
+    if (ta.value.includes("|") || ta.value.includes("।।")) {
+      const p = ta.selectionStart, before = fixBars(ta.value.slice(0, p));
+      ta.value = before + fixBars(ta.value.slice(p));
+      ta.selectionStart = ta.selectionEnd = before.length;
+    }
+    keepDraft(); paint();
+  }
+  function insert(s) { ta.setRangeText(s, ta.selectionStart, ta.selectionEnd, "end"); onInput(); }
+  function jump(dir) {
+    const rs = rows();
+    for (let i = curRow() + dir; i >= 0 && i < rs.length; i += dir) {
+      if (!isLow(rs[i])) continue;
+      const start = rs.slice(0, i).reduce((n, r) => n + r.t.length + 1, 0);
+      ta.focus(); ta.setSelectionRange(start, start + rs[i].t.length);
+      ta.scrollTop = Math.max(0, i * parseFloat(getComputedStyle(ta).lineHeight) - ta.clientHeight / 3);
+      paint(); return;
+    }
+    $("saved").textContent = dir > 0 ? "No more unsure lines below." : "No more unsure lines above.";
+  }
+  async function save(next) {
+    const text = fixVerseDigits(ta.value), fixed = text !== ta.value;
     try {
-      const r = await api(`/api/${S.work}/${S.page}/groundtruth`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: $("gt").value, verified: $("verified").checked, note: $("note").value }) });
-      $("saved").textContent = `Saved to ${r.saved}`;
-      const keepMode = S.mode; await loadPage(S.page); if (keepMode === "edit") setMode("edit");
-    } catch (e) { $("saved").textContent = "Save failed: " + e.message; }
+      const r = await api(`/api/${S.work}/${S.page}/groundtruth`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text, verified: $("verified").checked, note: $("note").value }) });
+      store.del(draftKey);
+      S.flash = `Saved p${S.page} to ${r.saved}` + (fixed ? " (verse numbers changed to Devanagari digits)" : "");
+      const i = S.pages.findIndex((p) => p.page === S.page), n = next ? S.pages[i + 1] : null;
+      if (next && !n) S.flash += " · this was the last page";
+      await loadPage(n ? n.page : S.page); // still in Proofread mode, so this redraws the editor
+    } catch (e) { $("saved").textContent = "Save failed: " + e.message + " (your edits are still kept in this browser)"; }
+  }
+
+  ta.addEventListener("input", onInput);
+  ta.addEventListener("keyup", () => paint());
+  ta.addEventListener("click", () => paint());
+  ta.addEventListener("scroll", sync);
+  $("verified").onchange = keepDraft;
+  $("note").oninput = keepDraft;
+  $("pal").addEventListener("mousedown", (e) => e.preventDefault()); // keep the cursor in the text
+  $("pal").onclick = (e) => { const b = e.target.closest("button[data-c]"); if (b) insert(b.dataset.c); };
+  $("rom").oninput = () => ($("romout").textContent = translit($("rom").value));
+  $("rom").onkeydown = (e) => {
+    if (e.key === "Enter") { e.preventDefault(); if ($("rom").value) insert(translit($("rom").value)); $("rom").value = ""; $("romout").textContent = ""; }
+    if (e.key === "Escape") ta.focus();
   };
+  $("save").onclick = () => save(false);
+  $("savenext").onclick = () => save(true);
+  if (restored) $("discard").onclick = () => { store.del(draftKey); renderEdit(); };
+  S.edit = { save, jump };
+  paint(false);
 }
+
+document.addEventListener("keydown", (e) => {
+  if (S.mode !== "edit" || !S.edit) return;
+  const mod = e.metaKey || e.ctrlKey;
+  if (mod && e.key.toLowerCase() === "s") { e.preventDefault(); S.edit.save(false); }
+  else if (mod && e.key === "Enter") { e.preventDefault(); S.edit.save(true); }
+  else if (e.key === "F2") { e.preventDefault(); S.edit.jump(e.shiftKey ? -1 : 1); }
+  else if (e.altKey && (e.key === "ArrowDown" || e.key === "ArrowUp")) { e.preventDefault(); S.edit.jump(e.key === "ArrowDown" ? 1 : -1); }
+});
 
 function render() {
   if (!S.data) return;
+  S.edit = null;
   const diff = S.mode === "diff";
   $("vs").style.display = $("engB").style.display = diff ? "" : "none";
   $("engA").style.display = S.mode === "edit" ? "none" : "";
