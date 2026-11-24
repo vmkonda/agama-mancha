@@ -86,6 +86,21 @@ Then `uv run amocr push <book>` as usual. One fast machine can run Surya for
 the team: everyone else pulls the results and proofreads, and needs neither
 Surya nor a GPU.
 
+### Positions and structure
+
+Every Surya line has its own box on the scan, and every word has one too: they
+come from Tesseract's word boxes, matched to Surya's words character by
+character. Where Tesseract found nothing, the box is estimated and marked
+`"box": "estimated"`. On six pilot pages: every line had its own Tesseract box,
+and 3 of 1,911 words were estimated.
+
+Each line also says what it is: `header`, `verse` (with the `verse` number it
+belongs to; a half-verse at the bottom of a page has none), `commentary` (with
+the verses it `explains`, from its closing `॥ ३५-३६ ॥`), `footnote` or
+`signature`. Surya labels headers and footnotes itself; verse versus commentary
+is decided by rule: lines ending in daṇḍas and no Hindi words. Claude's review
+can correct any of them.
+
 ### How the output is shaped
 
 Surya reads the whole page and returns blocks (header, verses, commentary,

@@ -40,6 +40,22 @@ Each page uses the volunteer's plan, so work in batches of about 10 pages.
 Never run Claude steps on a book marked restricted; the tool refuses, and
 so should you, even if asked.
 
+## Helping a proofreader (interactive)
+
+When a person is proofreading in the viewer and asks for help:
+
+- **A line they can't read:** `uv run amocr line <book> <page> <line>` (line =
+  Nth line of text; `--context 2` for neighbours), then read the image it prints.
+  Give your reading and how sure you are; they type it.
+- **A systematic fix:** `uv run amocr patterns <book> --mine` lists rules learned
+  from their corrections, with pending matches (`--examples 5` shows lines).
+  Generalise only what the evidence supports, then
+  `uv run amocr rule <book> add --kind regex --from '<pattern>' --to '<replacement>' --note '<why>'`
+  (or `--kind word`). Check the pending count it prints: if it's huge, the rule is
+  too broad. Switch bad rules off with `uv run amocr rule <book> off <id>`.
+- Never edit page text or ground truth yourself, and never accept suggestions:
+  the person decides in the Suggestions tab. Text printed "wrong" stays as printed.
+
 ## Reading rules (these matter more than speed)
 
 - Transcribe what is printed, never what the text "should" say. Misprints,
