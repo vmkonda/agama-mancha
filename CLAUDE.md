@@ -24,6 +24,13 @@ Each page uses the volunteer's plan, so work in batches of about 10 pages.
      text that isn't printed, `block_types` (verse, commentary ...), `uncertain`.
      An empty `changes` list means every line was checked and is right. The
      `T:` lines are Tesseract's reading: a hint only, often wrong.
+   - **screen** (`--mode screen`, experimental): `screen.txt` only, no image.
+     Write `flags.json` (`{"work", "page", "mode": "screen", "flags": [{"line", "why"}],
+     "block_types"}`) flagging every line that may be misread; flag only, never
+     correct from the text. Then `uv run amocr claude-check <book>` builds
+     `check*.png` and `check.txt` for the flagged lines (plus Tesseract
+     disagreements); write `result.json` with mode "screen", corrections for
+     those lines only. Misses valid-looking misreadings, so don't use it for verses.
    - **bands**: `band0..2.png` (overlapping strips of the page) and
      `tesseract.txt`. Write the whole page (schema in
      `src/amocr/claude_session.py`; default mode "correct").

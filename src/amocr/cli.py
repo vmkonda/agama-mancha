@@ -180,7 +180,7 @@ def _prep_pages(work: Work, rows: list[dict], pages: list[int], mode: str) -> li
 
     for p in pages:
         _tesseract(work, rows, [p], quiet=True)
-    if mode == "review":
+    if mode in ("review", "screen"):
         missing = [p for p in pages if not base_result(work, p)]
         if missing:
             print(f"Surya on {len(missing)} page(s) first ...")
@@ -189,6 +189,9 @@ def _prep_pages(work: Work, rows: list[dict], pages: list[int], mode: str) -> li
 
 
 def _packet_help(mode: str) -> str:
+    if mode == "screen":
+        return ("Read screen.txt (text only) and write flags.json listing lines that may be misread "
+                "(rules in CLAUDE.md); then `amocr claude-check` builds images of just those lines")
     if mode == "review":
         return "Read review.txt and the sheet*.png images, write result.json (mode \"review\", rules in CLAUDE.md)"
     return "Read band*.png and tesseract.txt, write result.json (rules in CLAUDE.md)"
@@ -211,6 +214,11 @@ def cmd_claude_next(work: Work, args) -> None:
     if waiting:
         print(f"{len(waiting)} finished page(s) not imported yet: run `amocr claude-import {work.id} --ready` first")
         return
+    screening = [d.name for d in sorted((work.workdir / "claude").glob("p*")) if (d / "screen.txt").exists() and not (d / "result.json").exists()]
+    if screening:
+        print(f"{len(screening)} screened page(s) still need their image check ({', '.join(screening)}): "
+              f"write flags.json, run `amocr claude-check {work.id}`, then result.json and `claude-import --ready`")
+        return
     rows = _inventory(work)
     pages = next_pages(work, args.n, _needs_ocr(rows))
     if not pages:
@@ -220,6 +228,32 @@ def cmd_claude_next(work: Work, args) -> None:
     for p, d in _prep_pages(work, rows, pages, mode):
         print(f"p{p}: {d}")
     print(f"\n{len(pages)} page(s) ready for Claude ({mode} mode). {_packet_help(mode)} in each folder, "
+          f"then `amocr claude-import {work.id} --ready`.")
+
+
+def cmd_claude_check(work: Work, args) -> None:
+    """Screen mode, step 2: line images for the lines flagged in flags.json (plus Tesseract disagreements)."""
+    from .claude_review import prep_check
+    from .claude_session import inbox
+
+    _no_claude_if_restricted(work)
+    rows = _inventory(work)
+    done = 0
+    for d in sorted((work.workdir / "claude").glob("p*")):
+        page = int(d.name[1:])
+        if not (d / "flags.json").exists() or (d / "result.json").exists():
+            continue
+        if (d / "check.txt").exists() and not args.force:
+            continue
+        n = len(json.loads((d / "lines.json").read_text(encoding="utf-8"))["lines"])
+        by_claude, by_tess = prep_check(work, page, _image(work, rows[page - 1]), inbox(work, page))
+        print(f"p{page}: check {len(by_claude) + len(by_tess)} of {n} lines "
+              f"({len(by_claude)} flagged from the text, {len(by_tess)} where Tesseract disagrees)")
+        done += 1
+    if not done:
+        print("no pages waiting for a check (they need flags.json and no result.json yet)")
+        return
+    print(f"\nRead check.txt and the check*.png images in each folder, write result.json (mode \"screen\"), "
           f"then `amocr claude-import {work.id} --ready`.")
 
 
@@ -459,15 +493,19 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--langs", default="san+hin")
     p.add_argument("--psm", type=int, default=3)
     p.add_argument("--force", action="store_true", help="redo pages that already have a result")
-    mode_help = "review: Claude checks Surya's reading line by line (fewer tokens); bands: Claude reads whole-page strips; auto: review if Surya is installed"
+    mode_help = ("review: Claude checks every line of Surya's reading against line images; screen: Claude reads "
+                 "Surya's text first and sees images only of lines it flags (fewest tokens); bands: whole-page strips; "
+                 "auto: review if Surya is installed")
     p = book_cmd("claude-next", cmd_claude_next, help="prepare the next pages for Claude")
     p.add_argument("-n", type=int, default=10)
-    p.add_argument("--mode", choices=["auto", "review", "bands"], default="auto", help=mode_help)
+    p.add_argument("--mode", choices=["auto", "review", "screen", "bands"], default="auto", help=mode_help)
+    p = book_cmd("claude-check", cmd_claude_check, help="screen mode: build images of the flagged lines")
+    p.add_argument("--force", action="store_true", help="rebuild check packets that already exist")
     p = book_cmd("claude-import", cmd_claude_import, pages=True, help="store Claude's finished pages")
     p.add_argument("--ready", action="store_true", help="every page with a result.json not yet imported")
     p.add_argument("--force", action="store_true")
     p = book_cmd("claude-prep", cmd_claude_prep, pages=True, help="prepare specific pages for Claude")
-    p.add_argument("--mode", choices=["auto", "review", "bands"], default="auto", help=mode_help)
+    p.add_argument("--mode", choices=["auto", "review", "screen", "bands"], default="auto", help=mode_help)
     book_cmd("push", cmd_push, help="upload results to the team's OCR Mirror")
     book_cmd("pull", cmd_pull, help="download results others pushed")
     book_cmd("eval", cmd_eval, help="CER of every result vs ground truth")

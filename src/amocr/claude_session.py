@@ -31,7 +31,7 @@ from . import __version__
 from .catalog import Work
 
 REGION_TYPES = {"header", "verse", "commentary", "footnote", "signature", "other"}
-MODES = {"direct", "correct", "review"}
+MODES = {"direct", "correct", "review", "screen"}
 BANDS = [(0.0, 0.38), (0.30, 0.68), (0.60, 1.0)]  # overlapping, so no line is cut in every band
 BASELINE = "tesseract-san+hin-psm3"
 
@@ -47,6 +47,10 @@ def prep(work: Work, page: int, image: Path, mode: str = "bands") -> Path:
         from .claude_review import prep_review
 
         return prep_review(work, page, image, d)
+    if mode == "screen":
+        from .claude_review import prep_screen
+
+        return prep_screen(work, page, d)
     d.mkdir(parents=True, exist_ok=True)
     for old in list(d.glob("sheet*.png")) + [d / "review.txt", d / "lines.json"]:
         old.unlink(missing_ok=True)
@@ -100,16 +104,31 @@ def _review_record(work: Work, page: int, d: Path, res: dict) -> tuple[str, list
     if res.get("work") != work.id or res.get("page") != page:
         raise ValueError(f"result is for {res.get('work')} p{res.get('page')}, expected {work.id} p{page}")
     packet = json.loads((d / "lines.json").read_text(encoding="utf-8"))
+    config = {"mode": res["mode"], "base": packet["base"]}
+    extra: list[str] = []
+    if res["mode"] == "screen":
+        from .claude_review import read_flags
+
+        flags = read_flags(d, work, page)
+        res = {"block_types": flags.get("block_types", {})} | res
+        flagged = {fl["line"] for fl in flags.get("flags", [])}
+        by_tess = {i for i, ln in enumerate(packet["lines"], 1) if ln.get("tess")}
+        checked = flagged | by_tess
+        touched = {c.get("line") for c in res.get("changes", [])} | {x.get("line") for x in res.get("delete", [])}
+        if touched - checked:
+            extra.append(f"changes to lines that weren't checked against an image: {sorted(touched - checked)}")
+        config |= {"flagged_by_claude": sorted(flagged), "flagged_by_tesseract": sorted(by_tess - flagged),
+                   "lines": len(packet["lines"])}
     lines, changes, warnings = apply_review(res, packet["lines"])
     regs = regions(lines)
     out_lines = [{"text": ln["text"], "type": ln["type"], "verse": None, "bbox": ln.get("bbox")} for ln in lines]
-    return to_text({"regions": regs}), regs, out_lines, changes, warnings, {"mode": "review", "base": packet["base"]}
+    return to_text({"regions": regs}), regs, out_lines, changes, warnings + extra, config
 
 
 def import_result(work: Work, page: int, force: bool = False, operator: str = "") -> tuple[Path, list[str]]:
     d = inbox(work, page)
     res = json.loads((d / "result.json").read_text(encoding="utf-8"))
-    if res.get("mode") == "review":
+    if res.get("mode") in ("review", "screen"):
         text, regs, out_lines, changes, warnings, config = _review_record(work, page, d, res)
         return _store(work, page, res, text, regs, out_lines, changes, warnings, config, force, operator)
     base = d / "tesseract.txt"
