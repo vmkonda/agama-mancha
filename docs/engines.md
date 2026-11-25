@@ -64,6 +64,7 @@ tokens:
 |---|---|
 | look-alike | a word that is rare in this book while a look-alike of it is common (देवो/देवी, बादि/आदि, अमराचित/अमरार्चित), whole words first, then a character model trained on the book's own text (catches compounds) |
 | metre | a verse line with the wrong syllable count |
+| context | a common word whose look-alike is also common (को/की, हो/ही, भो/भी): the next word decides, e.g. "की तरह" is far more usual in the book than "को तरह" |
 | verse number | a verse number out of sequence |
 | Tesseract | Tesseract reads the same line differently |
 | rare | a word that occurs once and looks unusual for this book |
@@ -86,6 +87,21 @@ roughly halves the lines that need an image check while keeping most errors. It
 doesn't replace reading: the misses are single wrong letters that form valid
 words, and footnote markers. These numbers come from one book; measure again on
 each new one (`amocr suspects <book> --eval`).
+
+## Book brief and glossary
+
+`amocr brief <book> --sources --pages …` collects, cheaply, what Claude needs to
+write a short brief of a book: its structure found from the text (front matter,
+contents, chapter starts and colophons, indexes), its most frequent words, and the
+text of the pages you choose (title pages, introduction, contents). Claude reads
+that once (about 15,000 tokens for the pilot book, against 300,000+ to read the
+whole book) and writes `data/works/<book>/brief.md` and `glossary.json`.
+
+- `amocr chat wait` points Claude to the brief before it checks lines.
+- Glossary terms count as well-known words in `amocr suspects`.
+- The viewer's chat panel links to the brief for proofreaders.
+
+Both files quote the book, so they live in `data/` and are never committed.
 
 ## Surya
 

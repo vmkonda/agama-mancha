@@ -8,6 +8,8 @@ Every line of a book gets a score from independent signals:
              profile and from its own corrections, never from a built-in list.
   metre      a verse line with the wrong syllable count, if the book's profile sets one
              (16 for anuṣṭubh half-verses printed one per line).
+  context    a common word whose look-alike is also common (को/की, हो/ही), where the next word
+             says which: "की तरह" is far more usual in the book than "को तरह".
   verse_no   a verse number out of sequence (३५, ३६, ३९, ३८ ...).
   tesseract  Tesseract read the same line very differently.
   rare       a word that occurs once and whose letter sequences are among the least usual
@@ -32,7 +34,7 @@ IND = "अआइईउऊऋॠऌएऐओऔ"
 STRIP = "॥।,.;:()'\"‘’“”-—!?"
 # Measured on the pilot book's 42 known corrections (see docs/engines.md): look-alikes are precise,
 # Tesseract disagreement catches more but also flags many correct lines.
-WEIGHTS = {"lookalike": 3, "verse_no": 3, "metre": 2, "tesseract": 2, "rare": 1}
+WEIGHTS = {"lookalike": 3, "context": 3, "verse_no": 3, "metre": 2, "tesseract": 2, "rare": 1}
 TESS_DIFF = 0.08
 DIGITS = str.maketrans("०१२३४५६७८९", "0123456789")
 
@@ -125,6 +127,10 @@ def _vocab(work: Work) -> Counter:
         d = pat.draft(work, page)
         if d and not d["source"].startswith("tesseract"):
             freq.update(clean(t) for t in pat.tokens(d["text"]))
+    from .brief import glossary
+
+    for t in glossary(work):  # the book's key terms, spelled right, count as well known
+        freq[t["term"]] += 50
     return freq
 
 
@@ -150,6 +156,7 @@ def _overlap(a, b) -> float:
 def score_book(work: Work, pages: list[int] | None = None, min_ratio: float = 4.0, lm_margin: float = 2.0) -> list[dict]:
     """One entry per non-blank line: {page, n, text, type, score, reasons[], fixes[]}."""
     freq, prof = _vocab(work), profile(work)
+    ctx = [(re.compile(context_regex(r)), r) for r in context_fixes(work)]
     lm = CharModel(freq)
     odd = lm.threshold(0.03)  # the least book-like 3% of words
     out, verse_seq = [], []
@@ -181,6 +188,10 @@ def score_book(work: Work, pages: list[int] | None = None, min_ratio: float = 4.
                     fixes.append({"from": w, "to": best[1], "why": best[2], "seen": best[0], "rare": freq[w]})
                 elif freq[w] <= 1 and len(w) >= 3 and not re.search(r"[०-९0-9]", w) and lm.per_char(w) < odd:
                     reasons.append(f"rare: {w} is unusual for this book")
+            for rx, r in ctx:
+                if rx.search(line):
+                    reasons.append(f"context: {r['from']} {r['next']} → {r['to']} {r['next']} ({r['to']} {r['next']} {r['seen']}x in this book)")
+                    fixes.append({"from": r["from"], "to": r["to"], "why": "context", "seen": r["seen"], "rare": r["count"]})
             if typ == "verse" and prof["metre"]:
                 n = syllables(line)
                 if n and n != prof["metre"]:
@@ -200,6 +211,33 @@ def score_book(work: Work, pages: list[int] | None = None, min_ratio: float = 4.
     for e in out:
         e["score"] = sum(WEIGHTS[r.split(":")[0]] for r in e["reasons"])
     return out
+
+
+def context_fixes(work: Work, min_seen: int = 3, ratio: float = 4.0) -> list[dict]:
+    """Common words that a look-alike turns into another common word (को/की, हो/ही): only the
+    next word can tell them apart. Returns {from, to, next, count, seen} where "to next" is
+    far more usual in this book than "from next"."""
+    rules = profile(work)["lookalikes"]
+    uni, big = Counter(), Counter()
+    for page in pat.pages(work):
+        d = pat.draft(work, page)
+        if d and not d["source"].startswith("tesseract"):
+            toks = [clean(t) for t in pat.tokens(d["text"])]
+            uni.update(toks)
+            big.update(zip(toks, toks[1:]))
+    pairs = {(a, v, why) for a, c in uni.items() if c >= 5 and len(a) <= 6
+             for v, why in lookalikes(a, [r for r in rules if r[0] != "+र्"]) if uni[v] >= 20 and v != a}
+    out = []
+    for a, v, why in pairs:
+        for (x, nxt), c in big.items():
+            if x == a and nxt and big[(v, nxt)] >= min_seen and big[(v, nxt)] >= ratio * c:
+                out.append({"from": a, "to": v, "next": nxt, "count": c, "seen": big[(v, nxt)], "why": why})
+    return sorted(out, key=lambda r: -r["count"])
+
+
+def context_regex(r: dict) -> str:
+    b = pat.BOUNDARY
+    return rf"(?<![^{b}]){re.escape(r['from'])}(?=[ \t]+{re.escape(r['next'])}(?![^{b}]))"
 
 
 def known_errors(work: Work) -> dict[tuple[int, int], tuple[str, str]]:

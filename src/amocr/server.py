@@ -151,6 +151,13 @@ class Handler(BaseHTTPRequestHandler):
                 if a not in res or b not in res:
                     return self._err("unknown result label")
                 return self._json({"ops": _diff(res[a]["text"], res[b]["text"]), "cer": round(cer(res[a]["text"], res[b]["text"]), 4)})
+            if parts[0] == "brief" and len(parts) == 2:
+                from . import brief
+
+                work, _ = self._work_page(parts[1:2])
+                p = brief.brief_path(work)
+                body = p.read_text(encoding="utf-8") if p.exists() else f"No brief yet. In Claude Code: amocr brief {work.id} --sources"
+                return self._send(body.encode(), "text/plain; charset=utf-8")
             if parts[0] == "crop" and len(parts) == 3:
                 work, page = self._work_page(parts[1:])
                 b = [int(float(x)) for x in parse_qs(url.query).get("b", [""])[0].split(",")]

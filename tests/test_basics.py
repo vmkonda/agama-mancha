@@ -358,3 +358,23 @@ def test_suspects_signals():
     assert lookalikes("देवो", []) == []  # nothing is built in: a book without a profile gets no look-alikes
     lm = CharModel(Counter({"मालिनी": 50, "देवी": 40, "उसी": 30, "विजय": 20}))
     assert lm.score("मालिनीविजय") > lm.score("मालिनोविजय")
+
+
+def test_context_fixes_only_in_context(tmp_path, monkeypatch):
+    import json
+    import re
+
+    from amocr import suspects as sus
+    from amocr.catalog import Work
+
+    monkeypatch.setenv("AMOCR_DATA", str(tmp_path))
+    w = Work(id="B-ctx", title="t", languages=["hin"], sha256="x", extra={"profile": {"lookalikes": [["ो", "ी", "shape"]]}})
+    text = ("उस की तरह है । " * 30 + "राम को दिया । " * 30 + "उस को तरह है । " * 2 + "\n")
+    ocr = w.page_dir(1) / "ocr"
+    ocr.mkdir(parents=True)
+    (ocr / "surya-2.5-0.24.0.json").write_text(json.dumps({"text": text, "lines": [{"text": text.strip(), "bbox": [0, 0, 9, 9]}]},
+                                                          ensure_ascii=False), encoding="utf-8")
+    fixes = sus.context_fixes(w)
+    assert [(f["from"], f["next"], f["to"]) for f in fixes] == [("को", "तरह", "की")]
+    rx = re.compile(sus.context_regex(fixes[0]))
+    assert rx.search("उस को तरह है") and not rx.search("राम को दिया")  # को stays को where it belongs
