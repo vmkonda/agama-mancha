@@ -97,8 +97,9 @@ A book never gets its own layout, buttons or colours.
   usually is: a misread daṇḍa or verse number. The warnings point at those.
 - **Another edition as a second pair of eyes.** If the book has a reference
   e-text (see docs/engines.md), each verse line is compared with it and
-  differences appear among the warnings ("differs from GRETIL 13.41ab:
-  …dran[o]lābh… ↔ …dran[ī]lābh…"); hover to see the reference's half-verse.
+  differences appear among the warnings, your word first, then the other
+  edition's: "घनावृतेन्द्रनोलाभो → GRETIL: घनावृतेन्द्रनीलाभरविबिम्बसमाकृतिम्
+  (GRETIL 13.41ab)". Hover to see the reference's whole half-verse.
   Check the print: often it's an OCR slip, sometimes the editions really
   differ. Type what is printed; if the print looks like a misprint, say so in
   the note.

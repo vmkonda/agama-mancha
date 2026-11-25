@@ -633,5 +633,7 @@ def test_reference_cross_check(tmp_path, monkeypatch):
     st = assemble.page_structure(w, 5, text)
     assert st["reference"] == "TEST" and st["lines"][1]["ref"] == "13.1ab" and st["lines"][2]["ref"] == "13.1cd"
     ref_w = [x for x in st["warnings"] if x.get("kind") == "reference"]
-    assert len(ref_w) == 1 and ref_w[0]["line"] == 3 and "[o]" in ref_w[0]["text"] and "[ī]" in ref_w[0]["text"]
+    assert len(ref_w) == 1 and ref_w[0]["line"] == 3
+    assert ref_w[0]["diffs"] == [{"ours": "नदो", "ref": "नदी"}]          # the words, in Devanagari
+    assert reference.deva("muhūrtād akhedataḥ") == "मुहूर्ताद् अखेदतः"
     assert reference.norm("vanaṃ gacchati") == reference.norm("vanam gacchati") == reference.norm("vanaṅgacchati")

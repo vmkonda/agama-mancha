@@ -454,16 +454,16 @@ def page_structure(work: Work, page: int, text: str) -> dict:
         for n, (t, tag) in enumerate(zip(lines, out), 1):
             if tag["type"] != "verse":
                 continue
-            c = reference.compare(work, iast(VERSE_NO.sub("", t)), chapter)
+            c = reference.compare_line(work, VERSE_NO.sub("", t), chapter)
             if not c:
                 continue
             tag["ref"] = c["key"]
             if c["diffs"]:
-                shown = "; ".join(f"…{d['context']}… ↔ …{d['ref_context']}…" for d in c["diffs"][:2])
-                more = f" (+{len(c['diffs']) - 2} more)" if len(c["diffs"]) > 2 else ""
-                warnings.append({"line": n, "kind": "reference",
-                                 "text": f"differs from {ref['name']} {c['key']}: {shown}{more}. Check the print; editions differ",
-                                 "ref": c["text"]})
+                shown = "; ".join(f"{d['ours']} → {ref['name']}: {d['ref']}" for d in c["diffs"][:3])
+                more = f" (+{len(c['diffs']) - 3} more)" if len(c["diffs"]) > 3 else ""
+                warnings.append({"line": n, "kind": "reference", "diffs": c["diffs"], "key": c["key"],
+                                 "text": f"{shown}{more} ({ref['name']} {c['key']}). Check the print; editions differ",
+                                 "ref": c["ref_deva"]})
     # A verse number that isn't closed properly ("॥ ३८ ।", "। ३८ ॥", "॥ ३८"): the assembler can't see it.
     bad_no = re.compile(r"[।॥]\s*[०-९0-9]+(?:\s*[-–]\s*[०-९0-9]+)?\s*[।॥]?\s*$")
     for n, (t, tag) in enumerate(zip(lines, out), 1):
