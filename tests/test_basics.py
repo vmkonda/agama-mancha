@@ -696,3 +696,35 @@ def test_page_grid(tmp_path, monkeypatch):
     assert g["done"] == 1 and g["counts"]["proofread"] == 1 and g["pages"][1]["proofread_by"] == "anna"
     ws = grid.warnings(w)
     assert set(ws) == {2, 3, 4} and ws[4] == {"structure": 0, "reference": 0}    # chapter pages only
+
+
+def test_save_history(tmp_path, monkeypatch):
+    """Every save is kept; a page's text from before history is kept first; the base reading is found."""
+    import json
+
+    from amocr import history, ladder
+    from amocr.catalog import Work
+
+    monkeypatch.setenv("AMOCR_DATA", str(tmp_path))
+    w = Work(id="B-test000005", title="t", languages=["san"], sha256="0" * 64)
+    ocr = w.page_dir(3) / "ocr"
+    ocr.mkdir(parents=True)
+    (ocr / "surya-2.5-0.24.0.json").write_text(json.dumps({"text": "रामो वनं\n"}), encoding="utf-8")
+    w.gt_dir.mkdir(parents=True)
+    (w.gt_dir / "p0003.txt").write_text("रामः वनं\n", encoding="utf-8")                  # saved before history
+    (w.gt_dir / "p0003.meta.json").write_text(json.dumps({"reviewer": "anna", "verified": False, "saved": "t0"}))
+    meta = ladder.change(json.loads((w.gt_dir / "p0003.meta.json").read_text()), "proofread", "anna", now="t1")
+    assert history.record(w, 3, "रामः वनं गच्छति\n", meta, "save") == 1
+    vs = history.load(w, 3)
+    assert [(v["v"], v["how"], v["text"]) for v in vs] == [(0, "before history", "रामः वनं\n"), (1, "save", "रामः वनं गच्छति\n")]
+    assert vs[1]["status"] == "proofread" and vs[1]["by"] == "anna"
+    assert history.base_text(w, 3) == ("surya-2.5-0.24.0", "रामो वनं\n")
+
+
+def test_chat_fix_quotes_are_not_text():
+    """A --fix written as '231:7:"…"' must not put the quotes into the proposed line."""
+    from amocr.chat import _unquote
+
+    assert _unquote('"योजनानां शतं गत्वा ।"') == "योजनानां शतं गत्वा ।"
+    assert _unquote("“योजनानां ।”") == "योजनानां ।"
+    assert _unquote("'मातृचक्र' का अर्थ") == "'मातृचक्र' का अर्थ"     # quotes inside a printed line stay

@@ -105,6 +105,16 @@ A unit of text (a verse, a commentary passage) is as far along as its least
 checked page, and a book is *verified* on the board only when every page is
 validated or has no text.
 
+### History: every save is kept
+
+Under the Save buttons, **History and changes since the OCR** lists every save of
+the page (who, when, which status, and whether it was a save in Proofread,
+accepted suggestions or a fix from the chat), newest first. *What changed* shows
+the difference from the save before it. **Changes since the OCR** shows
+everything changed from the engine reading the page started from: this is what
+a validator should read first, then check the rest of the page against the print.
+Nothing in the history is ever deleted.
+
 ### Helpers in Proofread
 
 - **The scan follows your cursor.** The line you're on is outlined on the

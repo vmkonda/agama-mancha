@@ -23,6 +23,9 @@ src/amocr/
   board.py           claims, stages and progress, one file per person on the drive
   inventory.py       which PDFs need OCR: text layers measured and graded
   dedupe.py          the same book under two ids on one machine: merge
+  ladder.py          a page's status: draft, proofread, validated (second person), problem, no text
+  grid.py            the Pages view: every page's status, grouped by chapter, with warning counts
+  history.py         every save of a page's text (groundtruth/pNNNN.history.jsonl)
   book.py            volunteer ops: add, fetch, export, merge results, push, pull
   proton.py          wrapper around the official proton-drive CLI
   metrics.py         normalisation + character error rate

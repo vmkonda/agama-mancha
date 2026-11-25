@@ -261,6 +261,30 @@ class Handler(BaseHTTPRequestHandler):
                                               "can_validate": ok, "why_not": why,
                                               "proofread_by": (meta or {}).get("proofread_by"),
                                               "validated_by": (meta or {}).get("validated_by")}})
+            if parts[0] == "api" and len(parts) in (4, 5) and parts[3] == "history":
+                from . import history
+
+                work, page = self._work_page(parts[1:3])
+                versions = history.load(work, page)
+                base = history.base_text(work, page)
+                if len(parts) == 4:
+                    return self._json({"versions": [{k: v for k, v in x.items() if k != "text"} for x in versions],
+                                       "base": base[0] if base else None})
+                if parts[4] != "diff":
+                    raise LookupError("not found")
+                q = parse_qs(url.query)
+                texts = {str(x["v"]): x["text"] for x in versions}
+                if base:
+                    texts["ocr"] = base[1]
+                gt = work.gt_dir / f"p{page:04d}.txt"
+                if versions:
+                    texts["current"] = versions[-1]["text"]
+                elif gt.exists():                                   # saved before history began
+                    texts["current"] = gt.read_text(encoding="utf-8")
+                a, b = q.get("a", [""])[0], q.get("b", [""])[0]
+                if a not in texts or b not in texts:
+                    return self._err("unknown version")
+                return self._json({"ops": _diff(texts[a], texts[b]), "cer": round(cer(texts[a], texts[b]), 4)})
             if parts[0] == "api" and len(parts) == 4 and parts[3] == "diff":
                 work, page = self._work_page(parts[1:3])
                 q = parse_qs(url.query)
@@ -384,6 +408,11 @@ class Handler(BaseHTTPRequestHandler):
             # Check the step first (e.g. validating your own proofreading), so a refusal changes nothing.
             # Keep what's already recorded (the reading it started from, fixes applied).
             meta = ladder.change(old_meta, status, cfgmod.load().operator, str(body.get("note", ""))[:2000])
+            if body.get("base") and not meta.get("base"):      # the reading the page started from
+                meta["base"] = str(body["base"])[:200]
+            from . import history
+
+            history.record(work, page, text, meta, "save")       # every version is kept
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(text.rstrip("\n") + "\n", encoding="utf-8")
             meta_path.write_text(json.dumps(meta, ensure_ascii=False, indent=1), encoding="utf-8")

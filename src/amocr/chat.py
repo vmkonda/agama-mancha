@@ -153,9 +153,20 @@ def range_context(work: Work, page: int, n1: int, n2: int) -> dict:
     return out
 
 
+_QUOTES = {'"': '"', "'": "'", "“": "”", "‘": "’"}
+
+
+def _unquote(t: str) -> str:
+    """A proposed line wrapped in quotes ('"योजनानां … ।"') means the quotes came from the command line,
+    not the print: printed lines don't begin and end with a matching pair. Strip them."""
+    while len(t) >= 2 and t[0] in _QUOTES and t[-1] == _QUOTES[t[0]]:
+        t = t[1:-1].strip()
+    return t
+
+
 def check_action(work: Work, a: dict) -> dict:
     if a.get("type") == "line":
-        page, n, to = int(a["page"]), int(a["n"]), str(a["to"]).strip()
+        page, n, to = int(a["page"]), int(a["n"]), _unquote(str(a["to"]).strip())
         if not to:
             raise ValueError("a line fix needs the whole new line")
         ctx = line_context(work, page, n)
