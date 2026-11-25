@@ -1,0 +1,55 @@
+# The librarian: first end-to-end slice
+
+The design doc's five layers, built thinly over the Trika core from published e-texts, so the whole
+idea can be tested before the OCR of any book is finished. Everything runs on this machine; the only
+Claude use is the session that asks the questions.
+
+| Layer | What exists now |
+|---|---|
+| Library | 10 GRETIL e-texts as works `ET-0001`…`ET-0010` (provisional ids until the team's `SL-` list), units `work/chapter/verse/layer` in Devanagari with IAST, status `edition`; plus the assembled units of OCR'd books (Mālinī `SL-0001`, with Miśra's Hindi commentary, status `draft`) |
+| Preprocessing | units from the editions' own structure: verses, sūtras, Bhāskara's vārttika and Utpala's vṛtti linked to what they explain, prose split near 400 words |
+| Index | LanceDB: keyword search on IAST folded to plain letters plus bge-m3 meaning search (local Ollama), merged by rank fusion. Ids and search text only; passages are read from the library |
+| Curation | not yet (work cards, concept glossary): the design builds it after the index |
+| Librarian | an MCP tool for Claude Code: `search`, `get_unit` (with the commentary on a unit), `list_works`, with the design's grounding rules as its instructions |
+
+## The Trika core
+
+| Id | Work | Units |
+|---|---|---|
+| ET-0001 | Mālinīvijayottaratantra | 1,292 |
+| ET-0002 | Vijñānabhairava | 174 |
+| ET-0003 | Śivasūtra with Bhāskara's Vārttika | 833 |
+| ET-0004 | Spandakārikā | 57 |
+| ET-0005 | Tantrasāra | 46 (prose passages) |
+| ET-0006 | Tantrāloka | 5,901 |
+| ET-0007 | Pratyabhijñāhṛdaya | 167 |
+| ET-0008 | Īśvarapratyabhijñākārikā with Vṛtti | 372 |
+| ET-0009 | Paramārthasāra | 105 |
+| ET-0010 | Svacchandatantra | 3,680 |
+
+GRETIL's e-texts are licensed CC BY-NC-SA (non-commercial; internal use is fine); they live in
+`data/etexts/` and `data/library/`, never in the repo. Citations name GRETIL's edition, which is not
+the team's printed copy.
+
+## Using it
+
+```sh
+uv sync --extra librarian                  # LanceDB and the MCP library
+ollama pull bge-m3                         # the embedding model (local)
+uv run librarian ingest data/etexts/gretil/*.xml
+uv run librarian build                     # about 10 minutes for 15,000 units
+uv run librarian search "spanda"           # or Devanagari, or English
+uv run librarian get ET-0003/1/1/mula      # a sūtra with the vārttika on it
+```
+
+In Claude Code in this folder, the `agama-librarian` MCP tool (`.mcp.json`) gives Claude `search`,
+`get_unit` and `list_works`; approve it once when asked. Ask a question and Claude answers from the
+retrieved passages only, with citations.
+
+## Not yet
+
+- Work cards and the concept glossary (cross-language questions lean on meaning search until then).
+- Sandhi splitting and lemmas in the search fields.
+- The evaluation set: 20 questions with known passages, written by the owner; run after every rebuild.
+- Mapping verse numbers between GRETIL's Mālinī and the printed edition, so the Hindi commentary links
+  to the GRETIL mūla.

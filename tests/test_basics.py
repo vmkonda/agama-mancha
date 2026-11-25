@@ -728,3 +728,30 @@ def test_chat_fix_quotes_are_not_text():
     assert _unquote('"योजनानां शतं गत्वा ।"') == "योजनानां शतं गत्वा ।"
     assert _unquote("“योजनानां ।”") == "योजनानां ।"
     assert _unquote("'मातृचक्र' का अर्थ") == "'मातृचक्र' का अर्थ"     # quotes inside a printed line stay
+
+
+def test_etext_parse_patterns():
+    """GRETIL's ways of marking structure: ids, pāda references, verse numbers, vṛtti, sūtra refs, prose."""
+    import pytest
+
+    pytest.importorskip("lancedb")
+    from librarian.etext import parse
+    from librarian.index import fold
+
+    xml = """<TEI><text><body>
+    <lg xml:id="AbhT_1.1"><l>vimalakalāśrayābhinava /</l><l>sṛṣṭimahā jananī //</l></lg>
+    <p>2.1ab: athaiṣām eva tattvānāṃ 2.1cd: prapañcaḥ kathyate leśāt</p>
+    <lg><l>jāgradādi vibhede 'pi</l><l>nivartate nijān naiva || 3 ||</l></lg>
+    <p>Ipv: kevalam asya svasaṃvedanasiddhasya</p>
+    <l>jñānaṃ bandhaḥ // SivS_1.2 //</l>
+    <p>* [&lt;śivasūtravārtika:&gt; / * ajñānam iti tatrādyaṃ || SivSV_1.2:1 ||</p>
+    <p>iha jñānaṃ mokṣakāraṇaṃ bandhanimittasya ajñānasya</p>
+    </body></text></TEI>"""
+    rows = parse(xml)
+    got = [(r["chapter"], r["verse"], r["layer"]) for r in rows]
+    assert got == [("1", "1", "mula"), ("2", "1", "mula"), ("2", "3", "mula"), ("2", "3", "vrtti"),
+                   ("1", "2", "mula"), ("1", "2:1", "varttika"), ("1", "p1", "mula")]
+    assert rows[1]["iast"] == "athaiṣām eva tattvānāṃ / prapañcaḥ kathyate leśāt"
+    assert rows[5]["explains"] == "2" and rows[4]["iast"] == "jñānaṃ bandhaḥ"
+    assert fold("Spanda-kārikā") == fold("spanda kArikA".replace("A", "a")) == "spanda karika"
+    assert fold("स्पन्दः") == "spandah"
