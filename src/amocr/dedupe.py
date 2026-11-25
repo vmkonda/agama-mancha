@@ -44,7 +44,7 @@ def _files(root: Path):
         return
     for f in sorted(root.rglob("*")):
         rel = f.relative_to(root)
-        if f.is_file() and rel.parts[0] not in SKIP_DIRS and str(rel) not in SKIP and f.name != ".DS_Store":
+        if f.is_file() and rel.parts[0] not in SKIP_DIRS and rel.as_posix() not in SKIP and f.name != ".DS_Store":
             yield rel
 
 
@@ -69,7 +69,7 @@ def plan(dup: Work, keep: Work) -> dict:
     same = 0
     for rel in _files(dup.workdir):
         src, dst = dup.workdir / rel, keep.workdir / rel
-        r = str(rel)
+        r = rel.as_posix()      # "groundtruth/p0001.txt" on Windows too
         if not dst.exists():
             copy.append(r)
         elif filecmp.cmp(src, dst, shallow=False) or _same_reading(src, dst):
