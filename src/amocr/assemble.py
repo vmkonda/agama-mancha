@@ -189,7 +189,7 @@ def _join(parts: list[str]) -> tuple[str, int]:
 
 def work_id(work: Work) -> tuple[str, bool]:
     """The permanent SL-… id when the catalog has one for this PDF; else the book id (provisional)."""
-    for w in load_works().values():
+    for w in load_works(include_merged=True).values():
         if w.origin == "repo" and w.sha256 == work.sha256 and w.id != work.id:
             return w.id, False
     return (work.id, work.id.startswith("B-"))

@@ -68,7 +68,22 @@ def book_id(sha256: str) -> str:
     return "B-" + sha256[:10]
 
 
-def load_works(path: Path | None = None) -> dict[str, Work]:
+def merged_ids() -> dict[str, str]:
+    """Books merged into another on this machine (amocr merge): old id -> kept id."""
+    f = data_dir() / "merged.json"
+    return {k: v["into"] for k, v in json.loads(f.read_text(encoding="utf-8")).items()} if f.exists() else {}
+
+
+def resolve(works: dict[str, "Work"], wid: str) -> str:
+    """A merged book's old id still works: it means the book it was merged into."""
+    seen = set()
+    while wid not in works and wid in (m := merged_ids()) and wid not in seen:
+        seen.add(wid)
+        wid = m[wid]
+    return wid
+
+
+def load_works(path: Path | None = None, include_merged: bool = False) -> dict[str, Work]:
     path = path or REPO_ROOT / "works.toml"
     works: dict[str, Work] = {}
     if path.exists():
@@ -81,6 +96,9 @@ def load_works(path: Path | None = None) -> dict[str, Work]:
         d = json.loads(bj.read_text(encoding="utf-8"))
         d.pop("origin", None)
         works.setdefault(d["id"], Work(**d, origin="book"))
+    if not include_merged:
+        for old in merged_ids():
+            works.pop(old, None)
     return works
 
 

@@ -121,3 +121,22 @@ replace them. The planned layout, by work, for Agama Mancha is in
 - **Cost:** each volunteer uses their own Claude plan. A 460-page book is
   many sessions for one person, so spread long books across volunteers by
   page ranges only if they coordinate closely, or one volunteer per book.
+
+## The same book twice on one machine
+
+If a book appears twice in the viewer (the same PDF under two ids, e.g. an old `SL-…`
+entry and the `B-…` id `amocr fetch` gives it), merge them:
+
+```
+uv run amocr duplicates                       # lists books that are the same PDF
+uv run amocr merge <old id> <id to keep> --dry-run
+uv run amocr merge <old id> <id to keep>
+```
+
+The merge copies everything the kept book doesn't have (page readings, saved text,
+Claude packets) and never overwrites. Readings that differ only in bookkeeping count as
+the same. If a person's work differs between the two (saved text, rules, glossary,
+brief), nothing changes and the files are listed, so someone can choose. The duplicate
+moves to `data/trash/` (delete it when you're sure); its old id keeps working. Only
+this machine changes; nothing on Proton Drive is deleted.
+

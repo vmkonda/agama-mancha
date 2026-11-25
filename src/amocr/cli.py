@@ -29,7 +29,7 @@ from pathlib import Path
 
 from . import __version__
 from . import config as cfgmod
-from .catalog import Work, load_works, sha256_of, verify_source
+from .catalog import Work, load_works, resolve, sha256_of, verify_source
 from .engines import get_engine
 from .metrics import cer
 from .pages import inventory, native_dpi, read_jsonl, render, write_jsonl
@@ -573,11 +573,54 @@ def _board_quietly() -> None:
 # ---- commands that don't take a single book ---------------------------------
 
 
+def cmd_duplicates(args) -> None:
+    """Books on this machine twice (same PDF under two ids)."""
+    from . import dedupe
+
+    groups = dedupe.duplicates()
+    if not groups:
+        print("no duplicate books on this machine")
+    for g in groups:
+        print(f"same PDF ({g[0].sha256[:12]}…):")
+        for w in g:
+            print(f"   {w.id:14} {dedupe._pages(w):4} pages with output   {w.title}")
+        print(f"   merge with: amocr merge {g[-1].id} {g[0].id} --dry-run")
+
+
+def cmd_merge(args) -> None:
+    """Merge a duplicate book into the one to keep; copies what's missing, never overwrites."""
+    from . import dedupe
+
+    works = load_works()
+    for wid in (args.dup, args.keep):
+        if wid not in works:
+            raise SystemExit(f"unknown book {wid!r}; known: {', '.join(works)}")
+    r = dedupe.merge(works[args.dup], works[args.keep], dry_run=args.dry_run)
+    print(f"{args.dup} -> {args.keep}: {len(r['copy'])} files to copy, {r['same']} the same, "
+          f"{len(r['kept'])} where {args.keep}'s machine output is kept, {len(r['conflicts'])} conflicts")
+    for rel in r["copy"][:args.show]:
+        print(f"   copy  {rel}")
+    if len(r["copy"]) > args.show:
+        print(f"   … and {len(r['copy']) - args.show} more")
+    for rel in r["kept"]:
+        print(f"   keep {args.keep}'s  {rel}  (the other goes to trash)")
+    for rel in r["conflicts"]:
+        print(f"   DIFFERS  {rel}")
+    if r["conflicts"]:
+        raise SystemExit("nothing changed: these files differ between the two books. Keep the right version in "
+                         f"{args.keep}, delete the other from {args.dup}, then merge again.")
+    if r["done"]:
+        print(f"merged; {args.dup} moved to {r['trash']} (delete that folder when you're sure). "
+              f"'{args.dup}' now means {args.keep}.")
+    else:
+        print("dry run: nothing changed. Run again without --dry-run to merge.")
+
+
 def cmd_status(args) -> None:
     from .book import page_status
 
     works = load_works()
-    ids = [args.work] if args.work else list(works)
+    ids = [resolve(works, args.work)] if args.work else list(works)
     for wid in ids:
         if wid not in works:
             raise SystemExit(f"unknown book {wid!r}")
@@ -925,6 +968,12 @@ def main(argv: list[str] | None = None) -> None:
     book_cmd("inventory", cmd_inventory)
     book_cmd("render", cmd_render, pages=True)
     book_cmd("checksum", cmd_checksum)
+    plain_cmd("duplicates", cmd_duplicates, "books on this machine twice (same PDF, two ids)")
+    p = plain_cmd("merge", cmd_merge, "merge a duplicate book into another: copy what's missing, then move it to data/trash")
+    p.add_argument("dup", help="the book id to merge away")
+    p.add_argument("keep", help="the book id to keep")
+    p.add_argument("--dry-run", action="store_true", help="show what would happen, change nothing")
+    p.add_argument("--show", type=int, default=15, help="how many files to list")
     p = book_cmd("estimate", cmd_estimate, pages=True, help="dry run for a paid engine")
     p.add_argument("--price-per-page", type=float, required=True)
     p.add_argument("--cap", type=float, required=True)
@@ -933,9 +982,12 @@ def main(argv: list[str] | None = None) -> None:
     if not args.per_book:
         return args.fn(args)
     works = load_works()
-    if args.work not in works:
+    wid = resolve(works, args.work)
+    if wid not in works:
         raise SystemExit(f"unknown book {args.work!r}; known: {', '.join(works) or 'none (use amocr fetch)'}")
-    args.fn(works[args.work], args)
+    if wid != args.work:
+        print(f"({args.work} was merged into {wid}; using {wid})", flush=True)
+    args.fn(works[wid], args)
 
 
 if __name__ == "__main__":
