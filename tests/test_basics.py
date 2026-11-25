@@ -636,4 +636,5 @@ def test_reference_cross_check(tmp_path, monkeypatch):
     assert len(ref_w) == 1 and ref_w[0]["line"] == 3
     assert ref_w[0]["diffs"] == [{"ours": "नदो", "ref": "नदी"}]          # the words, in Devanagari
     assert reference.deva("muhūrtād akhedataḥ") == "मुहूर्ताद् अखेदतः"
+    assert reference.strip_markers("योगी२ तद्गते १षट्बिन्दु क० पु०") == "योगी तद्गते षट्बिन्दु क० पु०"
     assert reference.norm("vanaṃ gacchati") == reference.norm("vanam gacchati") == reference.norm("vanaṅgacchati")

@@ -139,12 +139,23 @@ def _words_at(owner: list[int], i1: int, i2: int) -> list[int]:
 
 # --- Comparing -----------------------------------------------------------------------------------
 
+# Footnote markers, as the viewer tints them: a digit stuck to a letter (योगी२) or right before a
+# word (१षट्…). A lone ० after a letter is the abbreviation sign (क०) and stays.
+_MARK_AFTER = re.compile(r"(?<=[\u0900-\u0963\u0971-\u097F])(?!०(?![०-९]))[०-९0-9]+")
+_MARK_BEFORE = re.compile(r"(?:(?<=\s)|^)[१-९](?=[\u0905-\u0939])")
+
+
+def strip_markers(line: str) -> str:
+    return _MARK_BEFORE.sub("", _MARK_AFTER.sub("", line))
+
+
 def compare_line(work: Work, line_deva: str, chapter: int | None) -> dict | None:
     """Like compare(), for a Devanagari line: each difference names the line's word(s) and the
-    reference's word(s), both in Devanagari, so a proofreader can find them."""
+    reference's word(s), both in Devanagari, so a proofreader can find them. Footnote markers
+    are left out: they belong to this edition's apparatus, not to the text."""
     from .assemble import iast as to_iast
 
-    words = [w_ for w_ in line_deva.split() if norm(to_iast(w_))]
+    words = [w_ for w_ in strip_markers(line_deva).split() if norm(to_iast(w_))]
     ours, owner = _indexed(words, lambda w_: norm(to_iast(w_)))
     c = compare(work, to_iast(" ".join(words)), chapter, normed=ours)
     if not c:
@@ -157,7 +168,12 @@ def compare_line(work: Work, line_deva: str, chapter: int | None) -> dict | None
         if op == "equal":
             continue
         ow = " ".join(words[i] for i in _words_at(owner, i1, i2))
-        rw = " ".join(deva(rwords[j]) for j in _words_at(rowner, j1, j2))
+        idx = _words_at(rowner, j1, j2)
+        # GRETIL splits sandhi ("muhūrtād ety akhedataḥ"); a fragment ending in a virama reads
+        # better with the word it joins.
+        while idx and idx[-1] + 1 < len(rwords) and deva(rwords[idx[-1]]).endswith("्"):
+            idx.append(idx[-1] + 1)
+        rw = " ".join(deva(rwords[j]) for j in idx)
         if diffs and diffs[-1]["ours"] == ow:          # several differences in one word: say it once
             if rw not in diffs[-1]["ref"]:
                 diffs[-1]["ref"] += " " + rw
