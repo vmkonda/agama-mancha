@@ -46,10 +46,56 @@ In Claude Code in this folder, the `agama-librarian` MCP tool (`.mcp.json`) give
 `get_unit` and `list_works`; approve it once when asked. Ask a question and Claude answers from the
 retrieved passages only, with citations.
 
+## In the app
+
+The **Librarian** page (next to Library and Proofreading; `amocr serve` started with
+`uv run --extra librarian amocr serve`) has three tabs. (The **Library** page lists the team's PDFs on
+the drive; the works the librarian can search, e-texts included, are under **Librarian → Works**.)
+
+- **Works → Import e-texts** browses GRETIL's catalogue (about 800 TEI e-texts; search by title, in
+  IAST or plain letters) with an *Import* button on each, or takes a TEI XML file you upload. An import
+  downloads the file, reads its structure into passages, adds the work (`ET-` id) and indexes just its
+  passages, in seconds (the Bodhapañcadaśikā: 2 s). `librarian gretil search|import` does the same.
+  Passage ids depend on how a file marks its verses: unnumbered verses get placeholder ids (`q7`).
+- **External texts stay external.** An imported e-text is a pinned snapshot of the source, never
+  edited: its checksum and fetch date are recorded, the reader says where and when it came from, and
+  it lives only in `data/` on this machine (never on the shared drive, never redistributed). The local
+  copy is what keeps citations stable and lets the librarian work offline; an update at the source
+  becomes a new import, so old citations still point at the words they cited.
+- **Works → In the library** lists every work in the library (e-texts and OCR'd books) with its id, kind, number of
+  passages, source edition and licence; **Read** opens it at the first chapter.
+
+- **Search** reads passages in any language or script, filtered by work or layer, each with its
+  work, id, status (`edition` or `draft`), printed pages, and how it was found; *Context* opens the
+  commentary on it and its neighbours; *Copy citation* copies the passage with its id. Asking a
+  question and getting a cited answer happens in Claude Code, through the MCP tool.
+- **Read in context** (on every passage) opens the whole chapter with the cited passage outlined and
+  the commentary where the edition puts it, with the previous and next chapters. The way back to the
+  source: for the team's printed books, *scan p. N* opens that page in the viewer with the cited lines
+  outlined on the scan; for e-texts, the edition and licence, and a link to the GRETIL file. A reading
+  can be shared as a link: `/librarian#read=<unit id>`.
+- **Study with Claude** (a button in the reader) opens a panel beside the text. The outlined passage
+  is the one a question is about (on arrival, the cited one; click another to move the outline), or
+  select words with the mouse to ask about exactly those; the panel says which, in words. Ask about it (a translation, a term, what the commentary says, where else the
+  idea appears), and Claude answers from the library only, quoting the original with a translation;
+  every passage it cites is a link that opens in the reader. As with the proofreading chat, the app
+  can't call Claude: a Claude Code session in the project answers, after being asked to "listen to the
+  study chat" (`librarian study wait` / `reply`; conversations in `data/library/study/`).
+- **Evaluation** is the yardstick: 20 questions Claude drafted across the design's types (lookup,
+  concept, cross-language, commentary, not in the library), each with the passages it thinks answer
+  it. The owner corrects the expected unit ids (or *adds* one from the top results), approves or drops
+  each question, and runs the evaluation after every rebuild (`uv run librarian eval` does the same).
+  Questions and runs are in `data/library/eval/`.
+
+First baseline (2026-11-25, unreviewed draft answers): 11 of 18 scored questions have a correct
+passage in the top 10 (lookup 5/5, concept 3/5, cross-language 2/5, commentary 1/3). Some misses are
+the draft answers being too narrow: for the vāyavī dhāraṇā the top result is Miśra's commentary on
+13.34, a good answer the draft didn't list.
+
 ## Not yet
 
 - Work cards and the concept glossary (cross-language questions lean on meaning search until then).
 - Sandhi splitting and lemmas in the search fields.
-- The evaluation set: 20 questions with known passages, written by the owner; run after every rebuild.
+- The owner's review of the evaluation set (the answers are Claude's drafts until approved).
 - Mapping verse numbers between GRETIL's Mālinī and the printed edition, so the Hindi commentary links
   to the GRETIL mūla.

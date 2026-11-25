@@ -1,0 +1,453 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Librarian · Agama Mancha</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%276%27 fill=%27%23812911%27/%3E%3Ctext x=%2716%27 y=%2723%27 font-size=%2720%27 text-anchor=%27middle%27 fill=%27%23f0e1da%27 font-family=%27serif%27%3E%E0%A4%86%3C/text%3E%3C/svg%3E">
+<style>
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { color: var(--text); font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+header { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; padding: 8px 16px; border-bottom: 1px solid var(--line); }
+select, button, input, textarea { font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 4px 8px; }
+button { cursor: pointer; } button:disabled { opacity: .6; cursor: default; }
+.grow { flex: 1; } .muted { color: var(--muted); }
+main { padding: 12px 16px 48px; max-width: 1100px; margin: 0 auto; }
+#q { flex: 1 1 320px; min-width: 220px; font-size: 15px; padding: 6px 10px; }
+.deva { font-family: "Kohinoor Devanagari", "Devanagari Sangam MN", "Noto Serif Devanagari", "Nirmala UI", serif; font-size: 17px; line-height: 1.7; }
+.iast { color: var(--muted); font-size: 13px; }
+.hit { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 10px 14px; margin-bottom: 10px; }
+.hit .top { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; font-size: 13px; margin-bottom: 4px; }
+.hit .title { font-family: Raleway, sans-serif; font-weight: 600; }
+.chip { font-size: 11px; padding: 1px 7px; border-radius: 999px; background: var(--here, #eee); color: var(--here-text, #333); }
+.chip.edition { background: #d6efd8; color: #1d5e2a; } .chip.draft { background: #fbe7c6; color: #7a4a00; }
+.chip.layer { background: transparent; border: 1px solid var(--line); color: var(--muted); }
+code { font-size: 12px; }
+.more { margin-top: 8px; border-top: 1px dashed var(--line); padding-top: 8px; }
+.more .hit { margin: 6px 0 6px 16px; }
+.tabs { display: flex; gap: 6px; }
+.tabs button.on { background: var(--accent); color: var(--panel); border-color: var(--accent); }
+.note { background: var(--panel); border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: 6px; padding: 8px 12px; margin-bottom: 12px; font-size: 13px; }
+table { width: 100%; border-collapse: collapse; background: var(--panel); border: 1px solid var(--line); }
+th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; font-size: 13px; }
+th { color: var(--muted); font-weight: 600; font-family: Raleway, sans-serif; }
+.q textarea { width: 100%; min-height: 54px; font-family: ui-monospace, monospace; font-size: 12px; }
+.q .acts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+.q .acts button { font-size: 12px; padding: 1px 8px; }
+.st-approved { background: #d6efd8; color: #1d5e2a; } .st-draft { background: #fbe7c6; color: #7a4a00; } .st-dropped { background: #e9e6e3; color: #5a554f; }
+.rank.ok { color: #1d7a34; font-weight: 600; } .rank.miss { color: #a3301b; font-weight: 600; }
+.sum { display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: center; margin-bottom: 12px; font-size: 13px; }
+.err { color: #a3301b; }
+.reader .rhead { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; margin-bottom: 6px; }
+.reader h2 { font-family: Raleway, sans-serif; font-size: 18px; margin: 0; }
+.reader .src { font-size: 12px; color: var(--muted); margin-bottom: 12px; }
+.unit { display: grid; grid-template-columns: 92px 1fr; gap: 10px; padding: 6px 8px; border-radius: 6px; }
+.unit .ref { font-size: 11px; color: var(--muted); padding-top: 6px; font-variant-numeric: tabular-nums; }
+.unit .ref .lay { display: block; }
+.unit.l-com { margin-left: 28px; background: color-mix(in srgb, var(--panel) 70%, var(--bg)); border-left: 3px solid var(--line); }
+.unit.l-com .deva { font-size: 15px; }
+.unit.l-note .deva { font-size: 13px; color: var(--muted); }
+.unit.target .ref::after { content: "cited"; display: block; color: var(--accent); font-weight: 600; }
+.unit .acts { font-size: 12px; }
+.unit .acts a { margin-right: 10px; }
+.unit { cursor: pointer; } .unit.focus { outline: 2px solid var(--accent); background: var(--hl); }
+#sabout b { font-weight: 600; } #sabout q { font-family: "Kohinoor Devanagari", "Noto Serif Devanagari", serif; }
+#study { position: fixed; top: var(--study-top, 110px); right: 12px; bottom: 12px; width: 420px; display: none; flex-direction: column;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 6px 24px rgba(0,0,0,.12); z-index: 5; }
+#study.open { display: flex; }
+body.study-open main { margin-right: 444px; max-width: none; }
+#study .shead { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-bottom: 1px solid var(--line); font-size: 13px; }
+#study .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); } #study .dot.on { background: #2e9d55; }
+#slog { flex: 1; overflow: auto; padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+.smsg { border-radius: 8px; padding: 8px 10px; font-size: 14px; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; }
+.smsg.user { align-self: flex-end; background: var(--hl); max-width: 90%; }
+.smsg.claude { background: var(--bg); border: 1px solid var(--line); }
+.smsg .about { font-size: 11px; color: var(--muted); display: block; margin-bottom: 2px; }
+.smsg .cites { margin-top: 6px; display: flex; flex-wrap: wrap; gap: 4px; white-space: normal; }
+.smsg .cites a { font-size: 11px; font-family: ui-monospace, monospace; border: 1px solid var(--line); border-radius: 999px; padding: 0 7px; text-decoration: none; }
+#study .sfoot { border-top: 1px solid var(--line); padding: 8px 10px; display: flex; flex-direction: column; gap: 6px; }
+#sin { width: 100%; min-height: 64px; resize: vertical; }
+@media (max-width: 1100px) { #study { left: 12px; width: auto; top: auto; height: 55vh; } body.study-open main { margin-right: 0; } }
+</style>
+<link rel="stylesheet" href="/theme.css">
+</head>
+<body>
+<div class="brand">
+  <a class="mark" href="/library" title="Agama Mancha: the library">
+    <span class="name">Agama Mancha</span><span class="deva" lang="sa">आगम मञ्च</span>
+  </a>
+  <span class="by">Vimarsha Foundation · for internal use</span>
+  <nav aria-label="Sections"><a href="/library">Library</a><a href="/">Proofreading</a><a href="/librarian" aria-current="page">Librarian</a></nav>
+</div>
+<header>
+  <div class="tabs"><button id="t-works">Works</button><button id="t-search" class="on">Search</button><button id="t-eval">Evaluation</button></div>
+  <span class="grow"></span>
+  <span class="muted" id="hint"></span>
+</header>
+<main id="main"></main>
+<div id="study" role="dialog" aria-label="Study with Claude">
+  <div class="shead"><span class="dot" id="sdot"></span><span id="sstate" class="grow">…</span><button id="sx" title="Close">✕</button></div>
+  <div id="slog"></div>
+  <div class="sfoot">
+    <span class="muted" style="font-size:12px">About: <span id="sabout">click a passage, or select words in it</span></span>
+    <textarea id="sin" placeholder="Ask about this passage: a translation, a term, what the commentary says, where else the idea appears. ⌘/Ctrl ↵ sends."></textarea>
+    <div style="display:flex;gap:8px;align-items:center"><button id="ssend">Ask Claude</button><span class="muted" id="sinfo" style="font-size:12px"></span></div>
+  </div>
+</div>
+<script>
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const api = async (u, opt) => { const r = await fetch(u, opt); const j = await r.json(); if (!r.ok) throw new Error(j.error || r.status); return j; };
+const store = { get: (k) => { try { return localStorage.getItem("lib:" + k); } catch { return null; } }, set: (k, v) => { try { localStorage.setItem("lib:" + k, v); } catch {} } };
+let WORKS = [];
+
+function card(u) {
+  const how = u.found_by ? Object.entries(u.found_by).map(([k, v]) => `${k} #${v}`).join(", ") : "";
+  return `<div class="hit" data-id="${esc(u.id)}">
+    <div class="top"><span class="title">${esc(u.title || u.work)}</span>
+      <code>${esc(u.id)}</code>
+      <span class="chip ${esc(u.status)}" title="${u.status === "draft" ? "unproofread OCR of the team's printed book" : "a published e-text"}">${esc(u.status)}</span>
+      <span class="chip layer">${esc(u.layer)}</span>
+      ${u.pages ? `<span class="muted">pp. ${esc(u.pages.join(", "))}</span>` : ""}
+      <span class="grow"></span><span class="muted">${esc(how)}</span></div>
+    <div class="deva" lang="${esc(u.lang || "sa")}">${esc(u.text)}</div>
+    ${u.iast && u.lang === "san" ? `<div class="iast">${esc(u.iast)}</div>` : ""}
+    <div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap">
+      <button data-open="${esc(u.id)}">${u.n_commentary ? `Commentary (${u.n_commentary}) and context` : "Context"}</button>
+      <button data-read="${esc(u.id)}" title="The whole chapter around this passage, with its commentary">Read in context</button>
+      <button data-cite="${esc(u.id)}" title="Copy a citation">Copy citation</button>
+    </div>
+    <div class="more" hidden></div></div>`;
+}
+
+function wire(root) {
+  root.querySelectorAll("[data-open]").forEach((b) => (b.onclick = async () => {
+    const box = b.closest(".hit").querySelector(".more");
+    if (!box.hidden) { box.hidden = true; return; }
+    box.hidden = false; box.innerHTML = `<span class="muted">Reading…</span>`;
+    const u = await api(`/api/librarian/unit?id=${encodeURIComponent(b.dataset.open)}`);
+    const com = (u.commentary || []).map((c) => card(c)).join("");
+    box.innerHTML = `${com ? `<div class="muted" style="font-size:12px">Commentary on this passage</div>${com}` : `<div class="muted" style="font-size:12px">No commentary linked to this passage.</div>`}
+      <div class="muted" style="font-size:12px;margin-top:6px">Neighbours: ${(u.neighbours || []).map((n) => `<a href="#" data-goto="${esc(n)}"><code>${esc(n)}</code></a>`).join(" · ") || "none"}</div>`;
+    wire(box);
+    box.querySelectorAll("[data-goto]").forEach((a) => (a.onclick = (e) => { e.preventDefault(); $("q").value = ""; showUnit(a.dataset.goto); }));
+  }));
+  root.querySelectorAll("[data-read]").forEach((b) => (b.onclick = () => { location.hash = "read=" + encodeURIComponent(b.dataset.read); }));
+  root.querySelectorAll("[data-cite]").forEach((b) => (b.onclick = async () => {
+    const h = b.closest(".hit"), id = b.dataset.cite;
+    const t = h.querySelector(".title").textContent, txt = h.querySelector(".deva").textContent;
+    try { await navigator.clipboard.writeText(`${txt}\n— ${t}, ${id}`); b.textContent = "Copied"; } catch { b.textContent = id; }
+  }));
+}
+
+async function showUnit(id) {
+  const u = await api(`/api/librarian/unit?id=${encodeURIComponent(id)}`);
+  $("results").innerHTML = card(u); wire($("results"));
+}
+
+function renderSearch() {
+  $("hint").textContent = "Search in Sanskrit (IAST or Devanagari), Hindi or English. Passages are read from the library.";
+  $("main").innerHTML = `
+    <div class="note">This page searches and reads. To <b>ask a question</b> and get a cited answer, ask Claude in a Claude Code session in the project folder: its <code>agama-librarian</code> tool answers only from these passages, with their ids.</div>
+    <form id="f" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px">
+      <input id="q" type="search" placeholder="e.g. caitanyam ātmā · स्पन्द · the gap between two breaths" autofocus>
+      <select id="work"><option value="">All works</option>${WORKS.map((w) => `<option value="${esc(w.id)}">${esc(w.title)} (${w.units})</option>`).join("")}</select>
+      <select id="layer"><option value="">All layers</option>${["mula", "vrtti", "varttika", "hindi-mishra"].map((l) => `<option>${l}</option>`).join("")}</select>
+      <button>Search</button>
+    </form>
+    <div id="results"></div>`;
+  $("q").value = store.get("q") || "";
+  $("f").onsubmit = async (e) => {
+    if (e) e.preventDefault();
+    const q = $("q").value.trim(); if (!q) return;
+    store.set("q", q);
+    $("results").innerHTML = `<p class="muted">Searching…</p>`;
+    try {
+      const hits = await api(`/api/librarian/search?q=${encodeURIComponent(q)}&k=12&work=${encodeURIComponent($("work").value)}&layer=${encodeURIComponent($("layer").value)}`);
+      $("results").innerHTML = hits.length ? hits.map(card).join("") : `<p class="muted">Nothing found. The library may not have it: say so rather than guess.</p>`;
+      wire($("results"));
+    } catch (err) { $("results").innerHTML = `<p class="err">${esc(err.message)}</p>`; }
+  };
+  if ($("q").value) $("f").onsubmit();       // coming back from the reader: the results are still there
+}
+
+async function renderEval() {
+  $("hint").textContent = "The yardstick: run it after every index rebuild.";
+  $("main").innerHTML = `<p class="muted">Loading…</p>`;
+  const E = await api("/api/librarian/eval");
+  const run = E.last_run;
+  LAST = Object.fromEntries(((run && run.rows) || []).map((r) => [r.id, r]));
+  const sum = run ? `<span><b>${run.hits}/${run.scored}</b> questions with a correct passage in the top ${run.k}</span>
+      ${Object.entries(run.by_type).map(([t, v]) => `<span>${esc(E.types[t] || t)}: <b>${v.hits}/${v.n}</b></span>`).join("")}
+      <span class="muted">build ${esc(run.build)} · ${esc(run.at.replace("T", " ").slice(0, 16))}${run.only_approved ? " · approved only" : ""}</span>` : `<span class="muted">Not run yet.</span>`;
+  $("main").innerHTML = `
+    <div class="note">Claude drafted these questions and the passages it thinks answer them. They count as the yardstick only once you approve them: correct the expected unit ids (one per line), add better passages from <i>top results</i>, or drop a question.</div>
+    <div class="sum">${sum}<span class="grow"></span>
+      <label class="muted"><input type="checkbox" id="onlyok"> approved only</label><button id="run">Run evaluation</button></div>
+    <table><thead><tr><th style="width:44%">Question</th><th>Expected passages</th><th style="width:22%">Top results (last run)</th></tr></thead>
+    <tbody>${E.questions.map((q) => qrow(q, E)).join("")}</tbody></table>`;
+  $("run").onclick = async () => {
+    $("run").disabled = true; $("run").textContent = "Running…";
+    try { const r = await api("/api/librarian/eval/run", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ only_approved: $("onlyok").checked }) });
+      renderEval(); }
+    catch (e) { alert(e.message); $("run").disabled = false; $("run").textContent = "Run evaluation"; }
+  };
+  document.querySelectorAll("tr.q").forEach((tr) => {
+    const id = tr.dataset.id;
+    const save = async (changes) => { await api(`/api/librarian/eval/${id}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(changes) }); renderEval(); };
+    tr.querySelector(".exp").onchange = (e) => save({ expected: e.target.value.split("\n") });
+    tr.querySelectorAll("[data-status]").forEach((b) => (b.onclick = () => save({ status: b.dataset.status, expected: tr.querySelector(".exp").value.split("\n") })));
+    tr.querySelectorAll("[data-add]").forEach((b) => (b.onclick = () => save({ expected: tr.querySelector(".exp").value.split("\n").concat([b.dataset.add]) })));
+    tr.querySelectorAll("[data-peek]").forEach((a) => (a.onclick = async (e) => { e.preventDefault(); const u = await api(`/api/librarian/unit?id=${encodeURIComponent(a.dataset.peek)}`); alert(`${u.title} · ${u.id}\n\n${u.text}\n\n${u.iast || ""}`); }));
+  });
+}
+let LAST = {};
+function qrow(q, E) {
+  const r = LAST[q.id];
+  const rank = !r ? "" : !r.scored ? `<span class="muted">not scored (the librarian must say "not found")</span>` : r.rank ? `<span class="rank ok">found at #${r.rank}</span>` : `<span class="rank miss">not in the top 10</span>`;
+  return `<tr class="q" data-id="${esc(q.id)}">
+    <td><b>${esc(q.id)}</b> <span class="chip layer">${esc(E.types[q.type] || q.type)}</span> <span class="chip layer">${esc(q.lang)}</span>
+      <span class="chip st-${esc(q.status)}">${esc(q.status)}</span><div style="margin-top:4px">${esc(q.question)}</div>
+      <div class="acts">${["approved", "draft", "dropped"].filter((s) => s !== q.status).map((s) => `<button data-status="${s}">${s === "approved" ? "Approve" : s === "draft" ? "Back to draft" : "Drop"}</button>`).join("")}</div>
+      ${q.note ? `<div class="muted" style="font-size:12px">${esc(q.note)}</div>` : ""}${q.edited_by ? `<div class="muted" style="font-size:11px">edited by ${esc(q.edited_by)}</div>` : ""}</td>
+    <td><textarea class="exp" placeholder="${q.type === "absent" ? "nothing: the library doesn't have it" : "one unit id per line"}">${esc((q.expected || []).join("\n"))}</textarea>
+      <div>${(q.expected || []).map((x) => `<a href="#" data-peek="${esc(x)}"><code>${esc(x)}</code></a>`).join(" · ")}</div><div>${rank}</div></td>
+    <td>${r ? r.top.map((t) => `<div><a href="#" data-peek="${esc(t)}"><code>${esc(t)}</code></a>${(q.expected || []).includes(t) ? " ✓" : ` <button data-add="${esc(t)}" style="font-size:11px;padding:0 6px">add</button>`}</div>`).join("") : `<span class="muted">run the evaluation</span>`}</td></tr>`;
+}
+
+// Works: browse what's in the library, and import more (GRETIL's catalogue, or an uploaded TEI file).
+const WK = { view: store.get("wview") || "library", q: "", gq: store.get("gq") || "", poll: null };
+function renderWorks() {
+  $("hint").textContent = "Browse the works in the library, or import more e-texts.";
+  $("main").innerHTML = `<div class="tabs" style="margin-bottom:12px">
+      <button id="w-lib" class="${WK.view === "library" ? "on" : ""}">In the library (${WORKS.length})</button>
+      <button id="w-imp" class="${WK.view === "import" ? "on" : ""}">Import e-texts</button></div><div id="wbody"></div>`;
+  $("w-lib").onclick = () => { WK.view = "library"; store.set("wview", "library"); renderWorks(); };
+  $("w-imp").onclick = () => { WK.view = "import"; store.set("wview", "import"); renderWorks(); };
+  WK.view === "import" ? renderImport() : renderLibraryWorks();
+}
+function renderLibraryWorks() {
+  const kind = (w) => (w.kind === "etext" ? (w.origin === "upload" ? "e-text (uploaded)" : "e-text (GRETIL)") : w.kind === "ocr" ? "printed copy (OCR)" : w.kind || "");
+  $("wbody").innerHTML = `<input id="wq" type="search" placeholder="Filter by title, author or id" style="width:100%;max-width:420px;margin-bottom:10px" value="${esc(WK.q)}">
+    <div id="wlist"></div>`;
+  const draw = () => {
+    const q = WK.q.toLowerCase();
+    const ws = WORKS.filter((w) => !q || (w.title + " " + w.author + " " + w.id).toLowerCase().includes(q));
+    $("wlist").innerHTML = `<table><thead><tr><th>Work</th><th>Id</th><th>Kind</th><th style="text-align:right">Passages</th><th>Source</th><th>Added</th><th></th></tr></thead><tbody>
+    ${ws.map((w) => `<tr><td><b>${esc(w.title)}</b>${w.author ? `<div class="muted">${esc(w.author)}</div>` : ""}</td>
+      <td style="white-space:nowrap"><code>${esc(w.id)}</code></td><td>${esc(kind(w))}</td><td style="text-align:right">${w.units.toLocaleString()}</td>
+      <td class="muted" style="font-size:12px">${esc(w.source)}${w.licence ? `<div>${esc(w.licence)}</div>` : ""}${w.url ? `<a href="${esc(w.url)}" target="_blank" rel="noopener">GRETIL file</a>` : ""}</td>
+      <td class="muted" style="white-space:nowrap">${esc(w.added || "")}</td>
+      <td><button data-read="${esc(w.first)}">Read</button></td></tr>`).join("")}</tbody></table>`;
+    $("wlist").querySelectorAll("[data-read]").forEach((b) => (b.onclick = () => { location.hash = "read=" + encodeURIComponent(b.dataset.read); }));
+  };
+  $("wq").oninput = () => { WK.q = $("wq").value; draw(); };
+  draw();
+}
+function renderImport() {
+  $("wbody").innerHTML = `
+    <div class="note">Imported e-texts become works with <code>ET-</code> ids: searchable, readable in context and open to study with Claude. Each keeps its source and licence; GRETIL's are mostly CC BY-NC-SA (fine for Vimarsha's internal use). Nothing leaves this machine except the download from GRETIL.</div>
+    <div id="job"></div>
+    <h3 style="font-family:Raleway,sans-serif;font-size:15px;margin:14px 0 6px">From GRETIL's catalogue</h3>
+    <form id="gf" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px"><input id="gq" type="search" placeholder="Search titles, e.g. netra, spanda, kubjika, abhinavagupta" style="flex:1 1 320px" value="${esc(WK.gq)}"><button>Search</button></form>
+    <div id="glist" class="muted">Loading the catalogue…</div>
+    <h3 style="font-family:Raleway,sans-serif;font-size:15px;margin:18px 0 6px">From a file</h3>
+    <form id="uf" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px;max-width:900px">
+      <label>TEI XML file <input id="ufile" type="file" accept=".xml,application/xml,text/xml" required style="width:100%"></label>
+      <label>Title <input id="ut" placeholder="from the file if empty" style="width:100%"></label>
+      <label>Author <input id="ua" style="width:100%"></label>
+      <label>Licence <input id="ul" placeholder="from the file if empty" style="width:100%"></label>
+      <label>Source edition <input id="us" placeholder="from the file if empty" style="width:100%"></label>
+      <div style="align-self:end"><button>Import the file</button></div>
+    </form>`;
+  const search = async () => {
+    WK.gq = $("gq").value.trim(); store.set("gq", WK.gq);
+    $("glist").innerHTML = `<span class="muted">Searching…</span>`;
+    try {
+      const g = await api(`/api/librarian/gretil?q=${encodeURIComponent(WK.gq)}`);
+      $("glist").innerHTML = `<div class="muted" style="font-size:12px;margin-bottom:6px">${g.items.length}${g.items.length >= 60 ? "+" : ""} of ${g.total} GRETIL e-texts${WK.gq ? " match" : " (search to narrow)"}</div>
+        <table><tbody>${g.items.map((x) => `<tr><td>${esc(x.title)}<div class="muted" style="font-size:11px">${esc(x.path.split("/").pop())}</div></td>
+          <td style="white-space:nowrap;text-align:right">${x.imported ? `<span class="chip edition">imported · ${esc(x.imported)}</span>` : `<button data-imp="${esc(x.path)}" data-title="${esc(x.title)}">Import</button>`}</td></tr>`).join("")}</tbody></table>`;
+      $("glist").querySelectorAll("[data-imp]").forEach((b) => (b.onclick = () => startImport({ gretil: b.dataset.imp, title: b.dataset.title })));
+    } catch (e) { $("glist").innerHTML = `<p class="err">${esc(e.message)}</p>`; }
+  };
+  $("gf").onsubmit = (e) => { e.preventDefault(); search(); };
+  $("uf").onsubmit = async (e) => {
+    e.preventDefault();
+    const f = $("ufile").files[0]; if (!f) return;
+    const text = await f.text();
+    startImport({ upload: { name: f.name, text, title: $("ut").value, author: $("ua").value, licence: $("ul").value, source: $("us").value } });
+  };
+  search(); pollJob();
+}
+async function startImport(body) {
+  try { await api("/api/librarian/import", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }); }
+  catch (e) { $("job").innerHTML = `<div class="note err">${esc(e.message)}</div>`; return; }
+  pollJob();
+}
+async function pollJob() {
+  clearTimeout(WK.poll);
+  let j; try { j = await api("/api/librarian/import"); } catch { return; }
+  const box = $("job"); if (!box) return;
+  if (j.state === "idle") { box.innerHTML = ""; return; }
+  box.innerHTML = `<div class="note"><b>${j.state === "running" ? "Importing…" : j.state === "done" ? "Imported" : "Import failed"}</b>
+    <div style="font-family:ui-monospace,monospace;font-size:12px;white-space:pre-wrap;margin-top:4px">${esc(j.log.join("\n"))}${j.error ? "\n" + esc(j.error) : ""}</div>
+    ${j.state === "done" && j.result ? `<div style="margin-top:6px"><button id="jread">Read ${esc(j.result.title)}</button></div>` : ""}</div>`;
+  if (j.state === "done" && j.result) {
+    $("jread").onclick = () => api(`/api/librarian/works`).then((ws) => { WORKS = ws; const w = ws.find((x) => x.id === j.result.id); if (w) location.hash = "read=" + encodeURIComponent(w.first); });
+    if (WK.doneFor !== j.result.id) {          // once per finished import: the works and the "imported" badges
+      WK.doneFor = j.result.id;
+      WORKS = await api("/api/librarian/works");
+      if ($("gf")) $("gf").requestSubmit();
+    }
+  }
+  if (j.state === "running") WK.poll = setTimeout(pollJob, 1500);
+}
+
+// Read in context: the whole chapter around a citation, commentary where the edition puts it,
+// and the way to the source (the scan of the printed page, or the e-text on the web).
+const COMMENTARY = (layer) => layer !== "mula" && !layer.startsWith("footnote");
+function scanLink(book, u) {
+  if (!book || !u.lines || !u.lines.length) return "";
+  const pages = [...new Set(u.lines.map((l) => l.page))];
+  return pages.map((p) => {
+    const bs = u.lines.filter((l) => l.page === p && l.bbox).map((l) => l.bbox);
+    const box = bs.length ? [Math.min(...bs.map((b) => b[0])), Math.min(...bs.map((b) => b[1])), Math.max(...bs.map((b) => b[2])), Math.max(...bs.map((b) => b[3]))] : null;
+    return `<a href="/#${esc(book)}/${p}${box ? "/box=" + box.join(",") : ""}" target="_blank" title="Open the printed page with these lines outlined">scan p. ${p}</a>`;
+  }).join("");
+}
+async function renderReader(id, chapter) {
+  $("hint").textContent = "Read in context: the cited passage is outlined.";
+  $("main").innerHTML = `<p class="muted">Reading…</p>`;
+  const c = await api(`/api/librarian/read?id=${encodeURIComponent(id)}${chapter ? "&chapter=" + encodeURIComponent(chapter) : ""}`);
+  if (c.error) { $("main").innerHTML = `<p class="err">${esc(c.error)}</p>`; return; }
+  const w = c.work;
+  $("main").innerHTML = `<div class="reader">
+    <div class="rhead"><button id="back">◀ Back</button><h2>${esc(w.title || w.id)}</h2>${w.author ? `<span class="muted">${esc(w.author)}</span>` : ""}
+      <span class="grow"></span>
+      <button id="prev" ${c.prev ? "" : "disabled"}>◀ ${esc(c.prev || "")}</button>
+      <select id="ch">${c.chapters.map((x) => `<option ${x === c.chapter ? "selected" : ""}>${esc(x)}</option>`).join("")}</select>
+      <button id="next" ${c.next ? "" : "disabled"}>${esc(c.next || "")} ▶</button>
+      <button id="studybtn" title="Ask Claude about what you're reading; answers cite the library">Study with Claude</button></div>
+    <div class="src">${w.kind === "etext" ? `${w.origin === "upload" ? "Uploaded e-text" : "GRETIL e-text"}${w.added ? `, fetched ${esc(w.added.slice(0, 10))}` : ""} (a pinned copy, never edited): ${esc(w.source || "")}${w.licence ? " · " + esc(w.licence) : ""}${c.source_url ? ` · <a href="${esc(c.source_url)}" target="_blank" rel="noopener">source file on GRETIL</a>` : ""}`
+      : `The team's printed copy (OCR; <i>draft</i> units are unproofread).${c.book ? ` Each passage links to its page; the scan opens with the lines outlined.` : ""}`}
+      · chapter ${esc(c.chapter)} · ${c.units.length} passages</div>
+    ${c.units.map((u) => `<div class="unit ${COMMENTARY(u.layer) ? "l-com" : u.layer.startsWith("footnote") ? "l-note" : ""}${u.id === c.target ? " target" : ""}" id="u-${esc(u.id)}">
+      <div class="ref"><span>${esc(u.verse)}</span><span class="lay">${esc(u.layer)}</span>${u.status === "draft" ? `<span class="lay">draft</span>` : ""}</div>
+      <div><div class="deva" lang="${esc(u.lang || "sa")}">${esc(u.text)}</div>
+        ${u.iast && u.lang === "san" ? `<div class="iast">${esc(u.iast)}</div>` : ""}
+        <div class="acts muted"><code>${esc(u.id)}</code> ${scanLink(c.book, u)}</div></div></div>`).join("")}</div>`;
+  $("back").onclick = () => history.length > 1 ? history.back() : (location.hash = "");
+  const goCh = (x) => x && renderReader(id, x);
+  $("prev").onclick = () => goCh(c.prev); $("next").onclick = () => goCh(c.next);
+  $("ch").onchange = () => goCh($("ch").value);
+  const t = c.target && document.getElementById("u-" + c.target);
+  if (t) t.scrollIntoView({ block: "center" });
+  setFocus(c.target || (c.units[0] || {}).id);
+  document.querySelectorAll(".unit").forEach((el) => (el.onclick = (e) => {
+    if (e.target.closest("a") || (window.getSelection() || "").toString().trim()) return;   // a selection is handled on mouseup
+    setFocus(el.id.slice(2));
+  }));
+  $("studybtn").onclick = () => studyToggle(true);
+}
+
+// Study with Claude: questions about the passage in focus, answered by the listening Claude Code session.
+const ST = { open: false, focus: null, quote: null, timer: null, seen: 0, all: false };
+function aboutLabel() {
+  const el = ST.focus && document.getElementById("u-" + ST.focus);
+  if (!el) return "click a passage, or select words in it";
+  const title = (document.querySelector(".reader h2") || {}).textContent || "";
+  const [, ch, vs] = ST.focus.split("/");
+  const ref = /^p\d+$|^q\d+$/.test(vs) ? `${ch}, passage ${vs.slice(1)}` : `${ch}.${vs}`;
+  const layer = el.querySelector(".ref .lay").textContent;
+  const words = (ST.quote || el.querySelector(".deva").textContent).trim();
+  const short = words.length > 70 ? words.slice(0, 70) + "…" : words;
+  return `${ST.quote ? "your selection in " : ""}<b>${esc(title)} ${esc(ref)}</b> (${esc(layer)}): <q>${esc(short)}</q>`;
+}
+function setFocus(id, quote = null) {
+  ST.focus = id || null; ST.quote = quote;
+  document.querySelectorAll(".unit.focus").forEach((x) => x.classList.remove("focus"));
+  const el = id && document.getElementById("u-" + id); if (el) el.classList.add("focus");
+  $("sabout").innerHTML = aboutLabel();
+  if (ST.open) studyLoad();        // the conversation follows the work in focus
+}
+// Selecting words in the reader makes them the subject of the next question.
+document.addEventListener("mouseup", () => {
+  const sel = window.getSelection(), t = sel ? sel.toString().trim() : "";
+  if (!t || !sel.anchorNode) return;
+  const u = (sel.anchorNode.nodeType === 1 ? sel.anchorNode : sel.anchorNode.parentElement).closest(".unit");
+  if (u && t.length <= 2000) setFocus(u.id.slice(2), t);
+});
+function studyToggle(open) {
+  ST.open = open ?? !ST.open;
+  $("study").classList.toggle("open", ST.open); document.body.classList.toggle("study-open", ST.open);
+  document.documentElement.style.setProperty("--study-top", Math.round(($("main").getBoundingClientRect().top || 110) + 4) + "px");
+  clearInterval(ST.timer);
+  if (ST.open) { studyLoad(); ST.timer = setInterval(studyLoad, 3000); $("sin").focus(); }
+  store.set("study", ST.open ? "1" : "");
+}
+const fmt = (t) => esc(t).replace(/\*\*(.+?)\*\*/g, "<b>$1</b>");
+async function studyLoad() {
+  let d; try { d = await api("/api/librarian/study"); } catch (e) { $("sstate").textContent = e.message; return; }
+  $("sdot").classList.toggle("on", d.listening);
+  $("sstate").textContent = d.listening ? "Claude is listening" : "Claude isn't listening: in Claude Code, say “listen to the study chat”";
+  const work = (ST.focus || "").split("/")[0];
+  const key = d.messages.length + "|" + work + "|" + ST.all;
+  if (key === ST.seen) return;
+  ST.seen = key;
+  // The conversation about the work being read: questions about its passages, and their answers.
+  const unitOf = {}; d.messages.forEach((m) => { if (m.role === "user") unitOf[m.id] = m.unit || ""; });
+  const about = (m) => (m.role === "user" ? m.unit : unitOf[m.reply_to]) || "";
+  const mine = d.messages.filter((m) => ST.all || !work || about(m).split("/")[0] === work);
+  const others = new Set(d.messages.filter((m) => m.role === "user" && about(m).split("/")[0] !== work).map((m) => m.id)).size;
+  const log = $("slog"), atEnd = log.scrollHeight - log.scrollTop - log.clientHeight < 40;
+  const toggle = others && !ST.all ? `<button id="sall" style="font-size:12px;align-self:center">show ${others} earlier question${others === 1 ? "" : "s"} about other works</button>`
+    : ST.all && others ? `<button id="sall" style="font-size:12px;align-self:center">only this work</button>` : "";
+  log.innerHTML = toggle + mine.map((m) => `<div class="smsg ${m.role}">${m.unit ? `<span class="about">about <a href="#read=${encodeURIComponent(m.unit)}">${esc(m.unit)}</a>${m.quote ? `: «${esc(m.quote.length > 80 ? m.quote.slice(0, 80) + "…" : m.quote)}»` : ""}</span>` : ""}${fmt(m.text)}${
+    m.cites ? `<div class="cites">${m.cites.map((c) => `<a href="#read=${encodeURIComponent(c)}" title="Read in context">${esc(c)}</a>`).join("")}</div>` : ""}</div>`).join("")
+    + (mine.length ? "" : `<p class="muted" style="font-size:13px">No questions about this work yet. Ask about the outlined passage (or select words in it): Claude answers from the library only, quoting the original with a translation, and every passage it relies on is a link you can read in context.</p>`);
+  if ($("sall")) $("sall").onclick = () => { ST.all = !ST.all; ST.seen = null; studyLoad(); };
+  const waiting = mine.length && mine[mine.length - 1].role === "user";
+  $("sinfo").textContent = waiting ? (d.listening ? "Claude is reading…" : "waiting for Claude to listen") : "";
+  if (atEnd || waiting) log.scrollTop = log.scrollHeight;
+}
+async function studySend() {
+  const text = $("sin").value.trim(); if (!text) return;
+  $("ssend").disabled = true;
+  try { await api("/api/librarian/study", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text, unit: ST.focus, quote: ST.quote }) });
+    $("sin").value = ""; ST.seen = -1; await studyLoad(); }
+  catch (e) { $("sinfo").textContent = e.message; }
+  $("ssend").disabled = false;
+}
+function route() {
+  if (location.hash === "#import") {          // from the Library page's e-texts view
+    history.replaceState(null, "", location.pathname);
+    WK.view = "import"; store.set("wview", "import"); $("t-works").click(); return true;
+  }
+  const m = location.hash.match(/^#read=(.+)$/);
+  if (m) { ["t-works", "t-search", "t-eval"].forEach((t) => $(t).classList.remove("on")); renderReader(decodeURIComponent(m[1])).catch((e) => ($("main").innerHTML = `<p class="err">${esc(e.message)}</p>`)); return true; }
+  return false;
+}
+window.addEventListener("hashchange", () => { if (!route()) $("t-" + (store.get("tab") || "search")).click(); });
+
+$("sx").onclick = () => studyToggle(false);
+$("ssend").onclick = studySend;
+$("sin").addEventListener("keydown", (e) => { if ((e.metaKey || e.ctrlKey) && e.key === "Enter") { e.preventDefault(); studySend(); } });
+
+async function init() {
+  try { WORKS = await api("/api/librarian/works"); }
+  catch (e) { $("main").innerHTML = `<p class="err">${esc(e.message)}</p>`; return; }
+  const tab = store.get("tab") || "search";
+  const go = (t) => { store.set("tab", t); ["works", "search", "eval"].forEach((x) => $("t-" + x).classList.toggle("on", x === t));
+    if (t === "works") renderWorks(); else if (t === "search") renderSearch(); else renderEval().catch((e) => ($("main").innerHTML = `<p class="err">${esc(e.message)}</p>`)); };
+  $("t-works").onclick = () => { if (location.hash) history.replaceState(null, "", location.pathname); go("works"); };
+  $("t-search").onclick = () => { if (location.hash) history.replaceState(null, "", location.pathname); go("search"); };
+  $("t-eval").onclick = () => { if (location.hash) history.replaceState(null, "", location.pathname); go("eval"); };
+  if (!route()) go(tab);
+  if (store.get("study") && location.hash.startsWith("#read=")) setTimeout(() => studyToggle(true), 400);
+}
+init();
+</script>
+</body>
+</html>

@@ -612,7 +612,7 @@ def test_viewer_has_no_book_specific_code():
     import re
     from importlib.resources import files
 
-    for name in ("viewer.html", "theme.css", "library.html"):
+    for name in ("viewer.html", "theme.css", "library.html", "librarian.html"):
         src = files("amocr").joinpath(name).read_text(encoding="utf-8")
         assert not re.search(r"\b(B-[0-9a-f]{10}|SL-\d{4})\b", src), f"{name} mentions a specific book"
 
@@ -755,3 +755,45 @@ def test_etext_parse_patterns():
     assert rows[5]["explains"] == "2" and rows[4]["iast"] == "jñānaṃ bandhaḥ"
     assert fold("Spanda-kārikā") == fold("spanda kArikA".replace("A", "a")) == "spanda karika"
     assert fold("स्पन्दः") == "spandah"
+
+
+def test_study_chat(tmp_path, monkeypatch):
+    """Questions carry the passage in focus; answers must cite units that exist in the library."""
+    import pytest
+
+    pytest.importorskip("lancedb")
+    from librarian import etext, store, study
+
+    monkeypatch.setenv("AMOCR_DATA", str(tmp_path))
+    src = tmp_path / "sa_test.xml"
+    src.write_text('<TEI><text><body><lg xml:id="T_1.1"><l>caitanyam ātmā</l></lg></body></text></TEI>', encoding="utf-8")
+    m = etext.ingest(src)
+    store.reload()
+    uid = f"{m['id']}/1/1/mula"
+    q = study.post("user", "What does this sūtra mean?", unit=uid, by="anna")
+    assert study.pending() == [q] and q["unit"] == uid
+    with pytest.raises(ValueError, match="no such unit"):
+        study.post("claude", "…", reply_to=q["id"], cites=["ET-9999/1/1/mula"])
+    a = study.post("claude", "Consciousness is the self.", reply_to=q["id"], cites=[uid])
+    assert study.pending() == [] and a["cites"] == [uid]
+    store.reload()
+
+
+def test_gretil_catalogue_and_upload_checks():
+    """GRETIL's catalogue page → titles and TEI paths; only GRETIL TEI paths download; uploads must be TEI."""
+    import pytest
+
+    pytest.importorskip("lancedb")
+    from librarian import gretil, importer
+
+    page = """<ul><li>Vasugupta: Spandakarika, with commentary by Ksemaraja <span>(..)</span>
+      <a href="gretil/corpustei/sa_vasugupta-spandakArikA-comm.xml">TEI</a></li>
+      <li><a href="gretil/corpustei/sa_vijJAnabhairava.xml">TEI-conformant XML</a></li>
+      <li>No TEI here <a href="gretil/1_sanskr/x.htm">html</a></li></ul>"""
+    items = gretil.parse(page)
+    assert items == [{"title": "Vasugupta: Spandakarika, with commentary by Ksemaraja", "path": "gretil/corpustei/sa_vasugupta-spandakArikA-comm.xml"},
+                     {"title": "Vijñānabhairava", "path": "gretil/corpustei/sa_vijJAnabhairava.xml"}]
+    with pytest.raises(ValueError, match="only GRETIL TEI"):
+        gretil.download("https://example.org/evil.xml")
+    with pytest.raises(ValueError, match="TEI XML"):
+        importer.from_upload("notes.txt", "just some text")

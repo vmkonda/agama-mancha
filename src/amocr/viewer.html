@@ -162,7 +162,7 @@ i.wn { position: absolute; top: -6px; right: -6px; min-width: 15px; height: 15px
     <span class="name">Agama Mancha</span><span class="deva" lang="sa">आगम मञ्च</span>
   </a>
   <span class="by">Vimarsha Foundation · for internal use</span>
-  <nav aria-label="Sections"><a href="/library">Library</a><a href="/" aria-current="page">Proofreading</a></nav>
+  <nav aria-label="Sections"><a href="/library">Library</a><a href="/" aria-current="page">Proofreading</a><a href="/librarian">Librarian</a></nav>
 </div>
 <header>
   <select id="work" aria-label="Work"></select>
@@ -224,7 +224,9 @@ $("zoom").oninput = applyZoom; applyZoom();
 async function init() {
   const works = await api("/api/works");
   $("work").innerHTML = works.map((w) => `<option value="${esc(w.id)}">${esc(w.id)} · ${esc(w.title)}</option>`).join("");
-  const [hw, hp] = location.hash.slice(1).split("/");
+  const [hw, hp, hbox] = location.hash.slice(1).split("/");
+  // A citation link can name lines to outline on the scan: #book/page/box=x0,y0,x1,y1
+  if (hbox && hbox.startsWith("box=")) { const b = hbox.slice(4).split(",").map(Number); if (b.length === 4 && b.every((x) => !isNaN(x))) S.hintBox = b; }
   if (hw && works.some((w) => w.id === hw)) $("work").value = hw;
   await loadWork(hp ? +hp : null);
 }
@@ -243,6 +245,10 @@ async function loadPage(page) {
   history.replaceState(null, "", `#${S.work}/${page}`);
   $("img").src = `/img/${S.work}/${page}`;
   $("box").style.display = "none";
+  if (S.hintBox) {     // outline the cited lines once the scan has loaded (only for the page the link named)
+    const b = S.hintBox; S.hintBox = null;
+    $("img").addEventListener("load", () => { showBox(b); scrollToBox(b); }, { once: true });
+  }
   S.data = await api(`/api/${S.work}/${page}`);
   const labels = Object.keys(S.data.results);
   const order = (l) => (l === "groundtruth" ? "0" : l.startsWith("claude") ? "1" + l : "2" + l);

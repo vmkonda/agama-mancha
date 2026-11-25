@@ -91,6 +91,29 @@ def build(batch: int = 64, log=print) -> dict:
     return info
 
 
+def add_work(wid: str, batch: int = 64, log=print) -> dict:
+    """Put one work's units into the current index (replacing any it had): an import doesn't need a full
+    rebuild. The build records what was added after it was made."""
+    from . import etext
+
+    tbl = _table()
+    units = [u for u in etext.units(wid) if (u.get("text") or "").strip()]
+    vecs: list[list[float]] = []
+    for k in range(0, len(units), batch):
+        vecs += embed([u["text"][:4000] for u in units[k:k + batch]])
+        log(f"  embedded {min(k + batch, len(units))}/{len(units)}")
+    if re.fullmatch(r"[\w.-]+", wid):
+        tbl.delete(f"work = '{wid}'")
+    tbl.add([{"id": u["id"], "work": u["work"], "layer": u["layer"], "lang": u.get("lang", "san"), "status": u.get("status", ""),
+              "search": fold(u.get("iast") or u["text"]), "vector": v} for u, v in zip(units, vecs)])
+    tbl.create_fts_index("search", replace=True)
+    cur = index_dir() / (index_dir() / "current").read_text().strip()
+    info = json.loads((cur / "build.json").read_text(encoding="utf-8"))
+    info.setdefault("added", []).append({"work": wid, "units": len(units), "at": datetime.now(timezone.utc).isoformat(timespec="seconds")})
+    (cur / "build.json").write_text(json.dumps(info, indent=1), encoding="utf-8")
+    return {"work": wid, "units": len(units)}
+
+
 @lru_cache(maxsize=1)
 def _table():
     import lancedb

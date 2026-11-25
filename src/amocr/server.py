@@ -10,6 +10,7 @@ import getpass
 import json
 import os
 import re
+from pathlib import Path
 import socket
 from datetime import datetime, timezone
 from http import HTTPStatus
@@ -208,6 +209,10 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(files("amocr").joinpath("viewer.html").read_bytes(), "text/html; charset=utf-8")
             if parts == ["library"]:
                 return self._send(files("amocr").joinpath("library.html").read_bytes(), "text/html; charset=utf-8")
+            if parts == ["librarian"]:
+                return self._send(files("amocr").joinpath("librarian.html").read_bytes(), "text/html; charset=utf-8")
+            if parts[:2] == ["api", "librarian"]:
+                return self._json(_librarian_get(parts[2:], parse_qs(url.query)))
             if parts == ["theme.css"]:
                 return self._send(files("amocr").joinpath("theme.css").read_bytes(), "text/css; charset=utf-8")
             if parts == ["api", "catalog"]:
@@ -315,7 +320,7 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(img.read_bytes(), "image/png")
         except LookupError as e:
             return self._err(str(e), HTTPStatus.NOT_FOUND)
-        except (ValueError, IndexError, FileNotFoundError) as e:
+        except (ValueError, IndexError, FileNotFoundError, RuntimeError) as e:
             return self._err(str(e))
         self._err("not found", HTTPStatus.NOT_FOUND)
 
@@ -365,6 +370,41 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         parts = [p for p in urlparse(self.path).path.split("/") if p]
+        if parts == ["api", "librarian", "import"]:
+            try:
+                _librarian()
+                from librarian import importer
+
+                n = int(self.headers.get("Content-Length", 0))
+                if n > importer.MAX_UPLOAD + 100_000:
+                    raise ValueError("file too large (20 MB at most)")
+                b = json.loads(self.rfile.read(n) or b"{}")
+                if b.get("gretil"):
+                    return self._json(importer.from_gretil(str(b["gretil"]), str(b.get("title") or "") or None))
+                up = b.get("upload") or {}
+                if up.get("text"):
+                    return self._json(importer.from_upload(str(up.get("name") or "upload.xml"), str(up["text"]),
+                                                           *(str(up.get(k) or "") for k in ("title", "author", "licence", "source"))))
+                raise ValueError("say what to import: a GRETIL file or an uploaded TEI file")
+            except (ValueError, RuntimeError, json.JSONDecodeError) as e:
+                return self._err(str(e))
+        if parts == ["api", "librarian", "study"]:
+            try:
+                _librarian()
+                from librarian import study
+
+                b = self._body()
+                return self._json(study.post("user", str(b.get("text", "")), unit=str(b.get("unit") or "") or None,
+                                             quote=str(b.get("quote") or "") or None, by=cfgmod.load().operator or ""))
+            except (ValueError, RuntimeError, json.JSONDecodeError) as e:
+                return self._err(str(e))
+        if parts[:3] == ["api", "librarian", "eval"]:
+            try:
+                return self._json(_librarian_eval_post(parts[3:], self._body()))
+            except LookupError as e:
+                return self._err(str(e), HTTPStatus.NOT_FOUND)
+            except (ValueError, RuntimeError, json.JSONDecodeError) as e:
+                return self._err(str(e))
         if parts == ["api", "catalog", "refresh"]:
             return self._json(_start_refresh())
         if len(parts) == 3 and parts[:2] == ["api", "board"]:
@@ -421,6 +461,66 @@ class Handler(BaseHTTPRequestHandler):
             self._err(str(e), HTTPStatus.NOT_FOUND)
         except (ValueError, KeyError, json.JSONDecodeError) as e:
             self._err(str(e))
+
+
+def _librarian():
+    """The librarian is an optional extra; say how to install it rather than failing obscurely."""
+    try:
+        from librarian import evals, index, store
+    except ImportError as e:
+        raise RuntimeError(f"the librarian isn't installed here ({e.name}): run `uv sync --extra librarian`") from None
+    return evals, index, store
+
+
+def _librarian_get(parts: list[str], q: dict) -> object:
+    evals, index, store = _librarian()
+    one = lambda k, d="": (q.get(k) or [d])[0]
+    if parts == ["works"]:
+        return store.catalog()
+    if parts == ["search"]:
+        query = one("q").strip()
+        if not query:
+            raise ValueError("q: what to search for")
+        hits = index.search(query, k=min(int(one("k", "10") or 10), 50), work=one("work") or None, layer=one("layer") or None)
+        out = []
+        for h in hits:
+            u = store.get(h["id"], context=0)
+            if u:
+                u.pop("neighbours", None)
+                out.append(u | {"found_by": {x: h[x] for x in ("keyword", "meaning") if x in h},
+                                "n_commentary": len(u.pop("commentary", []))})
+        return out
+    if parts == ["unit"]:
+        return store.get(one("id"), context=2) or {"error": "no such unit"}
+    if parts == ["gretil"]:
+        from librarian import etext, gretil
+
+        have = {w.get("file"): w["id"] for w in etext.works()}
+        q = one("q").strip()
+        items = gretil.search(q, limit=60) if q else gretil.catalogue()[:60]
+        return {"total": len(gretil.catalogue()), "items": [x | {"imported": have.get(Path(x["path"]).name)} for x in items]}
+    if parts == ["import"]:
+        from librarian import importer
+
+        return importer.status()
+    if parts == ["study"]:
+        from librarian import study
+
+        return {"messages": study.load()[-120:], "listening": study.listening()}
+    if parts == ["read"]:
+        return store.context(one("id"), one("chapter") or None) or {"error": "no such unit"}
+    if parts == ["eval"]:
+        return {"questions": evals.load(), "types": evals.TYPES, "last_run": evals.last_run()}
+    raise LookupError("not found")
+
+
+def _librarian_eval_post(parts: list[str], body: dict) -> object:
+    evals, _, _ = _librarian()
+    if parts == ["run"]:
+        return evals.run(only_approved=bool(body.get("only_approved")))
+    if len(parts) == 1:
+        return evals.update(parts[0], body, cfgmod.load().operator or "unknown")
+    raise LookupError("not found")
 
 
 def serve(port: int = 8791, open_browser: bool = True, page: str | None = None) -> None:

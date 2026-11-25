@@ -31,6 +31,7 @@ header h1 { font-size: 15px; margin: 0 8px 0 0; font-weight: 600; }
 select, button, input { font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 4px 8px; }
 button { cursor: pointer; } button:hover { border-color: var(--accent); }
 button:disabled { opacity: .6; cursor: default; }
+button.on { background: var(--accent); color: var(--panel); border-color: var(--accent); }
 a { color: var(--accent); }
 .grow { flex: 1; }
 .muted { color: var(--muted); }
@@ -66,7 +67,7 @@ td.act { white-space: nowrap; text-align: right; } td.act button { font-size: 12
     <span class="name">Agama Mancha</span><span class="deva" lang="sa">आगम मञ्च</span>
   </a>
   <span class="by">Vimarsha Foundation · for internal use</span>
-  <nav aria-label="Sections"><a href="/library" aria-current="page">Library</a><a href="/">Proofreading</a></nav>
+  <nav aria-label="Sections"><a href="/library" aria-current="page">Library</a><a href="/">Proofreading</a><a href="/librarian">Librarian</a></nav>
 </div>
 <header>
   <input id="q" type="search" placeholder="Search title or path" aria-label="Search">
@@ -83,8 +84,10 @@ td.act { white-space: nowrap; text-align: right; } td.act button { font-size: 12
     <option value="new">New since last refresh</option>
     <option value="changed">Changed or moved</option>
     <option value="gone">Gone from the library</option>
+    <option value="etexts">E-texts (imported, in the librarian)</option>
   </select>
   <span class="grow"></span>
+  <button id="etx" title="Works imported from published e-texts (GRETIL): no OCR needed; read and study them in the Librarian">E-texts</button>
   <button id="sync" title="Read the board again: who is working on what">Sync board</button>
   <button id="refresh" title="Read the library listing again and update the shared catalog">Refresh</button>
   <button id="theme" title="Toggle theme">◐</button>
@@ -180,7 +183,27 @@ function rows() {
   return es.sort((a, b) => (val(a) < val(b) ? -1 : val(a) > val(b) ? 1 : 0) * d);
 }
 
+// Imported e-texts aren't PDFs on the drive: they live in the librarian's library. List them here too,
+// each opening in the Librarian's reader.
+let ETEXTS = null;
+async function renderEtexts() {
+  if (!ETEXTS) {
+    try { const r = await fetch("/api/librarian/works"); const j = await r.json(); if (!r.ok) throw new Error(j.error || r.status);
+      ETEXTS = j.filter((w) => w.kind === "etext"); }
+    catch (e) { $("list").innerHTML = `<p class="empty">${esc(e.message)}</p>`; return; }
+  }
+  const q = ($("q").value || "").toLowerCase();
+  const ws = ETEXTS.filter((w) => !q || (w.title + " " + w.author + " " + w.id).toLowerCase().includes(q));
+  $("list").innerHTML = ws.length ? `<table><thead><tr><th>Title</th><th>Id</th><th style="text-align:right">Passages</th><th>Source edition</th><th>Licence</th><th></th></tr></thead><tbody>
+    ${ws.map((w) => `<tr><td><b>${esc(w.title)}</b>${w.author ? `<div class="path">${esc(w.author)}</div>` : ""}</td><td style="white-space:nowrap"><code>${esc(w.id)}</code></td>
+      <td class="num">${w.units.toLocaleString()}</td><td class="path">${esc(w.source)}${w.url ? ` · <a href="${esc(w.url)}" target="_blank" rel="noopener">GRETIL file</a>` : ""}</td>
+      <td class="path">${esc(w.licence)}</td><td class="act"><a href="/librarian#read=${encodeURIComponent(w.first)}"><button>Read</button></a></td></tr>`).join("")}</tbody></table>
+    <p class="muted" style="font-size:12px">These works came from published e-texts, not from the drive: no OCR, no proofreading. Search them, read them in context and study them with Claude on the <a href="/librarian">Librarian</a> page. <a href="/librarian#import"><button>Import e-texts</button></a></p>`
+    : `<p class="empty">No imported e-texts match.</p>`;
+}
+
 function render() {
+  if ($("show").value === "etexts") return renderEtexts();
   if (!S.cat.entries.length) { $("list").innerHTML = ""; return; }
   const es = rows();
   const arrow = (k) => S.sort === k ? (S.dir > 0 ? " ▲" : " ▼") : "";
@@ -261,7 +284,16 @@ $("sync").onclick = () => job("sync", "");
 let timer;
 $("q").oninput = () => { clearTimeout(timer); timer = setTimeout(() => { store.set("q", $("q").value); render(); }, 120); };
 $("folder").onchange = () => { store.set("folder", $("folder").value); render(); };
-$("show").onchange = () => { store.set("show", $("show").value); render(); };
+$("show").onchange = () => { store.set("show", $("show").value); $("etx").classList.toggle("on", $("show").value === "etexts"); render(); };
+// The imported e-texts, one click away (they aren't PDFs on the drive, so the catalog's own views never list them).
+$("etx").onclick = () => {
+  $("show").value = $("show").value === "etexts" ? (store.get("show_before") || "needs") : (store.set("show_before", $("show").value), "etexts");
+  $("show").onchange();
+};
+fetch("/api/librarian/works").then((r) => r.ok ? r.json() : []).then((ws) => {
+  const n = ws.filter((w) => w.kind === "etext").length;
+  if (n) $("etx").textContent = `E-texts (${n})`; else $("etx").style.display = "none";
+}).catch(() => ($("etx").style.display = "none"));
 $("refresh").onclick = async () => {
   const r = await fetch("/api/catalog/refresh", { method: "POST" }); S.cat.refresh = await r.json(); status(); poll();
 };

@@ -61,6 +61,23 @@ When a person is proofreading in the viewer and asks for help:
 - Never edit page text or ground truth yourself, and never accept suggestions:
   the person decides in the Suggestions tab. Text printed "wrong" stays as printed.
 
+## Studying with the librarian (the reader's study chat)
+
+When asked to "listen to the study chat": run `uv run librarian study wait` in the background; it
+exits with the person's question, the passage they are reading (with its commentary and
+neighbours) and the recent conversation. Answer with
+`uv run librarian study reply <id> --text "..." --cite <unit id> [--cite ...]`, then wait again
+(also after a timeout, exit code 3), until told to stop. The librarian's rules hold:
+
+- Answer only from the library: read what you need with `uv run librarian get <id>` /
+  `uv run librarian search "..."` (or the `agama-librarian` MCP tool). Never fill a gap from general
+  knowledge; if the library doesn't have it, say so and name the nearest works.
+- Quote the original (Devanagari or IAST) with your translation beneath it; flag loose renderings of
+  technical terms (śakti, spanda, vimarśa …). Cite every passage you rely on with `--cite`, so it
+  becomes a link the person can read in context.
+- Say when you rely on a `draft` passage (unproofread OCR) and when sources disagree; show each.
+- Explaining is not an authoritative translation or a ruling on practice.
+
 ## The Proofread view is one standard
 
 Proofread is the same for every book: same layout, controls, line tags and highlights
