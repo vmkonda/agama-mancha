@@ -12,7 +12,7 @@ Ask a volunteer or the coordinator to do the one-time setup in the
 [volunteer guide](volunteer-guide.md) (sections 1 and 2) on your computer.
 After that you only need two things: Claude Code and this sentence.
 
-Open a terminal in the `agama-mancha-ocr` folder, type `claude`, and say:
+Open a terminal in the `agama-mancha` folder, type `claude`, and say:
 
 > I want to proofread book B-1a2b3c4d5e, starting at page 231
 

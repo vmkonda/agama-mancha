@@ -49,7 +49,7 @@ def _platform_tag() -> str:
 
 def _download(url: str, dest: Path) -> bytes:
     dest.parent.mkdir(parents=True, exist_ok=True)
-    req = urllib.request.Request(url, headers={"User-Agent": "agama-mancha-ocr-setup"})
+    req = urllib.request.Request(url, headers={"User-Agent": "agama-mancha-setup"})
     with urllib.request.urlopen(req, timeout=120) as r:
         data = r.read()
     tmp = dest.with_suffix(dest.suffix + ".part")

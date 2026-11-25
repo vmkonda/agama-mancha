@@ -208,6 +208,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(files("amocr").joinpath("viewer.html").read_bytes(), "text/html; charset=utf-8")
             if parts == ["library"]:
                 return self._send(files("amocr").joinpath("library.html").read_bytes(), "text/html; charset=utf-8")
+            if parts == ["theme.css"]:
+                return self._send(files("amocr").joinpath("theme.css").read_bytes(), "text/css; charset=utf-8")
             if parts == ["api", "catalog"]:
                 return self._json(_library(self.works))
             if parts == ["api", "works"]:

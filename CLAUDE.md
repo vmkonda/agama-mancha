@@ -1,4 +1,4 @@
-# agama-mancha-ocr: notes for Claude sessions
+# Agama Mancha: notes for Claude sessions
 
 Volunteers and proofreaders run this repo in Claude Code with their own
 accounts. Skills: `setup` (new machine, "set me up"), `ocr-book` (start or

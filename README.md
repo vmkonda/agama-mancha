@@ -1,7 +1,9 @@
-# agama-mancha-ocr
+# Agama Mancha · आगम मञ्च
 
-Turns scanned Sanskrit and Hindi books into accurate, checkable text, page by
-page, as a team. Part of Agama Mancha, a library of the Sarvāmnāya literature.
+The team's workbench for Agama Mancha, a library of the Sarvāmnāya literature
+(Vimarsha Foundation, internal use). It catalogs every book in the library,
+shows who is working on what, and turns scanned Sanskrit and Hindi books into
+accurate, checkable text, page by page, assembled into citable units.
 
 - **Tesseract** reads every page for free.
 - **Claude**, run by each volunteer in Claude Code with their own account,
@@ -27,8 +29,8 @@ page, as a team. Part of Agama Mancha, a library of the Sarvāmnāya literature.
 ## The short version
 
 ```sh
-git clone https://github.com/vmkonda/agama-mancha-ocr.git
-cd agama-mancha-ocr
+git clone https://github.com/vmkonda/agama-mancha.git
+cd agama-mancha
 claude          # then say: "Set me up"
 ```
 
