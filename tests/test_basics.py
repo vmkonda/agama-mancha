@@ -668,3 +668,31 @@ def test_status_ladder():
     with pytest.raises(ValueError, match="second person"):
         ladder.change(old, "validated", "anna")
     assert ladder.change(old, "validated", "bala")["proofread_by"] == "anna"
+
+
+def test_page_grid(tmp_path, monkeypatch):
+    """Every page with its status; groups from the latest build; warnings only on the text's own pages."""
+    import json
+
+    from amocr import grid
+    from amocr.catalog import Work
+
+    monkeypatch.setenv("AMOCR_DATA", str(tmp_path))
+    w = Work(id="B-test000004", title="t", languages=["san", "hin"], sha256="0" * 64)
+    w.workdir.mkdir(parents=True)
+    (w.workdir / "inventory.jsonl").write_text('{"page": 1}\n' * 6)
+    w.gt_dir.mkdir()
+    for p, meta in ((2, {"status": "proofread", "proofread_by": "anna"}), (3, {"verified": False}), (6, {"status": "blank"})):
+        (w.gt_dir / f"p{p:04d}.txt").write_text("अथ त्रयोदशोऽधिकारः\n" if p == 2 else "x\n", encoding="utf-8")
+        (w.gt_dir / f"p{p:04d}.meta.json").write_text(json.dumps(meta))
+    b = w.workdir / "units" / "v001"
+    b.mkdir(parents=True)
+    (b / "units.jsonl").write_text("")
+    (b / "build.json").write_text(json.dumps({"chapters": {"13": 2}, "skipped_after_colophon": [5, 6]}))
+    g = grid.pages(w)
+    assert [r["status"] for r in g["pages"]] == ["none", "proofread", "draft", "none", "none", "blank"]
+    assert g["groups"] == [{"name": "Before chapter 1", "from": 1, "to": 1}, {"name": "Chapter 13", "from": 2, "to": 4},
+                           {"name": "After the text", "from": 5, "to": 6}]
+    assert g["done"] == 1 and g["counts"]["proofread"] == 1 and g["pages"][1]["proofread_by"] == "anna"
+    ws = grid.warnings(w)
+    assert set(ws) == {2, 3, 4} and ws[4] == {"structure": 0, "reference": 0}    # chapter pages only

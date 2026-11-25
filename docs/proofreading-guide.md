@@ -36,6 +36,13 @@ The scanned page is on the left and the text on the right. Along the top:
 - **Compare** shows two readings with the differences marked: struck-through
   red text is in the first reading only, green text is in the second only.
 - **Proofread** is where you correct the page.
+- **Suggestions** lists fixes learned from corrections, across the book.
+- **Pages** shows every page of the book as a small square in its status
+  colour, grouped by chapter, with a count of warnings on each page and how
+  much of each chapter is done. Click a page to proofread it; *Next to
+  proofread* and *Next to validate* jump to the next page that needs you.
+  Front matter and the indexes at the back are grouped separately and get no
+  warnings, since they aren't verse and commentary.
 
 Use ◀ ▶ (or the arrow keys) to move between pages and the zoom slider to
 enlarge the scan.
