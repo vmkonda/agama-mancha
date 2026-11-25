@@ -363,6 +363,61 @@ def cmd_chat(work: Work, args) -> None:
     print(f"replied ({m['id']}) with {len(actions)} action(s); the proofreader applies them in the viewer")
 
 
+def cmd_profile(work: Work, args) -> None:
+    """A book's typeface look-alikes and metre, used by `amocr suspects`."""
+    from . import suspects as sus
+
+    prof = dict((work.extra or {}).get("profile") or {})
+    changed = False
+    if args.clear_lookalikes:
+        prof["lookalikes"], changed = [], True
+    for frm, to, why in args.lookalike or []:
+        prof.setdefault("lookalikes", []).append([frm, to, why])
+        changed = True
+    if args.metre is not None:
+        prof["metre"], changed = (args.metre or None), True
+    if changed:
+        work.extra = (work.extra or {}) | {"profile": prof}
+        work.save()
+    full = sus.profile(work)
+    print(f"{work.id}: metre {full['metre'] or 'not checked'}; {len(full['lookalikes'])} look-alike rules")
+    for frm, to, why in full["lookalikes"]:
+        print(f"  {frm} → {to}   ({why})")
+
+
+def cmd_suspects(work: Work, args) -> None:
+    """Score every line from the text alone and list the ones worth a second look."""
+    from . import patterns as pat
+    from . import suspects as sus
+
+    if args.eval:
+        r = sus.evaluate(work, args.min_score)
+        print(f"{work.id}: scored the engine's reading of {len(r['pages'])} corrected pages ({r['lines']} lines)")
+        print(f"  known corrections: {r['errors']}; flagged at score >= {args.min_score}: {r['flagged']} lines")
+        print(f"  caught {len(r['caught'])} of {r['errors']}; flagged but not (yet) corrected: {r['false_flags']}")
+        for (p, n), a, b in r["missed"]:
+            print(f"  missed p{p} line {n}: {a}  →  {b}")
+        return
+    rows = _inventory(work)
+    pages = parse_pages(args.pages, len(rows)) if args.pages else None
+    scored = sus.score_book(work, pages)
+    hits = [e for e in scored if e["score"] >= args.min_score]
+    print(f"{work.id}: {len(hits)} of {len(scored)} lines score >= {args.min_score}")
+    for e in sorted(hits, key=lambda e: (-e["score"], e["page"], e["n"]))[: args.limit]:
+        print(f"  p{e['page']} line {e['n']} [{e['score']}] {e['text']}")
+        for r in e["reasons"]:
+            print(f"      {r}")
+    if args.add_rules:
+        added = set()
+        for e in scored:
+            for f in e["fixes"]:
+                if (f["from"], f["to"]) not in added and f["seen"] >= 5 * max(1, f["rare"]):
+                    pat.add_rule(work, "word", f["from"], f["to"], source="scorer",
+                                 note=f"{f['why']}: '{f['to']}' {f['seen']}x in this book, '{f['from']}' {f['rare']}x")
+                    added.add((f["from"], f["to"]))
+        print(f"added {len(added)} look-alike rules to Suggestions")
+
+
 def cmd_rule(work: Work, args) -> None:
     """Add a rule (Claude or a person generalising a fix), or switch one on or off."""
     from . import patterns as pat
@@ -637,6 +692,16 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--rule", action="append", help="reply: point to a rule to review in Suggestions (repeatable)")
     p.add_argument("--timeout", type=float, default=1800, help="wait: seconds before giving up (default 30 min)")
     p.add_argument("--last", type=int, default=20, help="show: how many messages")
+    p = book_cmd("profile", cmd_profile, help="a book's typeface look-alikes and metre (for `suspects`)")
+    p.add_argument("--lookalike", nargs=3, action="append", metavar=("FROM", "TO", "WHY"),
+                   help='e.g. --lookalike ो ी "ी printed like ो"; ^भा = at word start; +र् = a dropped reph')
+    p.add_argument("--clear-lookalikes", action="store_true")
+    p.add_argument("--metre", type=int, help="syllables per verse line (16 for anuṣṭubh half-verses); 0 = don't check")
+    p = book_cmd("suspects", cmd_suspects, pages=True, help="lines worth a second look, scored from the text alone")
+    p.add_argument("--min-score", type=int, default=2)
+    p.add_argument("--limit", type=int, default=40)
+    p.add_argument("--eval", action="store_true", help="measure against the lines already corrected")
+    p.add_argument("--add-rules", action="store_true", help="send confident look-alike fixes to Suggestions")
     p = book_cmd("rule", cmd_rule, help="add a rule, or switch one on/off")
     p.add_argument("action", choices=["add", "on", "off"])
     p.add_argument("id", nargs="?")

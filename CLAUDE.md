@@ -63,6 +63,9 @@ When a person is proofreading in the viewer and asks for help:
 
 ## Reading rules (these matter more than speed)
 
+- A letter printed in a shape that resembles another letter is still that letter: in
+  the Mālinīvijayottara edition, ी looks like ो and आ like भा/बा; transcribe ी and आ
+  (docs/proofreading-guide.md, Conventions). This is about the typeface, not misprints.
 - Transcribe what is printed, never what the text "should" say. Misprints,
   nonstandard sandhi and odd spellings stay as printed; mention likely
   misprints in `uncertain`. Variant readings in footnotes are data, never

@@ -139,6 +139,10 @@ The goal is a faithful record of **this printed edition**, not a corrected
 or ideal text. Editorial judgement belongs in notes and in later stages.
 
 **Text**
+- Type the letter the typeface prints, even where its shape looks like another
+  letter. In the Mālinīvijayottara (Hindi) edition, **ी** is printed with a shape
+  that looks like **ो** (देवी looks like देवो, उसी like उसो): type **ी**. That is
+  how this type prints ी, not a misprint. Its **आ** can also look like भा/बा.
 - Type what is printed, even when it is a misprint. A note can say
   "misprint for कीट".
 - Keep the edition's spelling, sandhi, and its choice between anusvāra and
