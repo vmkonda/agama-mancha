@@ -83,6 +83,7 @@ td.act { white-space: nowrap; text-align: right; } td.act button { font-size: 12
     <option value="new">New since last refresh</option>
     <option value="changed">Changed or moved</option>
     <option value="gone">Gone from the library</option>
+    <option value="etexts">E-texts (imported, in the librarian)</option>
   </select>
   <span class="grow"></span>
   <button id="sync" title="Read the board again: who is working on what">Sync board</button>
@@ -180,7 +181,27 @@ function rows() {
   return es.sort((a, b) => (val(a) < val(b) ? -1 : val(a) > val(b) ? 1 : 0) * d);
 }
 
+// Imported e-texts aren't PDFs on the drive: they live in the librarian's library. List them here too,
+// each opening in the Librarian's reader.
+let ETEXTS = null;
+async function renderEtexts() {
+  if (!ETEXTS) {
+    try { const r = await fetch("/api/librarian/works"); const j = await r.json(); if (!r.ok) throw new Error(j.error || r.status);
+      ETEXTS = j.filter((w) => w.kind === "etext"); }
+    catch (e) { $("list").innerHTML = `<p class="empty">${esc(e.message)}</p>`; return; }
+  }
+  const q = ($("q").value || "").toLowerCase();
+  const ws = ETEXTS.filter((w) => !q || (w.title + " " + w.author + " " + w.id).toLowerCase().includes(q));
+  $("list").innerHTML = ws.length ? `<table><thead><tr><th>Title</th><th>Id</th><th style="text-align:right">Passages</th><th>Source edition</th><th>Licence</th><th></th></tr></thead><tbody>
+    ${ws.map((w) => `<tr><td><b>${esc(w.title)}</b>${w.author ? `<div class="path">${esc(w.author)}</div>` : ""}</td><td style="white-space:nowrap"><code>${esc(w.id)}</code></td>
+      <td class="num">${w.units.toLocaleString()}</td><td class="path">${esc(w.source)}${w.url ? ` · <a href="${esc(w.url)}" target="_blank" rel="noopener">GRETIL file</a>` : ""}</td>
+      <td class="path">${esc(w.licence)}</td><td class="act"><a href="/librarian#read=${encodeURIComponent(w.first)}"><button>Read</button></a></td></tr>`).join("")}</tbody></table>
+    <p class="muted" style="font-size:12px">These works came from published e-texts, not from the drive: no OCR, no proofreading. Search them, read them in context and study them with Claude on the <a href="/librarian">Librarian</a> page.</p>`
+    : `<p class="empty">No imported e-texts match.</p>`;
+}
+
 function render() {
+  if ($("show").value === "etexts") return renderEtexts();
   if (!S.cat.entries.length) { $("list").innerHTML = ""; return; }
   const es = rows();
   const arrow = (k) => S.sort === k ? (S.dir > 0 ? " ▲" : " ▼") : "";
