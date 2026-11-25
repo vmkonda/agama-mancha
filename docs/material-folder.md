@@ -42,6 +42,7 @@ Agama Mancha/
         ├── groundtruth/
         │   └── p0231.txt, .meta.json   the proofread text, its status (draft / proofread /
         │                               validated / problem / no text), who proofread and validated it
+        │       p0231.history.jsonl     every earlier save: text, status, who, when
         └── units/
             └── v002/              one build of the units, never changed after it's written
                 ├── units.jsonl    one unit per line (below)
@@ -49,8 +50,7 @@ Agama Mancha/
 ```
 
 Planned, not built yet: `work.json` (the design's catalog record), `card.md` (the work
-card), `glossary.json` in the shared folder, and `text/` with a `history.jsonl` of every
-earlier version of each page.
+card), and `glossary.json` in the shared folder.
 
 Folder names may change when the library is reorganised; the permanent work ID
 (`SL-0001`) in `work.json` doesn't, and units and citations use it, never the path.
@@ -88,7 +88,7 @@ tool's `B-…` id, which is derived from the checksum), access tier
 | Needed | Today | To build |
 |---|---|---|
 | Page readings with engine, version, confidence, positions | yes (Tesseract, Surya, Claude results; line and word boxes); `push` shares them in `pages/` | |
-| Proofread text, never overwritten | saved per page; Proton keeps file revisions | an explicit `history.jsonl` on every save |
+| Proofread text, never overwritten | saved per page, every save kept in `pNNNN.history.jsonl` | |
 | Structure: header, verse (+ number), commentary (+ verses explained), footnote | yes: `amocr assemble` classes lines from the text, finds chapters, builds units across pages | unit types confirmed by a person (today `types: "guessed"`) |
 | Work card | the book brief (`amocr brief`) is a first draft | the card's fields and status |
 | Glossary | per book (`glossary.json`) | concept IDs with Devanagari, IAST, English and Hindi forms, shared across works |

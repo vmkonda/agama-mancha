@@ -103,6 +103,13 @@ sup.fn { color: var(--accent); font-weight: 700; font-size: .72em; line-height: 
 i.wn { position: absolute; top: -6px; right: -6px; min-width: 15px; height: 15px; padding: 0 3px; border-radius: 999px; font-style: normal;
   font-size: 10px; line-height: 15px; background: var(--accent); color: var(--panel); }
 .legend i.wn { position: static; display: inline-block; margin-right: 2px; }
+.hist { margin-top: 10px; font-size: 13px; }
+.hist summary { cursor: pointer; color: var(--muted); }
+.hrow { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 4px 0; border-bottom: 1px solid var(--line); }
+.hrow button { font-size: 12px; padding: 1px 8px; }
+#hdiff { margin-top: 8px; white-space: pre-wrap; }
+#hdiff del { background: var(--del); color: var(--del-text); }
+#hdiff ins { background: var(--ins); color: var(--ins-text); text-decoration: none; }
 .pagebar { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 13px; margin: 0 0 6px; }
 .pagebar b { font-weight: 600; }
 .pwarn { font-size: 13px; margin: 0 0 8px; }
@@ -403,6 +410,27 @@ function bestReading(res) {
 
 const PALETTE = ["ऽ", "।", "॥", "्", "ं", "ँ", "ः", "ॐ", "०", "१", "२", "३", "४", "५", "६", "७", "८", "९", "—"];
 
+// Every save of the page, and what changed: between two saves, or since the engine reading it started from.
+const diffHtml = (ops) => ops.map(([op, x, y]) => op === "equal" ? esc(x) : (x ? `<del>${esc(x)}</del>` : "") + (y ? `<ins>${esc(y)}</ins>` : "")).join("");
+async function renderHistory() {
+  const box = $("histbody");
+  const h = await api(`/api/${S.work}/${S.page}/history`);
+  const vs = h.versions.slice().reverse();
+  const HOW = { save: "saved in Proofread", suggestions: "suggestions accepted", chat: "fix from the chat", "before history": "the text before history began" };
+  box.innerHTML = `<div class="hrow">${h.base ? `<button data-a="ocr" data-b="current">Changes since the OCR</button> <span>everything changed from <b>${esc(h.base)}</b> to the latest save</span>` : "<span>No engine reading to compare with.</span>"}</div>
+    ${vs.length ? vs.map((v, i) => {
+      const prev = vs[i + 1];
+      return `<div class="hrow"><span class="stchip st-${esc(v.status)}">${esc(STATUS_LABEL[v.status] || v.status)}</span>
+        <span><b>v${v.v}</b> · ${esc((v.at || "").replace("T", " ").slice(0, 16))} · ${esc(v.by || "unknown")} · ${esc(HOW[v.how] || v.how)}${v.note ? " · note: " + esc(v.note) : ""}</span>
+        ${prev ? `<button data-a="${prev.v}" data-b="${v.v}">what changed</button>` : (h.base ? `<button data-a="ocr" data-b="${v.v}">vs the OCR</button>` : "")}</div>`;
+    }).join("") : `<div class="hrow">No saves recorded yet: saves from now on are kept here.</div>`}
+    <div id="hdiff" class="deva diff"></div>`;
+  box.querySelectorAll("button[data-a]").forEach((b) => (b.onclick = async () => {
+    const d = await api(`/api/${S.work}/${S.page}/history/diff?a=${b.dataset.a}&b=${b.dataset.b}`);
+    const name = (x) => (x === "ocr" ? h.base : x === "current" ? "the latest save" : "v" + x);
+    $("hdiff").innerHTML = `<div class="meta" style="font-family:inherit"><span><del>${esc(name(b.dataset.a))}</del> → <ins>${esc(name(b.dataset.b))}</ins></span><span>${(d.cer * 100).toFixed(2)}% of characters differ</span></div>${diffHtml(d.ops)}`;
+  }));
+}
 const STATUS_LABEL = { none: "not proofread", draft: "draft", proofread: "proofread", validated: "validated", problem: "problem", blank: "no text" };
 function renderEdit() {
   const res = S.data.results;
@@ -432,7 +460,8 @@ function renderEdit() {
       <label class="st-blank"><input type="radio" name="st" value="blank"> <b>No text</b> <span>blank page or plate</span></label>
     </fieldset>
     <div style="display:flex;gap:8px;margin-top:8px;align-items:center"><button id="save">Save</button><button id="savenext">Save and next ▶</button><button id="checkline" title="Claude checks the selected line(s) against the print and proposes fixes (⌘/Ctrl K)">Check with Claude</button><span id="saved" class="muted">${esc(S.flash || "")}</span></div>
-    ${rv.saved ? `<p class="muted" style="font-size:13px">Last saved by ${esc(rv.reviewer || "unknown")} on ${esc(rv.saved.slice(0, 10))}${rv.note ? " · note: " + esc(rv.note) : ""}</p>` : ""}`;
+    ${rv.saved ? `<p class="muted" style="font-size:13px">Last saved by ${esc(rv.reviewer || "unknown")} on ${esc(rv.saved.slice(0, 10))}${rv.note ? " · note: " + esc(rv.note) : ""}</p>` : ""}
+    ${res.groundtruth ? `<details class="hist" id="hist"><summary>History and changes since the OCR</summary><div id="histbody" class="muted">Loading…</div></details>` : ""}`;
   S.flash = "";
   const ta = $("gt"), hl = $("hl"), gut = $("gut"), TL = positionLines();
   ta.value = restored ? draft.text : res[src].text;
@@ -527,7 +556,7 @@ function renderEdit() {
   async function save(next) {
     const text = fixVerseDigits(ta.value), fixed = text !== ta.value;
     try {
-      const r = await api(`/api/${S.work}/${S.page}/groundtruth`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text, status: chosen(), note: $("note").value }) });
+      const r = await api(`/api/${S.work}/${S.page}/groundtruth`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text, status: chosen(), note: $("note").value, base: res.groundtruth ? undefined : src }) });
       store.del(draftKey);
       S.flash = `Saved p${S.page} to ${r.saved}` + (fixed ? " (verse numbers changed to Devanagari digits)" : "");
       const i = S.pages.findIndex((p) => p.page === S.page), n = next ? S.pages[i + 1] : null;
@@ -542,6 +571,7 @@ function renderEdit() {
   ta.addEventListener("scroll", sync);
   structure();
   document.querySelectorAll("#ladder input").forEach((r) => (r.onchange = keepDraft));
+  if ($("hist")) $("hist").ontoggle = () => { if ($("hist").open) renderHistory(); };
   $("note").oninput = keepDraft;
   $("pal").addEventListener("mousedown", (e) => e.preventDefault()); // keep the cursor in the text
   $("pal").onclick = (e) => { const b = e.target.closest("button[data-c]"); if (b) insert(b.dataset.c); };

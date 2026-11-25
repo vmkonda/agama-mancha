@@ -278,12 +278,16 @@ def counts(work: Work) -> dict[str, int]:
 
 def write_draft(work: Work, page: int, d: dict, lines: list[str], counter: str) -> None:
     """Save a page's draft text (never verified) and count what changed it."""
+    from . import history
+
     t, m = gt_paths(work, page)
     t.parent.mkdir(parents=True, exist_ok=True)
-    t.write_text("\n".join(lines).rstrip("\n") + "\n", encoding="utf-8")
     meta = d["meta"] | {"reviewer": d["meta"].get("reviewer") or cfgmod.load().operator, "verified": False, "status": "draft",
                         "saved": _now(), "base": d["meta"].get("base") or (d["source"] if d["source"] != "groundtruth" else None),
                         counter: d["meta"].get(counter, 0) + 1}
+    text = "\n".join(lines).rstrip("\n") + "\n"
+    history.record(work, page, text, meta, "chat" if counter.startswith("chat") else "suggestions")
+    t.write_text(text, encoding="utf-8")
     m.write_text(json.dumps(meta, ensure_ascii=False, indent=1), encoding="utf-8")
 
 
