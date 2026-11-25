@@ -194,20 +194,22 @@ def update_mine(mine: dict, works: dict[str, Work], root: str) -> dict:
 
 # ---- syncing with the drive (through the wrapper; writes only the operator's own file) --
 
-def remote_dir(cfg) -> str | None:
+def remote_dir(cfg, sub: str = "board") -> str | None:
     from . import library
 
     d = library.remote_dir(cfg)
-    return posixpath.join(d, "board") if d else None
+    return posixpath.join(d, sub) if d else None
 
 
-def sync(pd, cfg) -> dict[str, dict]:
-    """Download everyone's board files. Returns them, merged with this person's local file."""
+def sync(pd, cfg, sub: str = "board") -> dict[str, dict]:
+    """Download everyone's files from catalog/<sub>/ (the board, or the inventory) into
+    data/library/<sub>/. Returns the board files (for sub="board")."""
     import shutil
     import tempfile
 
-    rdir = remote_dir(cfg)
-    local_dir().mkdir(parents=True, exist_ok=True)
+    rdir = remote_dir(cfg, sub)
+    ldir = data_dir() / "library" / sub
+    ldir.mkdir(parents=True, exist_ok=True)
     if rdir and pd.exists(rdir):
         names = [n for n in pd.list(rdir) if n.endswith(".json")]
         mine = file_name(cfg.operator) if cfg.operator else None
@@ -225,20 +227,24 @@ def sync(pd, cfg) -> dict[str, dict]:
                         continue
                     # A file speaks only for the operator it is named after.
                     if isinstance(d, dict) and file_name(str(d.get("operator", ""))) == n:
-                        shutil.copy2(got, local_dir() / n)
+                        shutil.copy2(got, ldir / n)
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
         # Our own file: take the drive's copy only if this machine has none (a new machine).
-        if mine and mine in names and not (local_dir() / mine).exists():
-            pd.download(posixpath.join(rdir, mine), local_dir())
-    return load_all()
+        if mine and mine in names and not (ldir / mine).exists():
+            pd.download(posixpath.join(rdir, mine), ldir)
+    return load_all() if sub == "board" else {}
 
 
 def publish(pd, cfg, mine: dict) -> str:
+    return publish_file(pd, cfg, save_mine(mine), "board")
+
+
+def publish_file(pd, cfg, p: Path, sub: str) -> str:
+    """Upload this person's own file to catalog/<sub>/ in the material folder."""
     from .proton import results_root
 
-    rdir = remote_dir(cfg)
-    p = save_mine(mine)
+    rdir = remote_dir(cfg, sub)
     if not rdir:
         return "saved here only: no material folder set"
     if not pd.exists(results_root(cfg.proton_root, cfg.material)):

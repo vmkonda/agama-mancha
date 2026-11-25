@@ -15,7 +15,7 @@ Miscellaneous 66, Reference 60, Kula Internal Documents 15).
 |---|---|---|
 | A | **Catalog** of every PDF, with refresh; the **Library** page | done (#12) |
 | B | **Claims, stages and progress** per book; *Work on this* and *Release* | built, in review |
-| C | **Inventory** per book: text layer, page count, script (which need OCR) | later |
+| C | **Inventory** per book: text layer, page count, script (which need OCR) | built, in review |
 | D | **Assemble** units into the material folder layout ([material-folder.md](material-folder.md)) | later |
 
 ### A. Catalog and Library page
@@ -61,8 +61,20 @@ Miscellaneous 66, Reference 60, Kula Internal Documents 15).
 
 The design doc's first OCR step: per PDF, count extractable text and test whether it is
 valid Devanagari or IAST. Books with a good text layer need no OCR. Runs when a book is
-fetched, or in bulk overnight on one machine (downloads the 31.6 GB). The Library page
-then shows only books needing OCR by default.
+fetched, or in bulk overnight on one machine (downloads the 32.8 GB, one PDF at a time,
+deleting each after measuring). The Library page then shows only books needing OCR by default.
+
+- `amocr catalog inventory [--limit N] [--folder Texts] [--max-mb M] [--local]`: smallest
+  PDFs first; resumable (saved after every PDF); skips PDFs anyone has already measured.
+- Facts per PDF (keyed by SHA-1), shared like the board, one file per person in
+  `<material folder>/catalog/inventory/`: pages, scanned pages, page kinds (Devanagari,
+  IAST, Latin, legacy-font text, none), verdict (*needs OCR*, *has a text layer*,
+  *partly usable text*, *not a PDF*), why (scanned pages, or the legacy font's name),
+  and the script from Tesseract's script detection on three pages. No book text.
+- Found on the first 15 PDFs: placeholder files that aren't PDFs (macOS iCloud stubs,
+  a web filter's "blocked download" page saved as .pdf), and texts typeset in the
+  legacy Sanskrit99 font (Devanagari stored as Latin letters). Those could be converted
+  by a font map instead of OCR.
 
 ### D. Assemble
 

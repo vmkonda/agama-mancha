@@ -508,6 +508,20 @@ def cmd_push(work: Work, args) -> None:
     _board_quietly()
 
 
+def _inventory_quietly(w: Work) -> None:
+    """Record a fetched book's text-layer facts and share them; never fail the fetch over it."""
+    from . import board, book, inventory
+
+    try:
+        pd, cfg = book._proton()
+        mine = inventory.load_mine(cfg.operator)
+        f = inventory.record(mine, board.sha1_of(w), w.source)
+        print(f"   {inventory.VERDICTS[f['verdict']]}" + (f", {f['script']}" if f.get("script") else ""))
+        inventory.publish(pd, cfg, mine)
+    except (SystemExit, Exception) as e:  # noqa: BLE001
+        print(f"inventory not shared: {e}")
+
+
 def _board_quietly() -> None:
     """Share this person's progress on the board; never fail the command over it."""
     from . import board
@@ -557,6 +571,7 @@ def cmd_fetch(args) -> None:
 
     w, pulled = fetch(args.remote, title=args.title, restricted=args.restricted)
     print(f"{w.id}  {w.title}\n   results from others: {pulled}")
+    _inventory_quietly(w)
     print(f"next: `amocr ocr {w.id}` (Tesseract, all pages), then `amocr claude-next {w.id}`")
 
 
@@ -670,8 +685,19 @@ def cmd_catalog(args) -> None:
         for u in s["unreadable"]:
             print(f"  couldn't list {u['folder']}: {u['error']} (its books keep their last state)")
         return
+    if args.action == "inventory":
+        from . import inventory
+
+        r = inventory.run(limit=args.limit, folder=args.folder, max_mb=args.max_mb, share=not args.local, redo=args.redo)
+        print(f"checked {r['done']} of {r['todo']} PDFs in {r['minutes']} min, {r['failed']} failed ({r['shared']})")
+        return
+    from . import inventory
+
     cat = library.load()
     print(f"{cat.get('count', 0)} PDFs, refreshed {cat.get('refreshed_at', 'never')} by {cat.get('refreshed_by', '-')}")
+    st = inventory.stats(cat, inventory.merged())
+    print("   " + ", ".join(f"{st.get(k, 0)} {inventory.VERDICTS.get(k, k)}" for k in ("ocr", "mixed", "text", "unknown", "error")
+                         if st.get(k)) + "  (unknown: run `amocr catalog inventory`)")
 
 
 def cmd_board(args) -> None:
@@ -765,9 +791,13 @@ def main(argv: list[str] | None = None) -> None:
     p = plain_cmd("status", cmd_status, "progress per book")
     p.add_argument("work", nargs="?", metavar="book")
     p = plain_cmd("catalog", cmd_catalog, "the shared catalog of every PDF in the library")
-    p.add_argument("action", choices=["refresh", "show"])
+    p.add_argument("action", choices=["refresh", "show", "inventory"])
     p.add_argument("--if-older", type=float, help="refresh only if older than this many hours")
     p.add_argument("--local", action="store_true", help="read the library only; don't pull or share the catalog")
+    p.add_argument("--limit", type=int, help="inventory: at most this many PDFs (smallest first)")
+    p.add_argument("--folder", help="inventory: only this top-level folder, e.g. Texts")
+    p.add_argument("--max-mb", dest="max_mb", type=float, help="inventory: skip PDFs larger than this")
+    p.add_argument("--redo", action="store_true", help="inventory: measure again PDFs already measured")
     p = plain_cmd("board", cmd_board, "who is working on which book, and how far each has got")
     p.add_argument("action", nargs="?", default="show", choices=["show", "sync", "claim", "release"])
     p.add_argument("book", nargs="?", help="for claim/release: a book id, catalog path, or a unique part of the title")
