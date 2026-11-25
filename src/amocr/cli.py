@@ -505,6 +505,17 @@ def cmd_push(work: Work, args) -> None:
 
     remote = push(work)
     print(f"{work.id}: uploaded to {remote}")
+    _board_quietly()
+
+
+def _board_quietly() -> None:
+    """Share this person's progress on the board; never fail the command over it."""
+    from . import board
+
+    try:
+        board.refresh_board()
+    except (SystemExit, Exception) as e:  # noqa: BLE001 - the board is a courtesy here
+        print(f"board not updated: {e}")
 
 
 # ---- commands that don't take a single book ---------------------------------
@@ -663,6 +674,36 @@ def cmd_catalog(args) -> None:
     print(f"{cat.get('count', 0)} PDFs, refreshed {cat.get('refreshed_at', 'never')} by {cat.get('refreshed_by', '-')}")
 
 
+def cmd_board(args) -> None:
+    """Who is working on what, and how far each book has got."""
+    from . import board, library
+
+    if args.action in ("claim", "release") and not args.book:
+        raise SystemExit(f"which book? amocr board {args.action} <book id, path or part of the title>")
+    if args.action == "claim":
+        r = board.claim(args.book)
+        print(("claimed: " if r["ok"] else "not claimed: ") + r["entry"]["path"])
+        print(f"   {r.get('shared', '')}" if r["ok"] else f"   {r['why']}")
+        if r["ok"] and not any(w.remote and w.remote.endswith("/" + r["entry"]["path"]) for w in load_works().values()):
+            root = library.load().get("root", "")
+            print(f'next: amocr fetch "{root}/{r["entry"]["path"]}"')
+        return
+    if args.action == "release":
+        r = board.release(args.book, args.why or "")
+        print(("released: " if r["ok"] else "not released: ") + r["entry"]["path"])
+        print(f"   {r.get('shared', '')}" if r["ok"] else f"   {r['why']}")
+        return
+    b = board.refresh_board() if args.action == "sync" else board.merge(board.load_all())
+    rows = sorted(b.values(), key=lambda e: (e.get("holder") is None, e.get("path") or ""))
+    if not rows:
+        print("nobody has claimed or reported a book yet" + ("" if args.action == "sync" else " (amocr board sync)"))
+    for e in rows:
+        p = e.get("progress") or {}
+        who = f"{e['holder']} since {e['since'][:10]}" + (" (stale)" if e.get("stale") else "") if e.get("holder") else "nobody"
+        prog = f" · {p.get('read', 0)}/{p.get('pages', 0)} read, {p.get('proofread', 0)} proofread, {p.get('verified', 0)} verified" if p.get("pages") else ""
+        print(f"{e.get('title') or e.get('path')}\n   {board.STAGE_LABEL[e['stage']]}{prog} · {who}")
+
+
 def cmd_start(args) -> None:
     """Refresh the catalog if it is more than a day old, then open the viewer."""
     from . import library
@@ -674,6 +715,7 @@ def cmd_start(args) -> None:
             print(f"catalog: {s['pdfs']} PDFs, +{s['added']} new ({s['shared']})")
         except SystemExit as e:
             print(f"catalog not refreshed: {e}")
+    _board_quietly()
     cmd_serve(args)
 
 
@@ -726,6 +768,10 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("action", choices=["refresh", "show"])
     p.add_argument("--if-older", type=float, help="refresh only if older than this many hours")
     p.add_argument("--local", action="store_true", help="read the library only; don't pull or share the catalog")
+    p = plain_cmd("board", cmd_board, "who is working on which book, and how far each has got")
+    p.add_argument("action", nargs="?", default="show", choices=["show", "sync", "claim", "release"])
+    p.add_argument("book", nargs="?", help="for claim/release: a book id, catalog path, or a unique part of the title")
+    p.add_argument("--why", help="for release: why (recorded)")
     p = plain_cmd("start", cmd_start, "refresh the catalog if stale, then open the viewer")
     p.add_argument("--port", type=int, default=8791)
     p.add_argument("--no-browser", action="store_true")

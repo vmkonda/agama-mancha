@@ -37,8 +37,12 @@ in the user's own terminal.
 
 ## "Start a new book" / "OCR <proton path>"
 
-`uv run amocr fetch "<proton path>"` (add `--restricted` if the user says the
+First claim it so the team sees who is on it: `uv run amocr board claim "<title or path>"`.
+If someone else holds it, tell the user who and since when, and stop (a stale claim
+can be released with `uv run amocr board release`, but only if the user asks).
+Then `uv run amocr fetch "<proton path>"` (add `--restricted` if the user says the
 book is restricted; ask if unsure), note the printed id, then continue as above.
+(The Library page's *Work on this* button does both.)
 A local PDF without Proton: `uv run amocr add <file>`.
 
 ## "I want to proofread book <id> [from page N]"

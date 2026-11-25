@@ -76,7 +76,9 @@ sheet is the lock.
 
 ## 4. Fetch the book and let Tesseract read it
 
-The easy way: tell Claude
+First pick a book nobody is working on: in the app's **Library** page
+(`uv run amocr start`), find it and press **Work on this**. That tells the team
+it's yours and downloads it. Or tell Claude
 
 > Start OCR on /shared-with-me/<library>/<path>/<book>.pdf
 

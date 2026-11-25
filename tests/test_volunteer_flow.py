@@ -118,3 +118,80 @@ def test_folders_lists_shares(tmp_path, monkeypatch, drive, capsys):
     capsys.readouterr()
     main(["folders"])
     assert "Team" in capsys.readouterr().out
+
+
+def _catalog_with_test_book(root):
+    import hashlib
+
+    from amocr import library
+
+    pdf = root / "shared-with-me/Team/Tantra/Test Book.pdf"
+    e = {"path": "Tantra/Test Book.pdf", "name": "Test Book.pdf", "folder": "Tantra", "size": pdf.stat().st_size,
+         "modified": "", "sha1": hashlib.sha1(pdf.read_bytes()).hexdigest(), "added_by": None}
+    entries, _ = library.merge([], [e], "t0")
+    library.save({"root": TEAM, "refreshed_at": "2026-11-25T00:00:00+00:00", "count": 1, "entries": entries})
+    return e["sha1"]
+
+
+def test_claims_on_the_board(tmp_path, monkeypatch, drive, capsys):
+    from datetime import datetime, timedelta, timezone
+
+    from amocr import board
+
+    root, fake = drive
+    volunteer(tmp_path, monkeypatch, "Anna", fake)
+    key = _catalog_with_test_book(root)
+    assert board.claim("Test Book")["ok"]
+    assert (root / "shared-with-me/Team/OCR Mirror/catalog/board/Anna.json").exists()
+    main(["fetch", f"{TEAM}/Tantra/Test Book.pdf"])
+    b = board.refresh_board()[key]
+    assert b["holder"] == "Anna" and b["stage"] == "inventoried" and b["progress"]["pages"] == 3
+
+    volunteer(tmp_path, monkeypatch, "Bala", fake)
+    _catalog_with_test_book(root)
+    r = board.claim("Tantra/Test Book.pdf")
+    assert not r["ok"] and "Anna" in r["why"]
+    assert not board.release("Test Book")["ok"]  # not stale: only Anna may release it
+
+    # Three weeks later, Anna's claim is stale: Bala may release it (recorded in Bala's file), then claim it.
+    later = datetime.now(timezone.utc) + timedelta(days=21)
+    monkeypatch.setattr(board, "_age_days", lambda at, now=None: (later - datetime.fromisoformat(at)).total_seconds() / 86400)
+    r = board.release("Test Book")
+    assert r["ok"] and r["released"] == "Anna"
+    assert board.claim("Test Book")["ok"]
+    b = board.merge(board.load_all())[key]
+    assert b["holder"] == "Bala" and b["stage"] == "inventoried" and b["by"] == "Anna"  # Anna's progress still counts
+
+    # The Library page gets it per catalog entry; Bala's copy fetches the PDF in the background.
+    import time
+
+    from amocr import server
+    from amocr.catalog import load_works
+
+    server.Handler.works = load_works()
+    lib = server._library(server.Handler.works)
+    assert lib["me"] == "Bala" and lib["entries"][0]["board"]["holder"] == "Bala"
+    assert "book" not in lib["entries"][0]  # not on Bala's machine yet
+    assert board.release("Test Book")["ok"]
+    server._start_job("claim", key, server.Handler)
+    while server._job["running"]:
+        time.sleep(0.05)
+    assert server._job["error"] is None and server._job["result"]["ok"] and server._job["result"]["fetched"]
+    lib = server._library(server.Handler.works)
+    assert lib["entries"][0]["book"] and lib["entries"][0]["board"]["holder"] == "Bala"
+
+
+def test_board_merge_earliest_claim_wins():
+    from amocr import board
+
+    files = {
+        "A": {"operator": "A", "books": {"k": {"claimed": True, "since": "2026-11-02T00:00:00+00:00"}}, "releases": []},
+        "B": {"operator": "B", "books": {"k": {"claimed": True, "since": "2026-11-01T00:00:00+00:00",
+                                               "stage": "read", "progress": {"pages": 2, "read": 2}}}, "releases": []},
+    }
+    assert board.merge(files)["k"]["holder"] == "B"
+    files["A"]["releases"] = [{"key": "k", "holder": "B", "since": "2026-11-01T00:00:00+00:00"}]
+    m = board.merge(files)["k"]
+    assert m["holder"] == "A" and m["stage"] == "read"
+    assert board.stage_of({"pages": 2, "read": 2, "claude": 0, "proofread": 1, "verified": 0}) == "proofreading"
+    assert "/" not in board.file_name("Ā b/../c") and board.file_name("vmkonda") == "vmkonda.json"
