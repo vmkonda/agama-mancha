@@ -378,3 +378,16 @@ def test_context_fixes_only_in_context(tmp_path, monkeypatch):
     assert [(f["from"], f["next"], f["to"]) for f in fixes] == [("को", "तरह", "की")]
     rx = re.compile(sus.context_regex(fixes[0]))
     assert rx.search("उस को तरह है") and not rx.search("राम को दिया")  # को stays को where it belongs
+
+
+def test_material_setting(tmp_path, monkeypatch):
+    import pytest
+
+    from amocr import book, config
+
+    monkeypatch.setenv("AMOCR_DATA", str(tmp_path))
+    config.path().write_text('operator = "x"\nproton_root = "/shared-with-me/L"\nmirror = "/shared-with-me/M"\n', encoding="utf-8")
+    assert config.load().material == "/shared-with-me/M"  # the old name still works
+    config.save(config.Config(proton_root="/shared-with-me/L"))
+    with pytest.raises(SystemExit, match="material folder not set"):
+        book._mirror("/shared-with-me/L/T/B.pdf", config.load())  # never write into the library by default

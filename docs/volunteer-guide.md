@@ -7,7 +7,7 @@ what's missing.
 
 **What you'll do:** take a book from the team's Proton Drive, let the computer
 read every page (Tesseract, free), let Claude carefully re-read pages in
-batches, and upload the results to the team's **OCR Mirror** folder. Other
+batches, and upload the results to the team's **material folder** for Agama Mancha. Other
 volunteers can continue where you stopped.
 
 **Time:** setup about 10 minutes, once, with Claude doing most of it. After
@@ -18,7 +18,7 @@ that, a batch of 10 pages takes a few minutes of your attention.
 ## Keeping the shared drive safe
 
 You can't damage the original books: you have read-only access to them. The
-tool only adds files to OCR Mirror; it has no way to delete, move or rename
+tool only adds files to the material folder; it has no way to delete, move or rename
 anything, and Claude is blocked from running Proton commands that change the
 drive. Please don't work around those blocks, and don't use other Proton
 tools on the team folders while a Claude session is running.
@@ -27,7 +27,7 @@ tools on the team folders while a Claude session is running.
 
 - A Mac (Apple Silicon or Intel), a Windows PC, or Linux.
 - A **Proton account** that the coordinator has invited to the library folder
-  (viewer) and to the OCR Mirror folder (editor). A shared *link*
+  (viewer) and to the material folder (editor). A shared *link*
   (drive.proton.me/urls/…) is not enough: the tool can only use folders shared
   to your account. Ask the coordinator for an invitation if you only have a link.
 - A **Claude** subscription (Pro or higher). Claude sets up your computer and
@@ -57,7 +57,7 @@ tools on the team folders while a Claude session is running.
    - permission before it runs commands (read what it asks, then approve);
    - your **Proton sign-in**: it gives you a link to open in your browser;
    - your **name**, as it should appear on the pages you do;
-   - which shared folders are the **library** and **OCR Mirror**.
+   - which shared folders are the **library** and the **material folder**.
 
    Anything that needs your computer's password, Claude gives you as a command
    to type yourself, starting with `!`. Claude never asks for passwords.
@@ -132,7 +132,7 @@ uv run amocr status B-1a2b3c4d5e
 ```
 
 Results appear in Proton Drive under
-`OCR Mirror/<same path as the book>/<book>.amocr/`. Update the sheet with the
+`<material folder>/<same path as the book>/<book>.amocr/`. Update the sheet with the
 pages done. When every page is done, set the status to *done*.
 
 ## 7. Look at the result (optional)
@@ -264,7 +264,7 @@ Open **PowerShell** (Start menu, type `powershell`).
 4. Tell the tool your name (credited on every page you do), the library
    folder and the results folder:
    ```sh
-   uv run amocr init --operator "Your Name" --proton-root "/shared-with-me/<library>" --mirror "/shared-with-me/OCR Mirror"
+   uv run amocr init --operator "Your Name" --proton-root "/shared-with-me/<library>" --material "/shared-with-me/[OCR Mirror]/Agama Mancha"
    ```
    Windows only, also: `uv run amocr init --proton-bin "C:\Tools\proton-drive.exe"`
 5. Check everything:

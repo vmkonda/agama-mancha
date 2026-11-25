@@ -1,6 +1,6 @@
 ---
 name: ocr-book
-description: Volunteer OCR workflow for a book - fetch it from Proton Drive, run Tesseract, have Claude read the next batch of pages, import, and push results to the team's OCR Mirror; also set up proofreading sessions. Use when the user says "continue OCR on book X", "start a new book", "OCR this PDF", "I want to proofread book X", "upload my proofreading", or asks for progress on a book.
+description: Volunteer OCR workflow for a book - fetch it from Proton Drive, run Tesseract, have Claude read the next batch of pages, import, and push results to the team's material folder; also set up proofreading sessions. Use when the user says "continue OCR on book X", "start a new book", "OCR this PDF", "I want to proofread book X", "upload my proofreading", or asks for progress on a book.
 ---
 
 # ocr-book

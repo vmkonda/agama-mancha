@@ -11,7 +11,7 @@ login can edit the originals, a mistake can damage them. Set Proton up so it can
 1. **Two separate shares.** Keep the originals and the results in two folders
    that are shared separately, neither inside the other:
    - the library of original PDFs, shared as **Viewer**;
-   - `OCR Mirror` (results), shared as **Editor**.
+   - the **material folder** (results; for example `[OCR Mirror]/Agama Mancha`), shared as **Editor**.
 
    With viewer rights, nothing a volunteer's computer does can change an
    original, whatever the software or Claude does. This is the protection that
@@ -28,7 +28,7 @@ login can edit the originals, a mistake can damage them. Set Proton up so it can
 Volunteers then configure both paths (the volunteer guide shows this):
 
 ```sh
-uv run amocr init --proton-root "/shared-with-me/<library>" --mirror "/shared-with-me/OCR Mirror"
+uv run amocr init --proton-root "/shared-with-me/<library>" --material "/shared-with-me/[OCR Mirror]/Agama Mancha"
 ```
 
 What the software adds on top (enforced in code and tested):
@@ -46,12 +46,12 @@ What the software adds on top (enforced in code and tested):
 ## Give a volunteer access
 
 1. **Proton Drive.** Invite the volunteer's Proton account to the library as
-   **Viewer** and to OCR Mirror as **Editor** (see above). For OCR Mirror (in the web app: Share → invite by email, role
+   **Viewer** and to the material folder as **Editor** (see above). For the material folder (in the web app: Share → invite by email, role
    *Editor*; or `proton-drive sharing invite --user <their email> --role editor "<folder>"`.
    The CLI's default role is *viewer*, which can download but not upload).
    Share links (drive.proton.me/urls/…, with or without a password) work in a
    browser but **not** with the tool, so every volunteer needs an invitation.
-   Proofreaders need the same: their corrections are uploaded to OCR Mirror.
+   Proofreaders need the same: their corrections are uploaded to the material folder.
 2. **GitHub.** The repository is public, so anyone can clone it; no account
    or invitation is needed. It holds code and documentation only, never book
    scans or book text.
@@ -69,7 +69,7 @@ Keep using the task sheet: one owner per book at a time. Suggested columns:
 The book id (e.g. `B-1a2b3c4d5e`) comes from `amocr fetch`. It's derived
 from the PDF itself, so it's the same on every machine and changes only if
 the file changes. The page counts can be read from the book's `book.json`
-in OCR Mirror, or with `uv run amocr status <id>`.
+in the material folder, or with `uv run amocr status <id>`.
 
 A book can be handed over: the next volunteer runs `amocr fetch` on the same
 PDF and receives everything already uploaded.
@@ -85,7 +85,7 @@ Deciding which works are restricted is the coordinator's call.
 ## What ends up in Proton Drive
 
 ```
-OCR Mirror/<same path as the original>/<book>.amocr/
+<material folder>/<same path as the original>/<book>.amocr/
   book.json        who did what, page counts, which pages are verified
   book.txt         the whole book as text, best reading per page
   pages/p0231/     every reading of page 231 (Tesseract, Claude), with credits
@@ -95,8 +95,9 @@ OCR Mirror/<same path as the original>/<book>.amocr/
 `book.txt` is the file most people want: one section per page, using the
 proofread text where it exists, then Claude's reading, then Tesseract's.
 
-This sits next to the team's existing OCR Mirror PDFs (from ocrmypdf); it
-doesn't replace them.
+It is separate from the team's `[OCR Mirror]` PDFs (from ocrmypdf) and doesn't
+replace them. The planned layout, by work, for Agama Mancha is in
+[material-folder.md](material-folder.md).
 
 ## Quality: what to watch
 

@@ -9,7 +9,7 @@ Volunteer flow (or just ask Claude: "set me up")
   amocr ocr <book> [--engine surya]          Tesseract (or local Surya) on every page (free, no Claude)
   amocr claude-next <book> -n 10             prepare the next 10 pages for Claude
   amocr claude-import <book> --ready         store every page Claude finished
-  amocr push <book>                          upload results to OCR Mirror on Proton Drive
+  amocr push <book>                          upload results to the material folder on Proton Drive
   amocr status [<book>]                      progress
   amocr serve                                scan and text side by side in the browser
 
@@ -551,7 +551,7 @@ def cmd_fetch(args) -> None:
 
 def cmd_init(args) -> None:
     cfg = cfgmod.load()
-    for k in ("operator", "proton_root", "proton_bin", "mirror"):
+    for k in ("operator", "proton_root", "proton_bin", "material"):
         v = getattr(args, k)
         if v is not None:
             setattr(cfg, k, v.rstrip("/") if k == "proton_root" else v)
@@ -598,8 +598,11 @@ def cmd_doctor(args) -> None:
 
             line(pd.exists(cfg.proton_root), "team folder reachable (logged in, shared with you)",
                  "run `proton-drive auth login`, and ask for the folder to be shared with your Proton account")
-            rr = results_root(cfg.proton_root, cfg.mirror)
-            line(pd.exists(rr), f"results folder exists: {rr}", "ask the coordinator to create/share it; amocr never creates it")
+            if not cfg.material.strip():
+                line(False, "material folder set", 'run `amocr init --material "/shared-with-me/<material folder>"`')
+            else:
+                rr = results_root(cfg.proton_root, cfg.material)
+                line(pd.exists(rr), f"material folder exists: {rr}", "ask the coordinator to create/share it; amocr never creates it")
     except ProtonError as e:
         line(False, "Proton Drive CLI", str(e))
     claude = shutil.which("claude")
@@ -638,7 +641,7 @@ def cmd_folders(args) -> None:
     for n in names:
         print(f"  {n}")
     if not names:
-        print("  (empty: ask the coordinator to share the library and OCR Mirror with your Proton account)")
+        print("  (empty: ask the coordinator to share the library and the material folder with your Proton account)")
 
 
 def cmd_serve(args) -> None:
@@ -673,8 +676,9 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--operator", help="your name, credited on every page you process")
     p.add_argument("--proton-root", dest="proton_root", help='team folder, e.g. "/shared-with-me/Library"')
     p.add_argument("--proton-bin", dest="proton_bin", help="path to the proton-drive program")
-    p.add_argument("--mirror", help='results folder: a full path like "/shared-with-me/OCR Mirror", '
-                   'or a folder name inside the team folder (default "OCR Mirror")')
+    p.add_argument("--material", "--mirror", dest="material",
+                   help='the material folder, where results go: a full path like "/shared-with-me/[OCR Mirror]/Agama Mancha", '
+                        "or a folder name inside the team folder (--mirror is the old name)")
     p = plain_cmd("fetch", cmd_fetch, "download a PDF from Proton Drive and register it")
     p.add_argument("remote", help='Proton path, e.g. "/shared-with-me/Team/Tantra/book.pdf"')
     p.add_argument("--title")
@@ -745,7 +749,7 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--force", action="store_true")
     p = book_cmd("claude-prep", cmd_claude_prep, pages=True, help="prepare specific pages for Claude")
     p.add_argument("--mode", choices=["auto", "review", "screen", "bands"], default="auto", help=mode_help)
-    book_cmd("push", cmd_push, help="upload results to the team's OCR Mirror")
+    book_cmd("push", cmd_push, help="upload results to the material folder")
     book_cmd("pull", cmd_pull, help="download results others pushed")
     book_cmd("eval", cmd_eval, help="CER of every result vs ground truth")
     book_cmd("inventory", cmd_inventory)

@@ -17,12 +17,12 @@ ocr     Tesseract (san+hin by default) per page -> text, line confidences, bboxe
 claude  the volunteer's Claude Code session reads page images in batches of 10
         and writes structured results (regions, changes vs Tesseract, uncertain);
         no API keys, it runs on the volunteer's own Claude plan
-push    exports <id>/ -> <OCR Mirror>/<same path>/<book>.amocr/ via proton-drive upload
+push    exports <id>/ -> <material folder>/<same path>/<book>.amocr/ via proton-drive upload
 pull    merges results others pushed; local files are never overwritten
 serve   local viewer (127.0.0.1) for side-by-side review and proofreading
 ```
 
-Output per book in OCR Mirror: `book.json` (page status, operators,
+Output per book in the material folder: `book.json` (page status, operators,
 reviewers), `book.txt` (best reading per page), `pages/pNNNN/*.json|txt`
 (every engine's result, append-only), `groundtruth/pNNNN.txt` plus
 `.meta.json` (proofread text, reviewer, verified flag). It sits next to the
@@ -40,7 +40,7 @@ volunteer's Proton credentials, doing something destructive on the drive.
 The defences, strongest first:
 
 1. **Proton permissions (the folder owner's part).** Volunteers get viewer access to the
-   library and editor access only to OCR Mirror. Nothing client-side can get
+   library and editor access only to the material folder. Nothing client-side can get
    past a viewer role.
 2. **`src/amocr/proton.py`.** The only code path to Proton. It allow-lists
    `version`, `filesystem info|list|download`, `filesystem create-folder` and
@@ -60,20 +60,20 @@ The defences, strongest first:
 
 ## What to set up on the drive
 
-1. **Separate OCR Mirror from the library.** They must be two independent
-   shares, neither inside the other. Proton has an `inherited` role, so a
-   folder nested inside the library share would follow the library's
-   permissions, and keeping them apart avoids any doubt. If OCR Mirror is
-   currently inside the library:
-   ```sh
-   proton-drive filesystem move "/my-files/<library>/OCR Mirror" /my-files
-   ```
-   (adjust paths; the web app's *Move* works too).
+1. **A material folder, writable, apart from the library.** This is where
+   Agama Mancha's material goes (see [material-folder.md](material-folder.md)).
+   It must be shared with volunteers as **Editor** through its own share, never
+   be writable through the library's share, and never contain the originals.
+   Proton has an `inherited` role, so a folder nested inside the library share
+   would follow the library's permissions: keep it out of the library.
+   The team's `[OCR Mirror]` (their ocrmypdf PDFs) is a separate share already,
+   so a subfolder of it, `[OCR Mirror]/Agama Mancha`, qualifies; so does a new
+   share of its own.
 2. **Roles** (CLI roles: `viewer`, `editor`, `admin`; the CLI defaults to
    `viewer`):
    ```sh
    proton-drive sharing invite --user <email> --role viewer "/my-files/<library>"
-   proton-drive sharing invite --user <email> --role editor "/my-files/OCR Mirror"
+   proton-drive sharing invite --user <email> --role editor "/my-files/<material folder>"
    proton-drive sharing status "/my-files/<library>"      # audit members and links
    ```
    Downgrade anyone who has editor on the library and doesn't add books.
@@ -88,7 +88,7 @@ hook blocks Proton write commands there by design.
 Volunteers then configure:
 
 ```sh
-uv run amocr init --operator "Name" --proton-root "/shared-with-me/<library>" --mirror "/shared-with-me/OCR Mirror"
+uv run amocr init --operator "Name" --proton-root "/shared-with-me/<library>" --material "/shared-with-me/[OCR Mirror]/Agama Mancha"
 uv run amocr doctor      # checks Tesseract langs, CLI, login, both folders
 ```
 
@@ -122,8 +122,8 @@ uv run amocr doctor      # checks Tesseract langs, CLI, login, both folders
 
 ## Checklist
 
-- [ ] OCR Mirror is a separate share from the library
-- [ ] Volunteers: viewer on the library, editor on OCR Mirror; links reviewed
+- [ ] The material folder exists, outside the library, in a share of its own
+- [ ] Volunteers: viewer on the library, editor on the material folder; links reviewed
 - [ ] Backup of the library outside Proton
 - [ ] Restricted works marked in the task sheet
 - [ ] Volunteers pointed to the [volunteer guide](volunteer-guide.md), scholars to the
