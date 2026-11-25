@@ -69,6 +69,7 @@ details li { margin: 2px 0; }
 #hl { position: absolute; inset: 0; overflow: hidden; color: transparent; pointer-events: none; padding-bottom: 80px; }
 #hl > div { height: var(--lh); border-radius: 3px; }
 #hl .lowl { background: var(--low); }
+sup.fn { color: var(--accent); font-weight: 700; font-size: .72em; line-height: 0; padding: 0 1px; }
 /* Footnote markers (a digit right after a letter: योगी२) look like letters in Devanagari fonts (२/र, ३/इ); tint them. */
 #hl .fnm { background: color-mix(in srgb, var(--accent) 28%, transparent); border-radius: 3px; box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 55%, transparent); }
 .ed.withgut textarea, .ed.withgut #hl { padding-left: 128px; }
@@ -172,6 +173,12 @@ const $ = (id) => document.getElementById(id);
 const S = { work: null, page: null, pages: [], data: null, mode: "view" };
 const store = { get(k) { try { return localStorage.getItem(k); } catch { return null; } }, set(k, v) { try { localStorage.setItem(k, v); } catch {} }, del(k) { try { localStorage.removeItem(k); } catch {} } };
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+// Devanagari text with footnote markers shown as raised, coloured digits (योगी२ → योगी^२), so a marker
+// can't pass for a letter (२/र, ३/इ). A marker is a digit right after a letter, or right before a word;
+// a lone ० after a letter is the abbreviation sign (क० पु०); verse numbers stand alone and stay as they are.
+const FNM_AFTER = /([\u0900-\u0963\u0971-\u097F])((?!०(?![०-९]))[०-९0-9]+)/g, FNM_BEFORE = /(^|\s)([१-९])(?=[\u0905-\u0939])/g;
+const deva = (t) => esc(t).replace(FNM_AFTER, '$1<sup class="fn" title="footnote marker">$2</sup>')
+  .replace(FNM_BEFORE, '$1<sup class="fn" title="footnote marker">$2</sup>');
 const api = async (u, opt) => { const r = await fetch(u, opt); const j = await r.json(); if (!r.ok) throw new Error(j.error || r.status); return j; };
 const LOW = 70;
 
@@ -261,7 +268,7 @@ function renderView(label) {
     lines.forEach((ln) => {
       const key = ln.type + "|" + (ln.verse ?? "");
       if (key !== cur) { if (cur) h += `</div>`; h += `<div class="region r-${esc(ln.type)}"><div class="tag">${esc(ln.type)}${ln.verse ? " · v" + esc(ln.verse) : ""}</div>`; cur = key; }
-      h += `<div class="ln">${esc(ln.text)}</div>`;
+      h += `<div class="ln">${deva(ln.text)}</div>`;
     });
     if (cur) h += `</div>`;
   } else if (lines.length && lines[0].bbox) {
@@ -271,10 +278,10 @@ function renderView(label) {
       const para = ln.block + "." + ln.par;
       if (prev && para !== prev) h += `<div class="gap"></div>`;
       prev = para;
-      h += `<div class="ln${ln.conf < LOW ? " low" : ""}" data-i="${i}" title="conf ${ln.conf}">${esc(ln.text)}</div>`;
+      h += `<div class="ln${ln.conf < LOW ? " low" : ""}" data-i="${i}" title="conf ${ln.conf}">${deva(ln.text)}</div>`;
     });
   } else {
-    h += r.text.split("\n").map((t) => (t.trim() ? `<div class="ln">${esc(t)}</div>` : `<div class="gap"></div>`)).join("");
+    h += r.text.split("\n").map((t) => (t.trim() ? `<div class="ln">${deva(t)}</div>` : `<div class="gap"></div>`)).join("");
   }
   h += `</div>`;
   if (r.changes && r.changes.length) h += `<details open><summary>${r.changes.length} changes from Tesseract</summary><ul class="deva" style="font-size:15px">${r.changes.map((c) => `<li><del style="color:var(--del-text)">${esc(c.from)}</del> → <b>${esc(c.to)}</b> <span class="muted" style="font-size:12px">${esc(c.why || "")}</span></li>`).join("")}</ul></details>`;
@@ -453,9 +460,7 @@ function renderEdit() {
     const rs = rows(), c = curRow();
     // A marker is a digit right after a letter (योगी२) or right before a word (१षट्…); a lone ० after a
     // letter is the abbreviation sign (क० पु०), not a marker.
-    const marks = (t) => esc(t)
-      .replace(/([\u0900-\u0963\u0971-\u097F])((?!०(?![०-९]))[०-९0-9]+)/g, '$1<span class="fnm" title="footnote marker">$2</span>')
-      .replace(/(^|\s)([१-९])(?=[\u0905-\u0939])/g, '$1<span class="fnm" title="footnote marker">$2</span>');
+    const marks = (t) => esc(t).replace(FNM_AFTER, '$1<span class="fnm">$2</span>').replace(FNM_BEFORE, '$1<span class="fnm">$2</span>');
     hl.innerHTML = rs.map((r, i) => `<div class="${[isLow(r) ? "lowl" : "", i === c ? "cur" : ""].join(" ").trim()}">${marks(r.t) || " "}</div>`).join("");
     sync();
     if (!follow) return;
@@ -679,7 +684,7 @@ async function chatLoad() {
     const acts = (m.actions || []).map((a, i) => {
       if (a.type === "line") {
         const done = applied.has(`${m.id}:${i}`);
-        return `<div class="act"><span class="where">p${a.page} · line ${a.n}</span><div class="deva"><del>${esc(a.from)}</del><br><ins>${esc(a.to)}</ins></div>
+        return `<div class="act"><span class="where">p${a.page} · line ${a.n}</span><div class="deva"><del>${deva(a.from)}</del><br><ins>${deva(a.to)}</ins></div>
           <button data-apply="${esc(m.id)}:${i}" ${done ? "disabled" : ""}>${done ? "Applied" : "Apply to the draft"}</button></div>`;
       }
       return `<div class="act">Rule <code>${esc(a.id)}</code> <button data-rule="${esc(a.id)}">Review its matches in Suggestions</button></div>`;
