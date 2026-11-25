@@ -391,3 +391,18 @@ def test_material_setting(tmp_path, monkeypatch):
     config.save(config.Config(proton_root="/shared-with-me/L"))
     with pytest.raises(SystemExit, match="material folder not set"):
         book._mirror("/shared-with-me/L/T/B.pdf", config.load())  # never write into the library by default
+
+
+def test_library_merge():
+    from amocr.library import merge
+
+    a = {"path": "T/a.pdf", "name": "a.pdf", "folder": "T", "size": 10, "modified": "", "sha1": "x", "added_by": None}
+    b = {"path": "T/b.pdf", "name": "b.pdf", "folder": "T", "size": 20, "modified": "", "sha1": "y", "added_by": None}
+    e1, c1 = merge([], [a, b], "t1")
+    assert c1["added"] == ["T/a.pdf", "T/b.pdf"] and all(e["state"] == "new" for e in e1)
+    moved = a | {"path": "S/a.pdf", "folder": "S"}
+    e2, c2 = merge(e1, [moved], "t2")
+    assert c2["moved"] == ["T/a.pdf -> S/a.pdf"] and c2["gone"] == ["T/b.pdf"]
+    assert next(e for e in e2 if e["path"] == "S/a.pdf")["moved_from"] == ["T/a.pdf"]
+    e3, c3 = merge(e2, [moved | {"sha1": "z"}], "t3")
+    assert c3["changed"] == ["S/a.pdf"] and any(e["state"] == "gone" for e in e3)  # gone entries are kept
