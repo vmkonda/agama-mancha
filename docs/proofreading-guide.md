@@ -81,8 +81,9 @@ A book never gets its own layout, buttons or colours.
 ### Helpers in Proofread
 
 - **The scan follows your cursor.** The line you're on is outlined on the
-  scan, which scrolls to it. This uses Tesseract's line positions, matched
-  line by line, so after you add or remove lines it can be one line off.
+  scan, which scrolls to it. This uses Surya's line positions (Tesseract's if
+  the page has no Surya reading), matched line by line, so after you add or
+  remove lines it can be one line off.
 - **Unsure lines are yellow.** These are the lines Tesseract was least sure
   of, where most mistakes are. **F2** (or **Alt ↓**) jumps to the next one
   and selects it; **Shift F2** (or **Alt ↑**) goes back.

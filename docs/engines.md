@@ -88,6 +88,25 @@ doesn't replace reading: the misses are single wrong letters that form valid
 words, and footnote markers. These numbers come from one book; measure again on
 each new one (`amocr suspects <book> --eval`).
 
+## Cheaper Claude models for a second check: tested, not settled
+
+Could Sonnet or Haiku, run as a subagent in the volunteer's own Claude Code session, check
+lines more cheaply than Opus? Same task as review mode (numbered line sheets plus Surya's
+reading), ten Mālinī pages (pp. 1, 8, 10, 11, 15 and 231–235), 284 lines, 2026-11-25:
+
+| | Sonnet | Haiku |
+|---|---|---|
+| Lines Opus corrected on pp. 231–235 (33): same fix | 24 | 7 |
+| Lines Opus left alone (118): changed anyway | 9 | 3 |
+| Tokens per page in this test | ~12k | ~15k |
+
+Agreement with Opus is not accuracy. Against the person-saved pages the models "broke"
+many lines, but most of those were the saved text keeping Surya's ो-for-ी and बा-for-आ
+look-alikes, so those pages (not yet verified) can't settle it. Provisional reading: Haiku
+misses too much; Sonnet finds most of what Opus finds but also normalises spellings
+(मां → माँ), so its output could only ever be suggestions. To be rescored once the pages
+are verified.
+
 ## Reference e-texts: another edition as a free cross-check
 
 When another edition of a book's root text exists as an e-text (GRETIL, Muktabodha …),

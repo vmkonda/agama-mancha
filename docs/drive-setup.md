@@ -44,7 +44,7 @@ The defences, strongest first:
    past a viewer role.
 2. **`src/amocr/proton.py`.** The only code path to Proton. It allow-lists
    `version`, `filesystem info|list|download`, `filesystem create-folder` and
-   `filesystem upload`. Writes are confined to the results root, which must
+   `filesystem upload`. Writes are confined to the material folder, which must
    already exist; the tool never creates it. Uploads use
    `--file-conflict-strategy create-new-revision`, so revision history is kept,
    never trash-and-replace. Every call is logged to `data/proton.log`.

@@ -264,7 +264,7 @@ Open **PowerShell** (Start menu, type `powershell`).
    proton-drive filesystem list /shared-with-me
    ```
 4. Tell the tool your name (credited on every page you do), the library
-   folder and the results folder:
+   folder and the material folder:
    ```sh
    uv run amocr init --operator "Your Name" --proton-root "/shared-with-me/<library>" --material "/shared-with-me/[OCR Mirror]/Agama Mancha"
    ```

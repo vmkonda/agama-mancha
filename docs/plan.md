@@ -16,7 +16,7 @@ Miscellaneous 66, Reference 60, Kula Internal Documents 15).
 | A | **Catalog** of every PDF, with refresh; the **Library** page | done (#12) |
 | B | **Claims, stages and progress** per book; *Work on this* and *Release* | done (#13) |
 | C | **Inventory** per book: text layer, page count, script (which need OCR) | done (#14) |
-| D | **Assemble** units into the material folder layout ([material-folder.md](material-folder.md)) | built, in review |
+| D | **Assemble** units into the material folder layout ([material-folder.md](material-folder.md)) | done (#15) |
 
 ### A. Catalog and Library page
 

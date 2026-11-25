@@ -5,7 +5,7 @@ The team's workbench for Agama Mancha, a library of the Sarvāmnāya literature
 shows who is working on what, and turns scanned Sanskrit and Hindi books into
 accurate, checkable text, page by page, assembled into citable units.
 
-- **Tesseract** reads every page for free.
+- **Tesseract** and **Surya** (optional, local) read every page for free.
 - **Claude**, run by each volunteer in Claude Code with their own account,
   re-reads pages: it fixes misreadings, labels verses, commentary and
   footnotes, and lists every change it made and everything it was unsure of.
@@ -13,6 +13,10 @@ accurate, checkable text, page by page, assembled into citable units.
   Their verified pages measure the accuracy of every method.
 - **Proton Drive** is the shared store: results go to the team's
   *material folder* for Agama Mancha, never to the originals, so anyone can continue a book.
+- **Assembly** turns proofread pages into citable units (work/chapter/verse/layer), with
+  commentary linked to its verses (`amocr assemble`).
+- **Checks that cost nothing:** suspect-line scores, rules learned from corrections, and
+  another edition's e-text (e.g. GRETIL) compared with every verse line (`amocr reference`).
 
 ## Which guide is for you
 

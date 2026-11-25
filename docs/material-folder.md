@@ -27,26 +27,29 @@ named after the PDF, so anyone can find a book's text by its name:
 
 ```
 Agama Mancha/
-├── README.md                      how the material is organised
 ├── catalog/
-│   └── works.csv                  one row per work (the catalog's CSV export)
+│   ├── catalog.json               every PDF in the library (amocr catalog refresh)
+│   ├── changes.jsonl              what each refresh found new, moved, changed or gone
+│   ├── board/<person>.json        each person's claims and their books' progress
+│   └── inventory/<person>.json    each person's text-layer measurements (amocr catalog inventory)
 └── Texts/Agamas/Shri Malini Vijayottara Tantra/
     └── Shri Malini Vijayottara Tantra (Hindi, Paramhansa Mishra).amocr/
-        ├── work.json              catalog record, with the permanent work ID (below)
-        ├── card.md                work card: scope, out of scope, standpoint, relationships,
-        │                          key terms, reliability notes, status (AI-drafted / verified)
-        ├── glossary.json          the work's terms, to feed the shared concept glossary
+        ├── book.json              the book's record and page status (planned: work.json, below)
+        ├── book.txt               every page's best text, one after another
         ├── pages/
         │   └── p0231/             every reading of page 231: engine, version, confidence,
         │                          lines with positions and type; never overwritten
-        ├── text/
-        │   ├── p0231.txt          current proofread text of the page
-        │   └── p0231.history.jsonl  every earlier version: text, who, when, verified
+        ├── groundtruth/
+        │   └── p0231.txt, .meta.json   the proofread text, who saved it, whether verified
         └── units/
-            └── v003/              one build of the units, never changed after it's written
+            └── v002/              one build of the units, never changed after it's written
                 ├── units.jsonl    one unit per line (below)
-                └── build.json     date, tool version, pages verified at build time
+                └── build.json     date, tool version, chapters, verse numbers to check
 ```
+
+Planned, not built yet: `work.json` (the design's catalog record), `card.md` (the work
+card), `glossary.json` in the shared folder, and `text/` with a `history.jsonl` of every
+earlier version of each page.
 
 Folder names may change when the library is reorganised; the permanent work ID
 (`SL-0001`) in `work.json` doesn't, and units and citations use it, never the path.
@@ -63,9 +66,9 @@ tool's `B-…` id, which is derived from the checksum), access tier
 
 ```json
 {"id": "SL-0001/13/34/mula", "work": "SL-0001", "chapter": 13, "verse": "34", "layer": "mula",
- "lang": "san", "text": "स्वदेहं चिन्तयेत्कृष्णं … ॥ ३४ ॥", "iast": "svadehaṃ cintayet kṛṣṇaṃ …",
+ "lang": "san", "text": "स्वदेहं चिन्तयेत्कृष्णं … ॥ ३४ ॥", "iast": "svadehaṃ cintayetkṛṣṇaṃ … || 34 ||",
  "pages": [231], "lines": [{"page": 231, "n": 3, "bbox": [404, 435, 1278, 503]}, …],
- "status": "verified", "source": "groundtruth"}
+ "status": "verified", "source": ["groundtruth"], "types": "guessed"}
 {"id": "SL-0001/13/34/hindi-mishra", "layer": "hindi-mishra", "explains": ["SL-0001/13/34/mula"], "lang": "hin", …}
 ```
 
@@ -76,13 +79,13 @@ tool's `B-…` id, which is derived from the checksum), access tier
 - **Status** comes from the pages: `verified` only if every line was checked by a person;
   otherwise `draft`, which the librarian can still search but must flag.
 - **Text** is NFC Devanagari, IAST generated from it; running headers, page numbers and
-  signature marks are left out, words broken across lines are rejoined (each change logged).
+  signature marks are left out, words broken across lines with a hyphen are rejoined (the build counts them).
 
 ## What exists today, and what's left
 
 | Needed | Today | To build |
 |---|---|---|
-| Page readings with engine, version, confidence, positions | yes (Tesseract, Surya, Claude results; line and word boxes) | push them under `works/<id>/pages/` |
+| Page readings with engine, version, confidence, positions | yes (Tesseract, Surya, Claude results; line and word boxes); `push` shares them in `pages/` | |
 | Proofread text, never overwritten | saved per page; Proton keeps file revisions | an explicit `history.jsonl` on every save |
 | Structure: header, verse (+ number), commentary (+ verses explained), footnote | yes: `amocr assemble` classes lines from the text, finds chapters, builds units across pages | unit types confirmed by a person (today `types: "guessed"`) |
 | Work card | the book brief (`amocr brief`) is a first draft | the card's fields and status |

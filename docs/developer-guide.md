@@ -5,18 +5,30 @@
 ```
 src/amocr/
   cli.py             all commands (argparse); `uv run amocr --help`
-  catalog.py         Work (a book), ids from sha256, data/ layout, works.toml + book.json
-  config.py          per-machine settings in data/config.toml (operator, Proton paths)
-  pages.py           PDF inventory (text-layer check) and page rendering (pymupdf)
+  catalog.py         Work (a book), ids from sha256, data/ layout, works.toml + book.json, merged ids
+  config.py          per-machine settings in data/config.toml (operator, Proton paths, material)
+  setup.py           downloads: the Proton CLI, pinned Tesseract models
+  pages.py           PDF page inventory and page rendering (pymupdf)
   textcheck.py       is an existing text layer real Devanagari/IAST or legacy-font junk?
-  engines/           OCR engines; tesseract.py parses TSV into lines with confidence + bbox
+  engines/           OCR engines: tesseract.py (TSV → lines with confidence + bbox), surya.py
   claude_session.py  Claude as an engine inside Claude Code: packets, result.json schema, import
-  book.py            volunteer ops: add, fetch, export, merge, push, pull
+  claude_review.py   review and screen modes: numbered line sheets, apply corrections
+  patterns.py        rules learned from corrections; suggestions across the book
+  suspects.py        lines worth a second look, scored from the text alone
+  brief.py           the book's brief and glossary
+  chat.py            the viewer's chat panel, answered from a Claude Code session
+  assemble.py        page texts → units (work/chapter/verse/layer); the structure Proofread shows
+  reference.py       another edition's e-text (GRETIL) compared with verse lines
+  library.py         the catalog of every PDF in the library, with safe refresh
+  board.py           claims, stages and progress, one file per person on the drive
+  inventory.py       which PDFs need OCR: text layers measured and graded
+  dedupe.py          the same book under two ids on one machine: merge
+  book.py            volunteer ops: add, fetch, export, merge results, push, pull
   proton.py          wrapper around the official proton-drive CLI
   metrics.py         normalisation + character error rate
-  server.py          local viewer API (127.0.0.1 only) + viewer.html
+  server.py          local viewer API (127.0.0.1 only); viewer.html, library.html, theme.css
 tests/               pytest; fake_proton.py stands in for the Proton CLI
-.claude/skills/      ocr-book (volunteer flow), ocr-view (viewer)
+.claude/skills/      setup (new machine), ocr-book (volunteer flow), ocr-view (viewer, chat)
 CLAUDE.md            reading rules every Claude session follows
 ```
 
@@ -32,6 +44,11 @@ data/works/<id>/pages/0231/ocr/<label>.{json,txt}
 data/works/<id>/claude/p0231/       packet: band0-2.png, tesseract.txt, result.json
 data/works/<id>/groundtruth/p0231.{txt,meta.json}
 data/works/<id>/export/<stem>.amocr/  what push uploads
+data/works/<id>/units/v001/         assembled builds (units.jsonl, build.json)
+data/works/<id>/reference/          another edition's e-text (reference.json, segments.jsonl)
+data/works/<id>/brief.md, glossary.json, patterns.json, chat.jsonl
+data/library/                       catalog.json, board/, inventory/ (local copies of the shared ones)
+data/merged.json, data/trash/       books merged into another (amocr merge)
 ```
 
 `AMOCR_DATA` overrides the data folder (the tests use it).
@@ -78,7 +95,7 @@ arguments change, update `proton.py` and `tests/fake_proton.py` together.
 ## Safety rails (don't weaken without review)
 
 - `proton.py` allow-lists CLI operations (read ops + create-folder + upload),
-  confines writes to the results root, requires that root to exist, uploads
+  confines writes to the material folder, requires that folder to exist, uploads
   with `create-new-revision`, and logs to `data/proton.log`.
 - `.claude/hooks/guard_proton.py` (wired in `.claude/settings.json`) blocks
   Claude from running proton-drive writes/deletes, writing scripts that would,
