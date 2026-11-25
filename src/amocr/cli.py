@@ -315,7 +315,11 @@ def cmd_chat(work: Work, args) -> None:
         return
     if args.action == "wait":
         _no_claude_if_restricted(work)
+        from . import brief as briefmod
+
         print(f"listening for {work.id} (the viewer shows Claude as listening) ...", flush=True)
+        if briefmod.brief_path(work).exists():
+            print(f"book brief: {briefmod.brief_path(work)} (read it once in this session before checking lines)", flush=True)
         m = chat.wait(work, timeout=args.timeout)
         if not m:
             print("no message before the timeout. Run `amocr chat <book> wait` again to keep listening.")
@@ -411,11 +415,33 @@ def cmd_suspects(work: Work, args) -> None:
         added = set()
         for e in scored:
             for f in e["fixes"]:
-                if (f["from"], f["to"]) not in added and f["seen"] >= 5 * max(1, f["rare"]):
+                # Context findings (को before तरह) become context rules below, never whole-word rules.
+                if f["why"] != "context" and (f["from"], f["to"]) not in added and f["seen"] >= 5 * max(1, f["rare"]):
                     pat.add_rule(work, "word", f["from"], f["to"], source="scorer",
                                  note=f"{f['why']}: '{f['to']}' {f['seen']}x in this book, '{f['from']}' {f['rare']}x")
                     added.add((f["from"], f["to"]))
-        print(f"added {len(added)} look-alike rules to Suggestions")
+        n_ctx = 0
+        for r in sus.context_fixes(work):
+            pat.add_rule(work, "regex", sus.context_regex(r), r["to"], source="scorer",
+                         note=f"{r['from']} {r['next']} → {r['to']} {r['next']}: '{r['to']} {r['next']}' {r['seen']}x in this book, "
+                              f"'{r['from']} {r['next']}' {r['count']}x ({r['why']})")
+            n_ctx += 1
+        print(f"added {len(added)} look-alike rules and {n_ctx} context rules to Suggestions")
+
+
+def cmd_brief(work: Work, args) -> None:
+    """The book's brief and glossary: show them, or collect sources for Claude to write them."""
+    from . import brief
+
+    if args.sources:
+        rows = _inventory(work)
+        print(brief.sources(work, parse_pages(args.pages, len(rows)) if args.pages else []))
+        print(f"\nWrite the brief to {brief.brief_path(work)} and the glossary to {brief.glossary_path(work)} "
+              '({"terms": [{"term": "...", "note": "..."}]}); see src/amocr/brief.py.')
+        return
+    p = brief.brief_path(work)
+    print(p.read_text(encoding="utf-8") if p.exists() else f"No brief yet for {work.id}: run `amocr brief {work.id} --sources`.")
+    print(f"\nglossary: {len(brief.glossary(work))} terms ({brief.glossary_path(work)})")
 
 
 def cmd_rule(work: Work, args) -> None:
@@ -702,6 +728,8 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--limit", type=int, default=40)
     p.add_argument("--eval", action="store_true", help="measure against the lines already corrected")
     p.add_argument("--add-rules", action="store_true", help="send confident look-alike fixes to Suggestions")
+    p = book_cmd("brief", cmd_brief, pages=True, help="the book's brief and glossary (or --sources to write them)")
+    p.add_argument("--sources", action="store_true", help="collect structure, frequent words and the given pages' text")
     p = book_cmd("rule", cmd_rule, help="add a rule, or switch one on/off")
     p.add_argument("action", choices=["add", "on", "off"])
     p.add_argument("id", nargs="?")

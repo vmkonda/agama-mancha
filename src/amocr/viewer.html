@@ -133,7 +133,7 @@ details li { margin: 2px 0; }
   <span id="status" class="muted"></span>
 </header>
 <div id="chat" role="dialog" aria-label="Chat with Claude">
-  <div class="head"><span class="dot" id="chatdot"></span><span id="chatstate" class="grow">…</span><button id="chatx" title="Close">✕</button></div>
+  <div class="head"><span class="dot" id="chatdot"></span><span id="chatstate" class="grow">…</span><a id="briefln" target="_blank" title="What this book is, its layout and conventions">Brief</a><button id="chatx" title="Close">✕</button></div>
   <div id="chatlog"></div>
   <div class="foot">
     <label class="muted" style="font-size:12px"><input type="checkbox" id="chatctx" checked> about <span id="chatwhere"></span></label>
@@ -680,6 +680,7 @@ function chatToggle(open) {
   document.body.classList.toggle("chat-open", CH.open);
   $("chatbtn").classList.toggle("on", CH.open);
   clearInterval(CH.timer);
+  $("briefln").href = `/brief/${S.work}`;
   if (CH.open) { chatWhere(); chatLoad(); CH.timer = setInterval(() => { chatWhere(); chatLoad(); }, 3000); $("chatin").focus(); }
   store.set("chat", CH.open ? "1" : "");
 }

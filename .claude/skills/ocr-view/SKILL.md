@@ -39,6 +39,8 @@ It is never published or exposed on the network: the scans are copyrighted.
 
 The viewer can't call Claude; you answer from this session.
 
+0. If the book has a brief (`data/works/<book>/brief.md`; `chat wait` prints its path), read it
+   once at the start: what the text is, its layout, conventions and the engine's habits.
 1. Run `uv run amocr chat <book> wait` with run_in_background. While it waits, the
    viewer shows "Claude is listening". It exits when the person sends a message,
    printing the message, the line it is about (as it stands now) and that line's image.
