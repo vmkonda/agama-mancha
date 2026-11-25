@@ -69,6 +69,8 @@ details li { margin: 2px 0; }
 #hl { position: absolute; inset: 0; overflow: hidden; color: transparent; pointer-events: none; padding-bottom: 80px; }
 #hl > div { height: var(--lh); border-radius: 3px; }
 #hl .lowl { background: var(--low); }
+/* Footnote markers (a digit right after a letter: योगी२) look like letters in Devanagari fonts (२/र, ३/इ); tint them. */
+#hl .fnm { background: color-mix(in srgb, var(--accent) 28%, transparent); border-radius: 3px; box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 55%, transparent); }
 .ed.withgut textarea, .ed.withgut #hl { padding-left: 128px; }
 #gut { position: absolute; left: 0; top: 0; bottom: 0; width: 120px; overflow: hidden; pointer-events: none; padding: 10px 0 80px 0; border-right: 1px solid var(--line); z-index: 1; }
 #gut > div { height: var(--lh); line-height: var(--lh); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 11px; padding: 0 6px; color: var(--muted); letter-spacing: .02em; }
@@ -449,7 +451,12 @@ function renderEdit() {
   }
   function paint(follow = true) {
     const rs = rows(), c = curRow();
-    hl.innerHTML = rs.map((r, i) => `<div class="${[isLow(r) ? "lowl" : "", i === c ? "cur" : ""].join(" ").trim()}">${esc(r.t) || " "}</div>`).join("");
+    // A marker is a digit right after a letter (योगी२) or right before a word (१षट्…); a lone ० after a
+    // letter is the abbreviation sign (क० पु०), not a marker.
+    const marks = (t) => esc(t)
+      .replace(/([\u0900-\u0963\u0971-\u097F])((?!०(?![०-९]))[०-९0-9]+)/g, '$1<span class="fnm" title="footnote marker">$2</span>')
+      .replace(/(^|\s)([१-९])(?=[\u0905-\u0939])/g, '$1<span class="fnm" title="footnote marker">$2</span>');
+    hl.innerHTML = rs.map((r, i) => `<div class="${[isLow(r) ? "lowl" : "", i === c ? "cur" : ""].join(" ").trim()}">${marks(r.t) || " "}</div>`).join("");
     sync();
     if (!follow) return;
     const x = tl(rs[c]);
