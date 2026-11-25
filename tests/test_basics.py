@@ -615,3 +615,23 @@ def test_viewer_has_no_book_specific_code():
     for name in ("viewer.html", "theme.css", "library.html"):
         src = files("amocr").joinpath(name).read_text(encoding="utf-8")
         assert not re.search(r"\b(B-[0-9a-f]{10}|SL-\d{4})\b", src), f"{name} mentions a specific book"
+
+
+def test_reference_cross_check(tmp_path, monkeypatch):
+    """A reference e-text flags verse lines that differ in reading, not in spelling (spaces, nasals)."""
+    from amocr import assemble, reference
+    from amocr.catalog import Work
+
+    monkeypatch.setenv("AMOCR_DATA", str(tmp_path))
+    w = Work(id="B-test000003", title="t", languages=["san", "hin"], sha256="0" * 64)
+    w.workdir.mkdir(parents=True)
+    src = tmp_path / "ref.txt"     # invented verses in GRETIL's plain-text shape
+    src.write_text("13.1ab: rāmo vanaṃ gacchati sītā api gacchati 13.1cd: nadī vahati parvataḥ tiṣṭhati sadā\n", encoding="utf-8")
+    m = reference.add(w, src, "TEST")
+    assert m["segments"] == 2 and m["chapters"] == [13]
+    text = "अथ त्रयोदशोऽधिकारः\nरामो वनं गच्छति सीता अपि गच्छति ।\nनदो वहति पर्वतः तिष्ठति सदा ॥ १ ॥"
+    st = assemble.page_structure(w, 5, text)
+    assert st["reference"] == "TEST" and st["lines"][1]["ref"] == "13.1ab" and st["lines"][2]["ref"] == "13.1cd"
+    ref_w = [x for x in st["warnings"] if x.get("kind") == "reference"]
+    assert len(ref_w) == 1 and ref_w[0]["line"] == 3 and "[o]" in ref_w[0]["text"] and "[ī]" in ref_w[0]["text"]
+    assert reference.norm("vanaṃ gacchati") == reference.norm("vanam gacchati") == reference.norm("vanaṅgacchati")

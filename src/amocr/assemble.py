@@ -447,6 +447,23 @@ def page_structure(work: Work, page: int, text: str) -> dict:
         elif ty == "header" and chapter_of(t):
             tag["chapter"] = chapter_of(t)
         out.append(tag)
+    # Verse lines against the book's reference e-text, if it has one (a place to look, not a correction).
+    from . import reference
+    ref = reference.info(work)
+    if ref:
+        for n, (t, tag) in enumerate(zip(lines, out), 1):
+            if tag["type"] != "verse":
+                continue
+            c = reference.compare(work, iast(VERSE_NO.sub("", t)), chapter)
+            if not c:
+                continue
+            tag["ref"] = c["key"]
+            if c["diffs"]:
+                shown = "; ".join(f"…{d['context']}… ↔ …{d['ref_context']}…" for d in c["diffs"][:2])
+                more = f" (+{len(c['diffs']) - 2} more)" if len(c["diffs"]) > 2 else ""
+                warnings.append({"line": n, "kind": "reference",
+                                 "text": f"differs from {ref['name']} {c['key']}: {shown}{more}. Check the print; editions differ",
+                                 "ref": c["text"]})
     # A verse number that isn't closed properly ("॥ ३८ ।", "। ३८ ॥", "॥ ३८"): the assembler can't see it.
     bad_no = re.compile(r"[।॥]\s*[०-९0-9]+(?:\s*[-–]\s*[०-९0-9]+)?\s*[।॥]?\s*$")
     for n, (t, tag) in enumerate(zip(lines, out), 1):
@@ -458,4 +475,4 @@ def page_structure(work: Work, page: int, text: str) -> dict:
             if any(o["type"] == "verse" for o in out[k + 1:]):
                 warnings.append({"line": k + 1, "text": "verse lines end here without a number (॥ N ॥)"})
     return {"lines": out, "chapter": chapter, "printed_page": printed, "verses": verses, "commentary": comments,
-            "warnings": warnings, "build": ctx.get("build")}
+            "warnings": warnings, "build": ctx.get("build"), "reference": (ref or {}).get("name")}

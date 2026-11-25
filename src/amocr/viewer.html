@@ -433,9 +433,10 @@ function renderEdit() {
     if (ST.printed_page) bits.push(`<span>printed p. <b>${esc(ST.printed_page)}</b></span>`);
     bits.push(`<span>verses <b>${esc(span(ST.verses))}</b></span>`);
     bits.push(`<span>commentary on <b>${esc(ST.commentary.length ? ST.commentary.join(", ") : "none closing here")}</b></span>`);
+    if (ST.reference) bits.push(`<span>verses checked against <b>${esc(ST.reference)}</b></span>`);
     bits.push(`<span class="muted">tags are guessed from the text, as the assembler will${ST.build ? "; context from build " + esc(ST.build) : ""}</span>`);
     $("pagebar").innerHTML = bits.join("");
-    $("pwarn").innerHTML = ST.warnings.map((w) => `<button data-line="${w.line}" title="go to line ${w.line}">line ${w.line}: ${esc(w.text)}</button>`).join("");
+    $("pwarn").innerHTML = ST.warnings.map((w) => `<button data-line="${w.line}" title="${w.ref ? "reference: " + esc(w.ref) + " · " : ""}go to line ${w.line}">line ${w.line}: ${esc(w.text)}</button>`).join("");
     $("pwarn").querySelectorAll("button").forEach((b) => b.onclick = () => {
       const want = +b.dataset.line, rs = rows();
       const i = rs.findIndex((r) => r.k === want - 1);
