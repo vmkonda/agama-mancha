@@ -276,12 +276,14 @@ async function renderReader(id, chapter) {
 }
 
 // Study with Claude: questions about the passage in focus, answered by the listening Claude Code session.
-const ST = { open: false, focus: null, quote: null, timer: null, seen: 0 };
+const ST = { open: false, focus: null, quote: null, timer: null, seen: 0, all: false };
 function aboutLabel() {
   const el = ST.focus && document.getElementById("u-" + ST.focus);
   if (!el) return "click a passage, or select words in it";
   const title = (document.querySelector(".reader h2") || {}).textContent || "";
-  const ref = el.querySelector(".ref span").textContent, layer = el.querySelector(".ref .lay").textContent;
+  const [, ch, vs] = ST.focus.split("/");
+  const ref = /^p\d+$|^q\d+$/.test(vs) ? `${ch}, passage ${vs.slice(1)}` : `${ch}.${vs}`;
+  const layer = el.querySelector(".ref .lay").textContent;
   const words = (ST.quote || el.querySelector(".deva").textContent).trim();
   const short = words.length > 70 ? words.slice(0, 70) + "…" : words;
   return `${ST.quote ? "your selection in " : ""}<b>${esc(title)} ${esc(ref)}</b> (${esc(layer)}): <q>${esc(short)}</q>`;
@@ -291,6 +293,7 @@ function setFocus(id, quote = null) {
   document.querySelectorAll(".unit.focus").forEach((x) => x.classList.remove("focus"));
   const el = id && document.getElementById("u-" + id); if (el) el.classList.add("focus");
   $("sabout").innerHTML = aboutLabel();
+  if (ST.open) studyLoad();        // the conversation follows the work in focus
 }
 // Selecting words in the reader makes them the subject of the next question.
 document.addEventListener("mouseup", () => {
@@ -312,13 +315,23 @@ async function studyLoad() {
   let d; try { d = await api("/api/librarian/study"); } catch (e) { $("sstate").textContent = e.message; return; }
   $("sdot").classList.toggle("on", d.listening);
   $("sstate").textContent = d.listening ? "Claude is listening" : "Claude isn't listening: in Claude Code, say “listen to the study chat”";
-  if (d.messages.length === ST.seen) return;
-  ST.seen = d.messages.length;
+  const work = (ST.focus || "").split("/")[0];
+  const key = d.messages.length + "|" + work + "|" + ST.all;
+  if (key === ST.seen) return;
+  ST.seen = key;
+  // The conversation about the work being read: questions about its passages, and their answers.
+  const unitOf = {}; d.messages.forEach((m) => { if (m.role === "user") unitOf[m.id] = m.unit || ""; });
+  const about = (m) => (m.role === "user" ? m.unit : unitOf[m.reply_to]) || "";
+  const mine = d.messages.filter((m) => ST.all || !work || about(m).split("/")[0] === work);
+  const others = new Set(d.messages.filter((m) => m.role === "user" && about(m).split("/")[0] !== work).map((m) => m.id)).size;
   const log = $("slog"), atEnd = log.scrollHeight - log.scrollTop - log.clientHeight < 40;
-  log.innerHTML = d.messages.map((m) => `<div class="smsg ${m.role}">${m.unit ? `<span class="about">about <a href="#read=${encodeURIComponent(m.unit)}">${esc(m.unit)}</a>${m.quote ? `: «${esc(m.quote.length > 80 ? m.quote.slice(0, 80) + "…" : m.quote)}»` : ""}</span>` : ""}${fmt(m.text)}${
+  const toggle = others && !ST.all ? `<button id="sall" style="font-size:12px;align-self:center">show ${others} earlier question${others === 1 ? "" : "s"} about other works</button>`
+    : ST.all && others ? `<button id="sall" style="font-size:12px;align-self:center">only this work</button>` : "";
+  log.innerHTML = toggle + mine.map((m) => `<div class="smsg ${m.role}">${m.unit ? `<span class="about">about <a href="#read=${encodeURIComponent(m.unit)}">${esc(m.unit)}</a>${m.quote ? `: «${esc(m.quote.length > 80 ? m.quote.slice(0, 80) + "…" : m.quote)}»` : ""}</span>` : ""}${fmt(m.text)}${
     m.cites ? `<div class="cites">${m.cites.map((c) => `<a href="#read=${encodeURIComponent(c)}" title="Read in context">${esc(c)}</a>`).join("")}</div>` : ""}</div>`).join("")
-    || `<p class="muted" style="font-size:13px">Ask about the passage in focus. Claude answers from the library only, quoting the original with a translation, and every passage it relies on is a link you can read in context.</p>`;
-  const waiting = d.messages.length && d.messages[d.messages.length - 1].role === "user";
+    + (mine.length ? "" : `<p class="muted" style="font-size:13px">No questions about this work yet. Ask about the outlined passage (or select words in it): Claude answers from the library only, quoting the original with a translation, and every passage it relies on is a link you can read in context.</p>`);
+  if ($("sall")) $("sall").onclick = () => { ST.all = !ST.all; ST.seen = null; studyLoad(); };
+  const waiting = mine.length && mine[mine.length - 1].role === "user";
   $("sinfo").textContent = waiting ? (d.listening ? "Claude is reading…" : "waiting for Claude to listen") : "";
   if (atEnd || waiting) log.scrollTop = log.scrollHeight;
 }
