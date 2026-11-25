@@ -216,16 +216,93 @@ function qrow(q, E) {
     <td>${r ? r.top.map((t) => `<div><a href="#" data-peek="${esc(t)}"><code>${esc(t)}</code></a>${(q.expected || []).includes(t) ? " ✓" : ` <button data-add="${esc(t)}" style="font-size:11px;padding:0 6px">add</button>`}</div>`).join("") : `<span class="muted">run the evaluation</span>`}</td></tr>`;
 }
 
-// Works: everything in the library, to browse; a work opens in the reader at its first chapter.
+// Works: browse what's in the library, and import more (GRETIL's catalogue, or an uploaded TEI file).
+const WK = { view: store.get("wview") || "library", q: "", gq: store.get("gq") || "", poll: null };
 function renderWorks() {
-  $("hint").textContent = "Every work in the library. Open one to read it from the beginning.";
-  const kind = (k) => (k === "etext" ? "e-text" : k === "ocr" ? "the team's printed copy (OCR)" : k || "");
-  $("main").innerHTML = `<table><thead><tr><th>Work</th><th>Id</th><th>Kind</th><th style="text-align:right">Passages</th><th>Source</th><th></th></tr></thead><tbody>
-    ${WORKS.map((w) => `<tr><td><b>${esc(w.title)}</b>${w.author ? `<div class="muted">${esc(w.author)}</div>` : ""}</td>
-      <td><code>${esc(w.id)}</code></td><td>${esc(kind(w.kind))}</td><td style="text-align:right">${w.units.toLocaleString()}</td>
+  $("hint").textContent = "Browse the works in the library, or import more e-texts.";
+  $("main").innerHTML = `<div class="tabs" style="margin-bottom:12px">
+      <button id="w-lib" class="${WK.view === "library" ? "on" : ""}">In the library (${WORKS.length})</button>
+      <button id="w-imp" class="${WK.view === "import" ? "on" : ""}">Import e-texts</button></div><div id="wbody"></div>`;
+  $("w-lib").onclick = () => { WK.view = "library"; store.set("wview", "library"); renderWorks(); };
+  $("w-imp").onclick = () => { WK.view = "import"; store.set("wview", "import"); renderWorks(); };
+  WK.view === "import" ? renderImport() : renderLibraryWorks();
+}
+function renderLibraryWorks() {
+  const kind = (w) => (w.kind === "etext" ? (w.origin === "upload" ? "e-text (uploaded)" : "e-text (GRETIL)") : w.kind === "ocr" ? "printed copy (OCR)" : w.kind || "");
+  $("wbody").innerHTML = `<input id="wq" type="search" placeholder="Filter by title, author or id" style="width:100%;max-width:420px;margin-bottom:10px" value="${esc(WK.q)}">
+    <div id="wlist"></div>`;
+  const draw = () => {
+    const q = WK.q.toLowerCase();
+    const ws = WORKS.filter((w) => !q || (w.title + " " + w.author + " " + w.id).toLowerCase().includes(q));
+    $("wlist").innerHTML = `<table><thead><tr><th>Work</th><th>Id</th><th>Kind</th><th style="text-align:right">Passages</th><th>Source</th><th>Added</th><th></th></tr></thead><tbody>
+    ${ws.map((w) => `<tr><td><b>${esc(w.title)}</b>${w.author ? `<div class="muted">${esc(w.author)}</div>` : ""}</td>
+      <td style="white-space:nowrap"><code>${esc(w.id)}</code></td><td>${esc(kind(w))}</td><td style="text-align:right">${w.units.toLocaleString()}</td>
       <td class="muted" style="font-size:12px">${esc(w.source)}${w.licence ? `<div>${esc(w.licence)}</div>` : ""}${w.url ? `<a href="${esc(w.url)}" target="_blank" rel="noopener">GRETIL file</a>` : ""}</td>
+      <td class="muted" style="white-space:nowrap">${esc(w.added || "")}</td>
       <td><button data-read="${esc(w.first)}">Read</button></td></tr>`).join("")}</tbody></table>`;
-  $("main").querySelectorAll("[data-read]").forEach((b) => (b.onclick = () => { location.hash = "read=" + encodeURIComponent(b.dataset.read); }));
+    $("wlist").querySelectorAll("[data-read]").forEach((b) => (b.onclick = () => { location.hash = "read=" + encodeURIComponent(b.dataset.read); }));
+  };
+  $("wq").oninput = () => { WK.q = $("wq").value; draw(); };
+  draw();
+}
+function renderImport() {
+  $("wbody").innerHTML = `
+    <div class="note">Imported e-texts become works with <code>ET-</code> ids: searchable, readable in context and open to study with Claude. Each keeps its source and licence; GRETIL's are mostly CC BY-NC-SA (fine for Vimarsha's internal use). Nothing leaves this machine except the download from GRETIL.</div>
+    <div id="job"></div>
+    <h3 style="font-family:Raleway,sans-serif;font-size:15px;margin:14px 0 6px">From GRETIL's catalogue</h3>
+    <form id="gf" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px"><input id="gq" type="search" placeholder="Search titles, e.g. netra, spanda, kubjika, abhinavagupta" style="flex:1 1 320px" value="${esc(WK.gq)}"><button>Search</button></form>
+    <div id="glist" class="muted">Loading the catalogue…</div>
+    <h3 style="font-family:Raleway,sans-serif;font-size:15px;margin:18px 0 6px">From a file</h3>
+    <form id="uf" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px;max-width:900px">
+      <label>TEI XML file <input id="ufile" type="file" accept=".xml,application/xml,text/xml" required style="width:100%"></label>
+      <label>Title <input id="ut" placeholder="from the file if empty" style="width:100%"></label>
+      <label>Author <input id="ua" style="width:100%"></label>
+      <label>Licence <input id="ul" placeholder="from the file if empty" style="width:100%"></label>
+      <label>Source edition <input id="us" placeholder="from the file if empty" style="width:100%"></label>
+      <div style="align-self:end"><button>Import the file</button></div>
+    </form>`;
+  const search = async () => {
+    WK.gq = $("gq").value.trim(); store.set("gq", WK.gq);
+    $("glist").innerHTML = `<span class="muted">Searching…</span>`;
+    try {
+      const g = await api(`/api/librarian/gretil?q=${encodeURIComponent(WK.gq)}`);
+      $("glist").innerHTML = `<div class="muted" style="font-size:12px;margin-bottom:6px">${g.items.length}${g.items.length >= 60 ? "+" : ""} of ${g.total} GRETIL e-texts${WK.gq ? " match" : " (search to narrow)"}</div>
+        <table><tbody>${g.items.map((x) => `<tr><td>${esc(x.title)}<div class="muted" style="font-size:11px">${esc(x.path.split("/").pop())}</div></td>
+          <td style="white-space:nowrap;text-align:right">${x.imported ? `<span class="chip edition">imported · ${esc(x.imported)}</span>` : `<button data-imp="${esc(x.path)}" data-title="${esc(x.title)}">Import</button>`}</td></tr>`).join("")}</tbody></table>`;
+      $("glist").querySelectorAll("[data-imp]").forEach((b) => (b.onclick = () => startImport({ gretil: b.dataset.imp, title: b.dataset.title })));
+    } catch (e) { $("glist").innerHTML = `<p class="err">${esc(e.message)}</p>`; }
+  };
+  $("gf").onsubmit = (e) => { e.preventDefault(); search(); };
+  $("uf").onsubmit = async (e) => {
+    e.preventDefault();
+    const f = $("ufile").files[0]; if (!f) return;
+    const text = await f.text();
+    startImport({ upload: { name: f.name, text, title: $("ut").value, author: $("ua").value, licence: $("ul").value, source: $("us").value } });
+  };
+  search(); pollJob();
+}
+async function startImport(body) {
+  try { await api("/api/librarian/import", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }); }
+  catch (e) { $("job").innerHTML = `<div class="note err">${esc(e.message)}</div>`; return; }
+  pollJob();
+}
+async function pollJob() {
+  clearTimeout(WK.poll);
+  let j; try { j = await api("/api/librarian/import"); } catch { return; }
+  const box = $("job"); if (!box) return;
+  if (j.state === "idle") { box.innerHTML = ""; return; }
+  box.innerHTML = `<div class="note"><b>${j.state === "running" ? "Importing…" : j.state === "done" ? "Imported" : "Import failed"}</b>
+    <div style="font-family:ui-monospace,monospace;font-size:12px;white-space:pre-wrap;margin-top:4px">${esc(j.log.join("\n"))}${j.error ? "\n" + esc(j.error) : ""}</div>
+    ${j.state === "done" && j.result ? `<div style="margin-top:6px"><button id="jread">Read ${esc(j.result.title)}</button></div>` : ""}</div>`;
+  if (j.state === "done" && j.result) {
+    $("jread").onclick = () => api(`/api/librarian/works`).then((ws) => { WORKS = ws; const w = ws.find((x) => x.id === j.result.id); if (w) location.hash = "read=" + encodeURIComponent(w.first); });
+    if (WK.doneFor !== j.result.id) {          // once per finished import: the works and the "imported" badges
+      WK.doneFor = j.result.id;
+      WORKS = await api("/api/librarian/works");
+      if ($("gf")) $("gf").requestSubmit();
+    }
+  }
+  if (j.state === "running") WK.poll = setTimeout(pollJob, 1500);
 }
 
 // Read in context: the whole chapter around a citation, commentary where the edition puts it,
@@ -253,7 +330,7 @@ async function renderReader(id, chapter) {
       <select id="ch">${c.chapters.map((x) => `<option ${x === c.chapter ? "selected" : ""}>${esc(x)}</option>`).join("")}</select>
       <button id="next" ${c.next ? "" : "disabled"}>${esc(c.next || "")} ▶</button>
       <button id="studybtn" title="Ask Claude about what you're reading; answers cite the library">Study with Claude</button></div>
-    <div class="src">${w.kind === "etext" ? `E-text: ${esc(w.source || "")}${w.licence ? " · " + esc(w.licence) : ""}${c.source_url ? ` · <a href="${esc(c.source_url)}" target="_blank" rel="noopener">source file on GRETIL</a>` : ""}`
+    <div class="src">${w.kind === "etext" ? `${w.origin === "upload" ? "Uploaded e-text" : "GRETIL e-text"}${w.added ? `, fetched ${esc(w.added.slice(0, 10))}` : ""} (a pinned copy, never edited): ${esc(w.source || "")}${w.licence ? " · " + esc(w.licence) : ""}${c.source_url ? ` · <a href="${esc(c.source_url)}" target="_blank" rel="noopener">source file on GRETIL</a>` : ""}`
       : `The team's printed copy (OCR; <i>draft</i> units are unproofread).${c.book ? ` Each passage links to its page; the scan opens with the lines outlined.` : ""}`}
       · chapter ${esc(c.chapter)} · ${c.units.length} passages</div>
     ${c.units.map((u) => `<div class="unit ${COMMENTARY(u.layer) ? "l-com" : u.layer.startsWith("footnote") ? "l-note" : ""}${u.id === c.target ? " target" : ""}" id="u-${esc(u.id)}">
@@ -344,6 +421,10 @@ async function studySend() {
   $("ssend").disabled = false;
 }
 function route() {
+  if (location.hash === "#import") {          // from the Library page's e-texts view
+    history.replaceState(null, "", location.pathname);
+    WK.view = "import"; store.set("wview", "import"); $("t-works").click(); return true;
+  }
   const m = location.hash.match(/^#read=(.+)$/);
   if (m) { ["t-works", "t-search", "t-eval"].forEach((t) => $(t).classList.remove("on")); renderReader(decodeURIComponent(m[1])).catch((e) => ($("main").innerHTML = `<p class="err">${esc(e.message)}</p>`)); return true; }
   return false;

@@ -198,7 +198,7 @@ async function renderEtexts() {
     ${ws.map((w) => `<tr><td><b>${esc(w.title)}</b>${w.author ? `<div class="path">${esc(w.author)}</div>` : ""}</td><td style="white-space:nowrap"><code>${esc(w.id)}</code></td>
       <td class="num">${w.units.toLocaleString()}</td><td class="path">${esc(w.source)}${w.url ? ` · <a href="${esc(w.url)}" target="_blank" rel="noopener">GRETIL file</a>` : ""}</td>
       <td class="path">${esc(w.licence)}</td><td class="act"><a href="/librarian#read=${encodeURIComponent(w.first)}"><button>Read</button></a></td></tr>`).join("")}</tbody></table>
-    <p class="muted" style="font-size:12px">These works came from published e-texts, not from the drive: no OCR, no proofreading. Search them, read them in context and study them with Claude on the <a href="/librarian">Librarian</a> page.</p>`
+    <p class="muted" style="font-size:12px">These works came from published e-texts, not from the drive: no OCR, no proofreading. Search them, read them in context and study them with Claude on the <a href="/librarian">Librarian</a> page. <a href="/librarian#import"><button>Import e-texts</button></a></p>`
     : `<p class="empty">No imported e-texts match.</p>`;
 }
 

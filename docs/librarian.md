@@ -52,7 +52,17 @@ The **Librarian** page (next to Library and Proofreading; `amocr serve` started 
 `uv run --extra librarian amocr serve`) has three tabs. (The **Library** page lists the team's PDFs on
 the drive; the works the librarian can search, e-texts included, are under **Librarian → Works**.)
 
-- **Works** lists every work in the library (e-texts and OCR'd books) with its id, kind, number of
+- **Works → Import e-texts** browses GRETIL's catalogue (about 800 TEI e-texts; search by title, in
+  IAST or plain letters) with an *Import* button on each, or takes a TEI XML file you upload. An import
+  downloads the file, reads its structure into passages, adds the work (`ET-` id) and indexes just its
+  passages, in seconds (the Bodhapañcadaśikā: 2 s). `librarian gretil search|import` does the same.
+  Passage ids depend on how a file marks its verses: unnumbered verses get placeholder ids (`q7`).
+- **External texts stay external.** An imported e-text is a pinned snapshot of the source, never
+  edited: its checksum and fetch date are recorded, the reader says where and when it came from, and
+  it lives only in `data/` on this machine (never on the shared drive, never redistributed). The local
+  copy is what keeps citations stable and lets the librarian work offline; an update at the source
+  becomes a new import, so old citations still point at the words they cited.
+- **Works → In the library** lists every work in the library (e-texts and OCR'd books) with its id, kind, number of
   passages, source edition and licence; **Read** opens it at the first chapter.
 
 - **Search** reads passages in any language or script, filtered by work or layer, each with its

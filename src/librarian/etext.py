@@ -150,11 +150,17 @@ def parse(xml: str, main_layer: str = "mula") -> list[dict]:
     return out
 
 
-def ingest(xml_path: Path) -> dict:
-    """One GRETIL TEI file → a library work with units. Rebuilding gives the same ids."""
+def ingest(xml_path: Path, title: str | None = None, author: str | None = None, licence: str | None = None,
+           source: str | None = None, origin: str = "GRETIL") -> dict:
+    """One TEI file → a library work with units. Rebuilding gives the same ids. Title and author come
+    from the Trika list, else what the importer gave, else the file's own header."""
     stem = xml_path.stem
-    title, author, layer = TRIKA.get(stem, (stem, "", "mula"))
     xml = xml_path.read_text(encoding="utf-8")
+    head = _header(xml)
+    known = TRIKA.get(stem)
+    title = (known[0] if known else None) or title or head["gretil_title"] or stem
+    author = (known[1] if known else None) or author or ""
+    layer = known[2] if known else "mula"
     wid = et_id(stem)
     rows = parse(xml, layer)
     d = texts_dir() / wid
@@ -166,14 +172,24 @@ def ingest(xml_path: Path) -> dict:
         seen[base] = seen.get(base, 0) + 1
         uid = base if seen[base] == 1 else f"{base}~{seen[base]}"
         u = {"id": uid, "work": wid, "chapter": r["chapter"], "verse": r["verse"], "layer": r["layer"], "lang": "san",
-             "text": deva(r["iast"].replace(" / ", " । ")), "iast": r["iast"], "status": "edition", "source": "GRETIL"}
+             "text": deva(r["iast"].replace(" / ", " । ")), "iast": r["iast"], "status": "edition", "source": origin}
         if r.get("explains"):
             u["explains"] = [f"{wid}/{r['chapter']}/{r['explains']}/mula"]
         units.append(u)
     (d / "units.jsonl").write_text("".join(json.dumps(u, ensure_ascii=False) + "\n" for u in units), encoding="utf-8")
+    if not units:
+        raise ValueError(f"{xml_path.name}: no verses or passages found; is it a TEI e-text?")
+    import hashlib
+
+    # A pinned snapshot of an external text: never edited; the checksum and date say exactly which
+    # version the citations point at (an update is a new import, not a change to this one).
     meta = {"id": wid, "title": title, "author": author, "lang": "san", "kind": "etext", "file": xml_path.name,
-            "units": len(units), "layers": sorted({u["layer"] for u in units}),
-            "added": datetime.now(timezone.utc).isoformat(timespec="seconds")} | _header(xml)
+            "origin": origin, "sha256": hashlib.sha256(xml_path.read_bytes()).hexdigest(), "units": len(units), "layers": sorted({u["layer"] for u in units}),
+            "added": datetime.now(timezone.utc).isoformat(timespec="seconds")} | head
+    if licence:
+        meta["licence"] = licence
+    if source:
+        meta["source"] = source
     (d / "work.json").write_text(json.dumps(meta, ensure_ascii=False, indent=1), encoding="utf-8")
     return meta
 

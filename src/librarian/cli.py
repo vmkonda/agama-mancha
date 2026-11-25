@@ -24,6 +24,9 @@ def main(argv=None) -> None:
     p = sub.add_parser("eval", help="run the evaluation questions against the current index")
     p.add_argument("--approved", action="store_true", help="only the questions the owner approved")
     sub.add_parser("mcp", help="run the MCP tool (stdio), for Claude Code")
+    p = sub.add_parser("gretil", help="GRETIL's catalogue: search it, or import a text into the library")
+    p.add_argument("action", choices=["search", "import"])
+    p.add_argument("what", help="search: words of the title; import: the TEI path (gretil/corpustei/sa_….xml)")
     p = sub.add_parser("study", help="the reader's study chat, from Claude's side: wait, reply, show")
     p.add_argument("action", choices=["wait", "reply", "show"])
     p.add_argument("msg", nargs="?", help="reply: the message id that `study wait` printed")
@@ -68,6 +71,21 @@ def main(argv=None) -> None:
         for row in r["rows"]:
             if row["scored"] and not row["rank"]:
                 print(f"  miss {row['id']}: top {', '.join(row['top'])}")
+    elif a.cmd == "gretil":
+        from . import gretil, importer
+
+        if a.action == "search":
+            for x in gretil.search(a.what):
+                print(f"{x['path']}\n   {x['title']}")
+        else:
+            importer.from_gretil(a.what)
+            import time
+
+            while importer.JOB["state"] == "running":
+                time.sleep(1)
+            print("\n".join(importer.JOB["log"]))
+            if importer.JOB["error"]:
+                raise SystemExit(importer.JOB["error"])
     elif a.cmd == "study":
         from amocr import config as cfgmod
 

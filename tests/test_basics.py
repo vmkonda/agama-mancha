@@ -777,3 +777,23 @@ def test_study_chat(tmp_path, monkeypatch):
     a = study.post("claude", "Consciousness is the self.", reply_to=q["id"], cites=[uid])
     assert study.pending() == [] and a["cites"] == [uid]
     store.reload()
+
+
+def test_gretil_catalogue_and_upload_checks():
+    """GRETIL's catalogue page → titles and TEI paths; only GRETIL TEI paths download; uploads must be TEI."""
+    import pytest
+
+    pytest.importorskip("lancedb")
+    from librarian import gretil, importer
+
+    page = """<ul><li>Vasugupta: Spandakarika, with commentary by Ksemaraja <span>(..)</span>
+      <a href="gretil/corpustei/sa_vasugupta-spandakArikA-comm.xml">TEI</a></li>
+      <li><a href="gretil/corpustei/sa_vijJAnabhairava.xml">TEI-conformant XML</a></li>
+      <li>No TEI here <a href="gretil/1_sanskr/x.htm">html</a></li></ul>"""
+    items = gretil.parse(page)
+    assert items == [{"title": "Vasugupta: Spandakarika, with commentary by Ksemaraja", "path": "gretil/corpustei/sa_vasugupta-spandakArikA-comm.xml"},
+                     {"title": "Vijñānabhairava", "path": "gretil/corpustei/sa_vijJAnabhairava.xml"}]
+    with pytest.raises(ValueError, match="only GRETIL TEI"):
+        gretil.download("https://example.org/evil.xml")
+    with pytest.raises(ValueError, match="TEI XML"):
+        importer.from_upload("notes.txt", "just some text")

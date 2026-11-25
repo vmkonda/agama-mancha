@@ -10,6 +10,7 @@ import getpass
 import json
 import os
 import re
+from pathlib import Path
 import socket
 from datetime import datetime, timezone
 from http import HTTPStatus
@@ -369,6 +370,24 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         parts = [p for p in urlparse(self.path).path.split("/") if p]
+        if parts == ["api", "librarian", "import"]:
+            try:
+                _librarian()
+                from librarian import importer
+
+                n = int(self.headers.get("Content-Length", 0))
+                if n > importer.MAX_UPLOAD + 100_000:
+                    raise ValueError("file too large (20 MB at most)")
+                b = json.loads(self.rfile.read(n) or b"{}")
+                if b.get("gretil"):
+                    return self._json(importer.from_gretil(str(b["gretil"]), str(b.get("title") or "") or None))
+                up = b.get("upload") or {}
+                if up.get("text"):
+                    return self._json(importer.from_upload(str(up.get("name") or "upload.xml"), str(up["text"]),
+                                                           *(str(up.get(k) or "") for k in ("title", "author", "licence", "source"))))
+                raise ValueError("say what to import: a GRETIL file or an uploaded TEI file")
+            except (ValueError, RuntimeError, json.JSONDecodeError) as e:
+                return self._err(str(e))
         if parts == ["api", "librarian", "study"]:
             try:
                 _librarian()
@@ -473,6 +492,17 @@ def _librarian_get(parts: list[str], q: dict) -> object:
         return out
     if parts == ["unit"]:
         return store.get(one("id"), context=2) or {"error": "no such unit"}
+    if parts == ["gretil"]:
+        from librarian import etext, gretil
+
+        have = {w.get("file"): w["id"] for w in etext.works()}
+        q = one("q").strip()
+        items = gretil.search(q, limit=60) if q else gretil.catalogue()[:60]
+        return {"total": len(gretil.catalogue()), "items": [x | {"imported": have.get(Path(x["path"]).name)} for x in items]}
+    if parts == ["import"]:
+        from librarian import importer
+
+        return importer.status()
     if parts == ["study"]:
         from librarian import study
 

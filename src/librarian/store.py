@@ -70,7 +70,8 @@ def catalog() -> list[dict]:
     return [{"id": w, "title": works.get(w, {}).get("title", w), "author": works.get(w, {}).get("author", ""),
              "kind": works.get(w, {}).get("kind", ""), "units": n, "first": first.get(w),
              "source": (works.get(w, {}).get("source") or "")[:160], "licence": (works.get(w, {}).get("licence") or "")[:120],
-             "url": source_link(works.get(w, {}))} for w, n in sorted(counts.items())]
+             "url": source_link(works.get(w, {})), "origin": works.get(w, {}).get("origin", ""),
+             "added": (works.get(w, {}).get("added") or "")[:10]} for w, n in sorted(counts.items())]
 
 
 def _book_of(wid: str) -> str | None:
@@ -87,7 +88,7 @@ def _book_of(wid: str) -> str | None:
 
 def source_link(w: dict) -> str | None:
     """Where an e-text came from, on the web."""
-    if w.get("kind") == "etext" and w.get("file"):
+    if w.get("kind") == "etext" and w.get("file") and w.get("origin", "GRETIL") == "GRETIL":
         return "https://gretil.sub.uni-goettingen.de/gretil/corpustei/" + w["file"]
     return None
 
@@ -110,7 +111,7 @@ def context(uid: str, chapter: str | None = None) -> dict | None:
     units = [cite(x) for x in in_work if str(x.get("chapter")) == str(ch)]
     w = works.get(wid, {"id": wid, "title": wid})
     i = chapters.index(str(ch)) if str(ch) in chapters else -1
-    out = {"work": {k: w.get(k) for k in ("id", "title", "author", "kind", "source", "licence")},
+    out = {"work": {k: w.get(k) for k in ("id", "title", "author", "kind", "source", "licence", "origin", "added", "sha256")},
            "source_url": source_link(w), "chapter": str(ch), "chapters": chapters,
            "prev": chapters[i - 1] if i > 0 else None, "next": chapters[i + 1] if 0 <= i < len(chapters) - 1 else None,
            "target": uid if str(u.get("chapter")) == str(ch) else None, "units": units}
