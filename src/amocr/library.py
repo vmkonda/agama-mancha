@@ -72,25 +72,51 @@ def _name(it: dict) -> str | None:
     return n.get("value") if isinstance(n, dict) and n.get("ok") else (n if isinstance(n, str) else None)
 
 
-def list_library(pd, root: str) -> list[dict]:
-    """Every PDF under root: {path (relative to root), name, folder, size, modified, sha1, added_by}."""
+def _seg(name: str) -> str:
+    """A name as one path segment: the CLI wants a / inside a name escaped as \\/."""
+    return name.replace("/", "\\/")
+
+
+def split_path(path: str) -> list[str]:
+    """A catalog path's segments, with escaped slashes restored."""
+    import re
+
+    return [p.replace("\\/", "/") for p in re.split(r"(?<!\\)/", path)]
+
+
+def list_library(pd, root: str, unreadable: list[dict] | None = None) -> list[dict]:
+    """Every PDF under root: {path (relative to root), name, folder, size, modified, sha1, added_by}.
+
+    Paths are in the drive's form (a / inside a name escaped as \\/). A folder that can't
+    be listed is skipped and its relative path added to `unreadable`."""
+    from .proton import ProtonError
+
     out = []
 
     def walk(path: str, rel: str) -> None:
-        for it in _items(pd, path):
+        try:
+            items = _items(pd, path)
+        except ProtonError as e:
+            if not rel:
+                raise
+            if unreadable is not None:
+                unreadable.append({"folder": rel, "error": str(e)})
+            return
+        for it in items:
             name = _name(it)
             if not name:
                 continue
+            seg = _seg(name)
             if it.get("type") == "folder":
                 if name not in SKIP:
-                    walk(f"{path}/{name}", f"{rel}/{name}" if rel else name)
+                    walk(f"{path}/{seg}", f"{rel}/{seg}" if rel else seg)
             elif name.lower().endswith(".pdf"):
                 rev = it.get("activeRevision") or {}
                 author = rev.get("contentAuthor") or {}
                 out.append({
-                    "path": f"{rel}/{name}" if rel else name,
+                    "path": f"{rel}/{seg}" if rel else seg,
                     "name": name,
-                    "folder": rel.split("/")[0] if rel else "",
+                    "folder": split_path(rel)[0] if rel else "",
                     "size": rev.get("claimedSize") or it.get("totalStorageSize") or 0,
                     "modified": it.get("modificationTime") or "",
                     "sha1": (rev.get("claimedDigests") or {}).get("sha1"),
@@ -103,8 +129,11 @@ def list_library(pd, root: str) -> list[dict]:
 
 # ---- merging a new listing into the catalog -------------------------------------------
 
-def merge(old: list[dict], listing: list[dict], now: str | None = None) -> tuple[list[dict], dict]:
-    """New catalog entries and a summary of what changed. Pure: no I/O."""
+def merge(old: list[dict], listing: list[dict], now: str | None = None,
+          unread: list[str] = ()) -> tuple[list[dict], dict]:
+    """New catalog entries and a summary of what changed. Pure: no I/O.
+
+    Entries under an `unread` folder (one that couldn't be listed) keep their state."""
     now = now or _now()
     by_path = {e["path"]: e for e in old}
     seen, entries = set(), []
@@ -126,6 +155,10 @@ def merge(old: list[dict], listing: list[dict], now: str | None = None) -> tuple
         else:
             unmatched_new.append(item)
     # Old entries no longer at their path: moved (same file elsewhere) or gone.
+    under = lambda p: any(p.startswith(u + "/") for u in unread)
+    kept = [e for p, e in by_path.items() if p not in seen and e.get("state") != "gone" and under(p)]
+    entries += kept
+    seen |= {e["path"] for e in kept}
     missing = [e for p, e in by_path.items() if p not in seen and e.get("state") != "gone"]
 
     def same_file(a: dict, b: dict) -> bool:
@@ -171,13 +204,14 @@ def refresh(operator: str = "", share: bool = True) -> dict:
 
     pd, cfg = book._proton()
     old = (pull(pd, cfg) if share else None) or load()
-    listing = list_library(pd, cfg.proton_root)
-    entries, changes = merge(old.get("entries", []), listing)
+    unreadable: list[dict] = []
+    listing = list_library(pd, cfg.proton_root, unreadable)
+    entries, changes = merge(old.get("entries", []), listing, unread=[u["folder"] for u in unreadable])
     cat = {"root": cfg.proton_root, "refreshed_at": _now(), "refreshed_by": operator or cfgmod.load().operator,
            "count": len([e for e in entries if e.get("state") != "gone"]), "entries": entries}
     save(cat)
     summary = {"at": cat["refreshed_at"], "by": cat["refreshed_by"], "pdfs": cat["count"],
-               **{k: len(v) for k, v in changes.items()}, "details": changes}
+               **{k: len(v) for k, v in changes.items()}, "unreadable": unreadable, "details": changes}
     with (local_dir() / "changes.jsonl").open("a", encoding="utf-8") as f:
         f.write(json.dumps(summary, ensure_ascii=False) + "\n")
     summary["shared"] = push(pd, cfg) if share else "not shared: --local"

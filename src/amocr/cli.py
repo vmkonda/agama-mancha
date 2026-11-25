@@ -656,6 +656,8 @@ def cmd_catalog(args) -> None:
             return
         s = library.refresh(share=not args.local)
         print(f"{s['pdfs']} PDFs: +{s['added']} new, {s['moved']} moved, {s['changed']} changed, {s['gone']} gone ({s['shared']})")
+        for u in s["unreadable"]:
+            print(f"  couldn't list {u['folder']}: {u['error']} (its books keep their last state)")
         return
     cat = library.load()
     print(f"{cat.get('count', 0)} PDFs, refreshed {cat.get('refreshed_at', 'never')} by {cat.get('refreshed_by', '-')}")

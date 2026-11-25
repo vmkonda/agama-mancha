@@ -425,3 +425,17 @@ def test_library_page_marks_books_on_this_machine(tmp_path, monkeypatch):
     assert out["count"] == 2 and not out["refresh"]["running"]
     assert {e["path"]: e.get("book") for e in out["entries"]} == {"T/a.pdf": "B-1", "T/b.pdf": None}
     json.dumps(out)  # the page gets it as JSON
+
+
+def test_library_names_with_slashes_and_unreadable_folders():
+    from amocr.library import _seg, merge, split_path
+    from amocr.proton import ProtonError
+
+    assert _seg("Durga/ Shakta") == "Durga\\/ Shakta"
+    assert split_path("Texts/Durga\\/ Shakta/b.pdf") == ["Texts", "Durga/ Shakta", "b.pdf"]
+
+    a = {"path": "T/X/a.pdf", "name": "a.pdf", "folder": "T", "size": 1, "modified": "", "sha1": "x", "added_by": None}
+    e1, _ = merge([], [a], "t1")
+    e2, c2 = merge(e1, [], "t2", unread=["T/X"])  # T/X couldn't be listed this time
+    assert c2["gone"] == [] and e2[0]["path"] == "T/X/a.pdf" and e2[0]["state"] != "gone"
+    assert issubclass(ProtonError, Exception)

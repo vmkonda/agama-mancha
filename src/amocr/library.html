@@ -86,6 +86,7 @@ $("theme").onclick = () => {
 const mb = (n) => n ? (n / 1048576 >= 100 ? Math.round(n / 1048576) : (n / 1048576).toFixed(1)) + " MB" : "";
 const day = (s) => s ? String(s).slice(0, 10) : "";
 const title = (e) => e.name.replace(/\.pdf$/i, "");
+const segs = (p) => p.split(/(?<!\\)\//).map((x) => x.replace(/\\\//g, "/"));  // a / inside a name is stored as \/
 function ago(h) {
   if (h == null) return "never";
   if (h < 1) return `${Math.max(1, Math.round(h * 60))} min ago`;
@@ -114,6 +115,7 @@ function status() {
     const lc = c.last_change;
     html = `<b>${c.count}</b> PDFs · refreshed ${esc(ago(c.age_hours))}${c.refreshed_by ? " by " + esc(c.refreshed_by) : ""}`;
     if (lc) html += ` · last refresh: +${lc.added} new, ${lc.moved} moved, ${lc.changed} changed, ${lc.gone} gone`;
+    if (lc && lc.unreadable && lc.unreadable.length) html += ` · <span class="err" title="${esc(lc.unreadable.map((u) => u.folder + ": " + u.error).join("\n"))}">${lc.unreadable.length} folder(s) couldn't be read</span>`;
     if (lc && lc.shared) html += ` · <span title="${esc(lc.shared)}">${lc.shared.startsWith("shared") ? "shared with the team" : esc(lc.shared)}</span>`;
   }
   if (rf.running) html = `Refreshing since ${esc(rf.started.slice(11, 16))} UTC: reading every folder of the library… · ` + html;
@@ -131,7 +133,7 @@ function rows() {
     if (show === "new" && e.state !== "new") return false;
     if (show === "changed" && !["changed", "moved"].includes(e.state)) return false;
     if (show === "gone" ? e.state !== "gone" : e.state === "gone" && show !== "") return false;
-    return !q || e.path.toLowerCase().includes(q);
+    return !q || segs(e.path).join("/").toLowerCase().includes(q);
   });
   const k = S.sort, d = S.dir;
   const val = (e) => k === "size" ? (e.size || 0) : k === "modified" ? (e.modified || "") : k === "title" ? title(e).toLowerCase() : e.path.toLowerCase();
@@ -152,7 +154,7 @@ function render() {
     <th data-k="size" class="hide-sm">Size${arrow("size")}</th><th data-k="modified" class="hide-sm">Added${arrow("modified")}</th></tr></thead>
     <tbody>${shown.map((e) => `<tr class="${e.state === "gone" ? "gone" : ""}">
       <td><div>${esc(title(e))}</div><div>${chips(e)}</div></td>
-      <td class="path hide-sm">${esc(e.path.split("/").slice(0, -1).join(" / "))}</td>
+      <td class="path hide-sm">${esc(segs(e.path).slice(0, -1).join(" › "))}</td>
       <td class="num hide-sm">${mb(e.size)}</td><td class="when hide-sm">${esc(day(e.modified))}</td></tr>`).join("")}</tbody></table>
     <p class="muted">${es.length} shown${es.length > shown.length ? ` (first ${shown.length}; narrow the search to see the rest)` : ""}.</p>`
     : `<div class="empty">No PDFs match.</div>`;

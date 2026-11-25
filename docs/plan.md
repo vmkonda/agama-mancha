@@ -6,7 +6,7 @@ each book has got. There is no server: the **material folder** on Proton Drive i
 shared board, and every volunteer's copy of the app reads it and writes only its own
 small files there.
 
-The library today: **942 PDFs, 31.6 GB** (Authors 325, Texts 302, Studies 173,
+The library today: **976 PDFs, 32.8 GB** (Authors 325, Texts 336, Studies 173,
 Miscellaneous 66, Reference 60, Kula Internal Documents 15).
 
 ## Phases
@@ -61,7 +61,7 @@ linked to its verses, written to the material folder as numbered builds.
 
 ## Decisions
 
-- Catalog lists **all 942 PDFs**; by default the Library shows those needing OCR (once
+- Catalog lists **all 976 PDFs**; by default the Library shows those needing OCR (once
   Phase C knows which).
 - Claims are **whole books** first.
 - **Anyone** may release a claim that has been stale for 14 days; the release is recorded.
