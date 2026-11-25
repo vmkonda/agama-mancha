@@ -467,3 +467,25 @@ def test_inventory_facts(tmp_path):
     html.write_text("<!DOCTYPE html><html><body>blocked</body></html>")
     assert inventory.summarize(html)["verdict"] == "notpdf"
     assert inventory.page_kind("dk;Z djrs gS vkSj ;g ,d iqLrd gS " * 5) == "suspect"  # legacy-font Hindi
+
+
+def test_inventory_judges_text_layers():
+    from amocr import inventory as inv
+
+    real = inv.screen(["स्वदेहं चिन्तयेत्कृष्णं ध्यायेद्देवीं परां शिवाम् । " * 20])
+    junk = inv.screen(["भथतानलर्िखाीं स " * 30])
+    assert real["deva_broken"] == 0 and not inv.garbled(real)
+    assert inv.garbled(junk)
+    assert not inv.garbled(inv.screen(["bhagavān śivaḥ kṛṣṇaṁ ēkaṁ vadati " * 40]))  # IAST and ISO 15919
+    assert inv.garbled(inv.screen(["bhagavËn ÝivaÆ kÎÌÆa vadati µ " * 40]))  # legacy-font leftovers
+
+    same = inv.compare("śivaḥ paramaḥ sūkṣmaḥ " * 10, "sūkṣmaḥ śivaḥ paramaḥ " * 10)
+    assert same["precision"] == 1.0 and inv.grade(same) == "good"  # order doesn't matter
+    lost = inv.compare("sivah paramah suksmah " * 10, "śivaḥ paramaḥ sūkṣmaḥ " * 10)
+    assert inv.grade(lost) == "poor"  # diacritics lost
+
+    base = {"verdict": "text", "layer": "ocr"}
+    assert inv.effective(base) == "layer-unchecked"
+    assert inv.effective(base | {"quality": {"grade": "poor"}}) == "layer-poor"
+    assert inv.effective(base | {"quality": {"grade": "good"}}) == "text"
+    assert inv.effective({"verdict": "text", "layer": "digital", "screen": junk}) == "garbled"

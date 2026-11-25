@@ -688,6 +688,11 @@ def cmd_catalog(args) -> None:
     if args.action == "inventory":
         from . import inventory
 
+        if args.quality:
+            r = inventory.run_quality(limit=args.limit, share=not args.local, redo=args.redo)
+            print(", ".join(f"{v} {k}" for k, v in r.items() if k not in ("todo", "engine", "shared"))
+                  + f" of {r['todo']} (read with {r['engine']}; {r['shared']})")
+            return
         r = inventory.run(limit=args.limit, folder=args.folder, max_mb=args.max_mb, share=not args.local, redo=args.redo)
         print(f"checked {r['done']} of {r['todo']} PDFs in {r['minutes']} min, {r['failed']} failed ({r['shared']})")
         return
@@ -696,7 +701,9 @@ def cmd_catalog(args) -> None:
     cat = library.load()
     print(f"{cat.get('count', 0)} PDFs, refreshed {cat.get('refreshed_at', 'never')} by {cat.get('refreshed_by', '-')}")
     st = inventory.stats(cat, inventory.merged())
-    print("   " + ", ".join(f"{st.get(k, 0)} {inventory.VERDICTS.get(k, k)}" for k in ("ocr", "mixed", "text", "unknown", "error")
+    names = inventory.VERDICTS | {"garbled": "text layer garbled", "layer-poor": "OCR layer poor", "layer-fair": "OCR layer fair",
+                                  "layer-unchecked": "OCR layer not checked (--quality)"}
+    print("   " + ", ".join(f"{st.get(k, 0)} {names.get(k, k)}" for k in ("ocr", "garbled", "layer-poor", "layer-fair", "layer-unchecked", "mixed", "text", "notpdf", "unknown", "error")
                          if st.get(k)) + "  (unknown: run `amocr catalog inventory`)")
 
 
@@ -798,6 +805,8 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--folder", help="inventory: only this top-level folder, e.g. Texts")
     p.add_argument("--max-mb", dest="max_mb", type=float, help="inventory: skip PDFs larger than this")
     p.add_argument("--redo", action="store_true", help="inventory: measure again PDFs already measured")
+    p.add_argument("--quality", action="store_true",
+                   help="inventory: grade existing OCR layers by reading 3 pages afresh (Surya if installed)")
     p = plain_cmd("board", cmd_board, "who is working on which book, and how far each has got")
     p.add_argument("action", nargs="?", default="show", choices=["show", "sync", "claim", "release"])
     p.add_argument("book", nargs="?", help="for claim/release: a book id, catalog path, or a unique part of the title")

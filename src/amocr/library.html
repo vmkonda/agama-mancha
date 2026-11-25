@@ -128,8 +128,9 @@ function status() {
     html = `<b>${c.count}</b> PDFs · refreshed ${esc(ago(c.age_hours))}${c.refreshed_by ? " by " + esc(c.refreshed_by) : ""}`;
     if (lc) html += ` · last refresh: +${lc.added} new, ${lc.moved} moved, ${lc.changed} changed, ${lc.gone} gone`;
     const iv = c.inventory || {};
-    const checked = (iv.ocr || 0) + (iv.mixed || 0) + (iv.text || 0) + (iv.notpdf || 0) + (iv.empty || 0) + (iv.error || 0);
-    html += ` · text layers checked: ${checked} of ${iv.pdfs || 0}` + (checked ? ` (${(iv.ocr || 0) + (iv.mixed || 0)} need OCR, ${iv.text || 0} have text, ${(iv.notpdf || 0) + (iv.error || 0)} problem files)` : "");
+    const checked = (iv.pdfs || 0) - (iv.unknown || 0);
+    const need = NEEDS.reduce((n, k) => n + (iv[k] || 0), 0);
+    html += ` · text layers checked: ${checked} of ${iv.pdfs || 0}` + (checked ? ` (${need} need OCR, of which ${iv["layer-unchecked"] || 0} have an OCR layer not yet graded and ${iv.garbled || 0} a garbled layer; ${iv.text || 0} have good text; ${(iv.notpdf || 0) + (iv.error || 0)} problem files)` : "");
     if (lc && lc.unreadable && lc.unreadable.length) html += ` · <span class="err" title="${esc(lc.unreadable.map((u) => u.folder + ": " + u.error).join("\n"))}">${lc.unreadable.length} folder(s) couldn't be read</span>`;
     if (lc && lc.shared) html += ` · <span title="${esc(lc.shared)}">${lc.shared.startsWith("shared") ? "shared with the team" : esc(lc.shared)}</span>`;
   }
@@ -151,7 +152,7 @@ function rows() {
   let es = S.cat.entries.filter((e) => {
     if (f && e.folder !== f) return false;
     const h = e.board && e.board.holder, v = e.inv && e.inv.verdict;
-    if (show === "needs" && v && !["ocr", "mixed"].includes(v)) return false;
+    if (show === "needs" && v && !NEEDS.includes(v)) return false;
     if (show === "text" && v !== "text") return false;
     if (show === "problem" && !["notpdf", "error", "empty"].includes(v)) return false;
     if (show === "mine" && h !== S.cat.me) return false;
@@ -196,7 +197,7 @@ function render() {
     const v = e.inv;
     if (!v) return `<span class="inv muted" title="not checked yet: amocr catalog inventory">–</span>`;
     const tip = [v.why, v.error, v.kinds && Object.entries(v.kinds).map(([k, n]) => `${n} pages ${k}`).join(", ")].filter(Boolean).join("; ");
-    return `<div class="inv ${["notpdf", "error"].includes(v.verdict) ? "bad" : ""}" title="${esc(tip)}">${esc(v.label)}</div>`
+    return `<div class="inv ${["notpdf", "error", "garbled", "layer-poor"].includes(v.verdict) ? "bad" : ""}" title="${esc(tip + (v.producer ? "; made with " + v.producer : ""))}">${esc(v.label)}</div>`
       + (v.script || v.pages ? `<div class="prog">${esc([v.script, v.pages ? v.pages + " pp" : ""].filter(Boolean).join(" · "))}</div>` : "");
   };
   const act = (e) => {
@@ -231,6 +232,8 @@ function render() {
   };
 }
 
+// Verdicts that mean the text has to come from OCR (or a font conversion).
+const NEEDS = ["ocr", "mixed", "garbled", "layer-poor", "layer-fair", "layer-unchecked"];
 const STAGES = ["listed", "inventoried", "read", "reviewed", "proofreading", "verified", "assembled"];
 function jobText(what) {
   if (!what) return "";

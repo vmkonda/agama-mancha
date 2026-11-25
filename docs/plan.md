@@ -71,6 +71,18 @@ deleting each after measuring). The Library page then shows only books needing O
   IAST, Latin, legacy-font text, none), verdict (*needs OCR*, *has a text layer*,
   *partly usable text*, *not a PDF*), why (scanned pages, or the legacy font's name),
   and the script from Tesseract's script detection on three pages. No book text.
+- **A text layer isn't trusted just for being in the right script.** Three checks:
+  - *Born-digital or OCR?* Text lying over a full-page scan (or a PDF made by an OCR
+    program) is someone's OCR. Word or Distiller documents that merely contain page images
+    are born-digital.
+  - *Garbled?* A text-only screen: Devanagari vowel signs or viramas with no consonant
+    before them (real text: 0%; over 1% means fonts that don't map back to Unicode), and,
+    on Latin pages, leftovers of legacy fonts (Ë Ý Æ µ …) beyond IAST, ISO 15919, European
+    accents and other Indic scripts (Śāradā is real text).
+  - *How good is an OCR layer?* Three of its pages are read afresh (Surya, else Tesseract)
+    and the words compared, in any order: the share of the layer's words confirmed, the
+    share of the page's words the layer has, and how many IAST diacritics survived. Good,
+    fair or poor; anything but good counts as needing OCR.
 - Found on the first 15 PDFs: placeholder files that aren't PDFs (macOS iCloud stubs,
   a web filter's "blocked download" page saved as .pdf), and texts typeset in the
   legacy Sanskrit99 font (Devanagari stored as Latin letters). Those could be converted
