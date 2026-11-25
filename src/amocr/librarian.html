@@ -51,6 +51,23 @@ th { color: var(--muted); font-weight: 600; font-family: Raleway, sans-serif; }
 .unit.target { outline: 2px solid var(--accent); background: var(--hl); }
 .unit .acts { font-size: 12px; }
 .unit .acts a { margin-right: 10px; }
+.unit { cursor: pointer; } .unit.focus { box-shadow: inset 3px 0 0 var(--accent); background: color-mix(in srgb, var(--hl) 60%, transparent); }
+#study { position: fixed; top: var(--study-top, 110px); right: 12px; bottom: 12px; width: 420px; display: none; flex-direction: column;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 6px 24px rgba(0,0,0,.12); z-index: 5; }
+#study.open { display: flex; }
+body.study-open main { margin-right: 444px; max-width: none; }
+#study .shead { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-bottom: 1px solid var(--line); font-size: 13px; }
+#study .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); } #study .dot.on { background: #2e9d55; }
+#slog { flex: 1; overflow: auto; padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+.smsg { border-radius: 8px; padding: 8px 10px; font-size: 14px; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; }
+.smsg.user { align-self: flex-end; background: var(--hl); max-width: 90%; }
+.smsg.claude { background: var(--bg); border: 1px solid var(--line); }
+.smsg .about { font-size: 11px; color: var(--muted); display: block; margin-bottom: 2px; }
+.smsg .cites { margin-top: 6px; display: flex; flex-wrap: wrap; gap: 4px; white-space: normal; }
+.smsg .cites a { font-size: 11px; font-family: ui-monospace, monospace; border: 1px solid var(--line); border-radius: 999px; padding: 0 7px; text-decoration: none; }
+#study .sfoot { border-top: 1px solid var(--line); padding: 8px 10px; display: flex; flex-direction: column; gap: 6px; }
+#sin { width: 100%; min-height: 64px; resize: vertical; }
+@media (max-width: 1100px) { #study { left: 12px; width: auto; top: auto; height: 55vh; } body.study-open main { margin-right: 0; } }
 </style>
 <link rel="stylesheet" href="/theme.css">
 </head>
@@ -68,6 +85,15 @@ th { color: var(--muted); font-weight: 600; font-family: Raleway, sans-serif; }
   <span class="muted" id="hint"></span>
 </header>
 <main id="main"></main>
+<div id="study" role="dialog" aria-label="Study with Claude">
+  <div class="shead"><span class="dot" id="sdot"></span><span id="sstate" class="grow">…</span><button id="sx" title="Close">✕</button></div>
+  <div id="slog"></div>
+  <div class="sfoot">
+    <span class="muted" style="font-size:12px">About: <span id="sabout">click a passage to ask about it</span></span>
+    <textarea id="sin" placeholder="Ask about this passage: a translation, a term, what the commentary says, where else the idea appears. ⌘/Ctrl ↵ sends."></textarea>
+    <div style="display:flex;gap:8px;align-items:center"><button id="ssend">Ask Claude</button><span class="muted" id="sinfo" style="font-size:12px"></span></div>
+  </div>
+</div>
 <script>
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
@@ -224,7 +250,8 @@ async function renderReader(id, chapter) {
       <span class="grow"></span>
       <button id="prev" ${c.prev ? "" : "disabled"}>◀ ${esc(c.prev || "")}</button>
       <select id="ch">${c.chapters.map((x) => `<option ${x === c.chapter ? "selected" : ""}>${esc(x)}</option>`).join("")}</select>
-      <button id="next" ${c.next ? "" : "disabled"}>${esc(c.next || "")} ▶</button></div>
+      <button id="next" ${c.next ? "" : "disabled"}>${esc(c.next || "")} ▶</button>
+      <button id="studybtn" title="Ask Claude about what you're reading; answers cite the library">Study with Claude</button></div>
     <div class="src">${w.kind === "etext" ? `E-text: ${esc(w.source || "")}${w.licence ? " · " + esc(w.licence) : ""}${c.source_url ? ` · <a href="${esc(c.source_url)}" target="_blank" rel="noopener">source file on GRETIL</a>` : ""}`
       : `The team's printed copy (OCR; <i>draft</i> units are unproofread).${c.book ? ` Each passage links to its page; the scan opens with the lines outlined.` : ""}`}
       · chapter ${esc(c.chapter)} · ${c.units.length} passages</div>
@@ -239,6 +266,49 @@ async function renderReader(id, chapter) {
   $("ch").onchange = () => goCh($("ch").value);
   const t = c.target && document.getElementById("u-" + c.target);
   if (t) t.scrollIntoView({ block: "center" });
+  setFocus(c.target || (c.units[0] || {}).id);
+  document.querySelectorAll(".unit").forEach((el) => (el.onclick = (e) => { if (e.target.closest("a")) return; setFocus(el.id.slice(2)); }));
+  $("studybtn").onclick = () => studyToggle(true);
+}
+
+// Study with Claude: questions about the passage in focus, answered by the listening Claude Code session.
+const ST = { open: false, focus: null, timer: null, seen: 0 };
+function setFocus(id) {
+  ST.focus = id || null;
+  document.querySelectorAll(".unit.focus").forEach((x) => x.classList.remove("focus"));
+  const el = id && document.getElementById("u-" + id); if (el) el.classList.add("focus");
+  $("sabout").innerHTML = id ? `<code>${esc(id)}</code>` : "click a passage to ask about it";
+}
+function studyToggle(open) {
+  ST.open = open ?? !ST.open;
+  $("study").classList.toggle("open", ST.open); document.body.classList.toggle("study-open", ST.open);
+  document.documentElement.style.setProperty("--study-top", Math.round(($("main").getBoundingClientRect().top || 110) + 4) + "px");
+  clearInterval(ST.timer);
+  if (ST.open) { studyLoad(); ST.timer = setInterval(studyLoad, 3000); $("sin").focus(); }
+  store.set("study", ST.open ? "1" : "");
+}
+const fmt = (t) => esc(t).replace(/\*\*(.+?)\*\*/g, "<b>$1</b>");
+async function studyLoad() {
+  let d; try { d = await api("/api/librarian/study"); } catch (e) { $("sstate").textContent = e.message; return; }
+  $("sdot").classList.toggle("on", d.listening);
+  $("sstate").textContent = d.listening ? "Claude is listening" : "Claude isn't listening: in Claude Code, say “listen to the study chat”";
+  if (d.messages.length === ST.seen) return;
+  ST.seen = d.messages.length;
+  const log = $("slog"), atEnd = log.scrollHeight - log.scrollTop - log.clientHeight < 40;
+  log.innerHTML = d.messages.map((m) => `<div class="smsg ${m.role}">${m.unit ? `<span class="about">about <a href="#read=${encodeURIComponent(m.unit)}">${esc(m.unit)}</a></span>` : ""}${fmt(m.text)}${
+    m.cites ? `<div class="cites">${m.cites.map((c) => `<a href="#read=${encodeURIComponent(c)}" title="Read in context">${esc(c)}</a>`).join("")}</div>` : ""}</div>`).join("")
+    || `<p class="muted" style="font-size:13px">Ask about the passage in focus. Claude answers from the library only, quoting the original with a translation, and every passage it relies on is a link you can read in context.</p>`;
+  const waiting = d.messages.length && d.messages[d.messages.length - 1].role === "user";
+  $("sinfo").textContent = waiting ? (d.listening ? "Claude is reading…" : "waiting for Claude to listen") : "";
+  if (atEnd || waiting) log.scrollTop = log.scrollHeight;
+}
+async function studySend() {
+  const text = $("sin").value.trim(); if (!text) return;
+  $("ssend").disabled = true;
+  try { await api("/api/librarian/study", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text, unit: ST.focus }) });
+    $("sin").value = ""; ST.seen = -1; await studyLoad(); }
+  catch (e) { $("sinfo").textContent = e.message; }
+  $("ssend").disabled = false;
 }
 function route() {
   const m = location.hash.match(/^#read=(.+)$/);
@@ -246,6 +316,10 @@ function route() {
   return false;
 }
 window.addEventListener("hashchange", () => { if (!route()) $("t-" + (store.get("tab") || "search")).click(); });
+
+$("sx").onclick = () => studyToggle(false);
+$("ssend").onclick = studySend;
+$("sin").addEventListener("keydown", (e) => { if ((e.metaKey || e.ctrlKey) && e.key === "Enter") { e.preventDefault(); studySend(); } });
 
 async function init() {
   try { WORKS = await api("/api/librarian/works"); }
@@ -257,6 +331,7 @@ async function init() {
   $("t-search").onclick = () => { if (location.hash) history.replaceState(null, "", location.pathname); go("search"); };
   $("t-eval").onclick = () => { if (location.hash) history.replaceState(null, "", location.pathname); go("eval"); };
   if (!route()) go(tab);
+  if (store.get("study") && location.hash.startsWith("#read=")) setTimeout(() => studyToggle(true), 400);
 }
 init();
 </script>

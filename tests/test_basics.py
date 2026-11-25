@@ -755,3 +755,25 @@ def test_etext_parse_patterns():
     assert rows[5]["explains"] == "2" and rows[4]["iast"] == "jñānaṃ bandhaḥ"
     assert fold("Spanda-kārikā") == fold("spanda kArikA".replace("A", "a")) == "spanda karika"
     assert fold("स्पन्दः") == "spandah"
+
+
+def test_study_chat(tmp_path, monkeypatch):
+    """Questions carry the passage in focus; answers must cite units that exist in the library."""
+    import pytest
+
+    pytest.importorskip("lancedb")
+    from librarian import etext, store, study
+
+    monkeypatch.setenv("AMOCR_DATA", str(tmp_path))
+    src = tmp_path / "sa_test.xml"
+    src.write_text('<TEI><text><body><lg xml:id="T_1.1"><l>caitanyam ātmā</l></lg></body></text></TEI>', encoding="utf-8")
+    m = etext.ingest(src)
+    store.reload()
+    uid = f"{m['id']}/1/1/mula"
+    q = study.post("user", "What does this sūtra mean?", unit=uid, by="anna")
+    assert study.pending() == [q] and q["unit"] == uid
+    with pytest.raises(ValueError, match="no such unit"):
+        study.post("claude", "…", reply_to=q["id"], cites=["ET-9999/1/1/mula"])
+    a = study.post("claude", "Consciousness is the self.", reply_to=q["id"], cites=[uid])
+    assert study.pending() == [] and a["cites"] == [uid]
+    store.reload()

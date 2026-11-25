@@ -369,6 +369,16 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         parts = [p for p in urlparse(self.path).path.split("/") if p]
+        if parts == ["api", "librarian", "study"]:
+            try:
+                _librarian()
+                from librarian import study
+
+                b = self._body()
+                return self._json(study.post("user", str(b.get("text", "")), unit=str(b.get("unit") or "") or None,
+                                             by=cfgmod.load().operator or ""))
+            except (ValueError, RuntimeError, json.JSONDecodeError) as e:
+                return self._err(str(e))
         if parts[:3] == ["api", "librarian", "eval"]:
             try:
                 return self._json(_librarian_eval_post(parts[3:], self._body()))
@@ -463,6 +473,10 @@ def _librarian_get(parts: list[str], q: dict) -> object:
         return out
     if parts == ["unit"]:
         return store.get(one("id"), context=2) or {"error": "no such unit"}
+    if parts == ["study"]:
+        from librarian import study
+
+        return {"messages": study.load()[-120:], "listening": study.listening()}
     if parts == ["read"]:
         return store.context(one("id"), one("chapter") or None) or {"error": "no such unit"}
     if parts == ["eval"]:
