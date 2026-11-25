@@ -38,6 +38,13 @@ VERDICTS = {"ocr": "needs OCR", "text": "has a text layer", "mixed": "partly usa
             "notpdf": "not a PDF"}
 
 
+
+def _scratch() -> Path:
+    """A place for temporary files on the same disk as the data folder (made if missing)."""
+    d = data_dir()
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
@@ -165,7 +172,7 @@ def summarize(pdf: Path, osd_pages: int = 3) -> dict:
     scripts: Counter = Counter()
     if need and osd_pages:
         picks = sorted({need[int(len(need) * f)] for f in (0.25, 0.5, 0.75)})[:osd_pages]
-        with tempfile.TemporaryDirectory(dir=data_dir()) as td:
+        with tempfile.TemporaryDirectory(dir=_scratch()) as td:
             for p in picks:
                 pix = doc[p - 1].get_pixmap(dpi=200, colorspace=pymupdf.csGRAY)
                 img = Path(td) / f"p{p}.png"
@@ -331,7 +338,7 @@ def _run_loop(todo, here, root, pd, cfg, mine, lazy, share, log, started) -> dic
             if e["sha1"] in here:
                 facts = record(mine, e["sha1"], here[e["sha1"]].source, lazy)
             else:
-                with tempfile.TemporaryDirectory(dir=data_dir()) as td:
+                with tempfile.TemporaryDirectory(dir=_scratch()) as td:
                     pd.download(f"{root}/{e['path']}", Path(td))
                     got = Path(td) / e["name"]
                     if not got.exists():
@@ -432,7 +439,7 @@ def quality(pdf: Path, facts: dict, reader: _Reader, pages: int = 3) -> dict:
     lp = facts.get("layer_pages") or [i + 1 for i in range(doc.page_count) if len(doc[i].get_text().strip()) > 200]
     picks = sorted({lp[int(len(lp) * f)] for f in (0.25, 0.5, 0.75)})[:pages] if lp else []
     layer_txt, fresh_txt, per_page = [], [], []
-    with tempfile.TemporaryDirectory(dir=data_dir()) as td:
+    with tempfile.TemporaryDirectory(dir=_scratch()) as td:
         for p in picks:
             page = doc[p - 1]
             img = Path(td) / f"p{p}.png"
@@ -477,7 +484,7 @@ def run_quality(limit: int | None = None, share: bool = True, redo: bool = False
         for i, e in enumerate(todo, 1):
             key = e["sha1"]
             try:
-                with tempfile.TemporaryDirectory(dir=data_dir()) as td:
+                with tempfile.TemporaryDirectory(dir=_scratch()) as td:
                     if key in here:
                         pdf = here[key].source
                     else:
