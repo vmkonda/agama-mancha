@@ -117,7 +117,7 @@ replace them. The planned layout, by work, for Agama Mancha is in
 - **Claude's main risk** is producing a smooth, plausible text that differs
   from the print, for example by "correcting" toward a familiar reading.
   Its output always lists what it changed and what it was unsure of, and
-  verified proofreading is what catches the rest.
+  proofreading, then validation by a second person, is what catches the rest.
 - **Cost:** each volunteer uses their own Claude plan. A 460-page book is
   many sessions for one person, so spread long books across volunteers by
   page ranges only if they coordinate closely, or one volunteer per book.

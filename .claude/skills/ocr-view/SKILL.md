@@ -30,7 +30,8 @@ It is never published or exposed on the network: the scans are copyrighted.
   list and its uncertain readings.
 - **Compare**: character diff between any two outputs, with CER.
 - **Proofread**: edit and save to `data/works/<book>/groundtruth/pNNNN.txt`, with the
-  reviewer's name, a note, and a "verified" tick that should be set only once every
+  reviewer's name, a note, and a status on the ladder (draft, proofread, validated by a
+  second person, problem, no text); proofread and validated mean every
   line has been checked against the print.
 - **Suggestions**: fixes learned from corrections, offered across the book (see CLAUDE.md).
 - **Chat**: a panel where the proofreader talks to this Claude session. See below.

@@ -849,7 +849,7 @@ def cmd_board(args) -> None:
     for e in rows:
         p = e.get("progress") or {}
         who = f"{e['holder']} since {e['since'][:10]}" + (" (stale)" if e.get("stale") else "") if e.get("holder") else "nobody"
-        prog = f" · {p.get('read', 0)}/{p.get('pages', 0)} read, {p.get('proofread', 0)} proofread, {p.get('verified', 0)} verified" if p.get("pages") else ""
+        prog = f" · {p.get('read', 0)}/{p.get('pages', 0)} read, {p.get('proofread', 0)} saved, {p.get('checked', 0)} proofread, {p.get('validated', 0)} validated" if p.get("pages") else ""
         print(f"{e.get('title') or e.get('path')}\n   {board.STAGE_LABEL[e['stage']]}{prog} · {who}")
 
 

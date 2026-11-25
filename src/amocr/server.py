@@ -106,7 +106,7 @@ def _library(works: dict[str, Work]) -> dict:
             p = x.get("progress") or {}
             e["board"] = {"holder": x.get("holder"), "since": x.get("since"), "stale": x.get("stale", False),
                           "stage": x["stage"], "stage_label": board.STAGE_LABEL[x["stage"]], "by": x.get("by"),
-                          "progress": {k: p.get(k) for k in ("pages", "read", "claude", "proofread", "verified")}}
+                          "progress": {k: p.get(k) for k in ("pages", "read", "claude", "proofread", "checked", "validated", "blank", "problem", "verified")}}
         entries.append(e)
     last = None
     log = library.local_dir() / "changes.jsonl"
@@ -243,7 +243,17 @@ class Handler(BaseHTTPRequestHandler):
                 for label, r in res.items():
                     if ref is not None and label != GT:
                         r["cer"] = round(cer(r["text"], ref), 4)
-                return self._json({"page": page, "results": res})
+                from . import ladder
+
+                meta_path = _gt_path(work, page).with_suffix(".meta.json")
+                meta = json.loads(meta_path.read_text(encoding="utf-8")) if meta_path.exists() else None
+                me = cfgmod.load().operator
+                ok, why = ladder.can_validate(meta, me)
+                return self._json({"page": page, "results": res,
+                                   "ladder": {"status": ladder.of(meta) if GT in res else "none", "me": me,
+                                              "can_validate": ok, "why_not": why,
+                                              "proofread_by": (meta or {}).get("proofread_by"),
+                                              "validated_by": (meta or {}).get("validated_by")}})
             if parts[0] == "api" and len(parts) == 4 and parts[3] == "diff":
                 work, page = self._work_page(parts[1:3])
                 q = parse_qs(url.query)
@@ -354,22 +364,23 @@ class Handler(BaseHTTPRequestHandler):
             if n > 2_000_000:
                 raise ValueError("too large")
             body = json.loads(self.rfile.read(n))
-            text, verified = body["text"], bool(body.get("verified"))
+            from . import ladder
+
+            text = body["text"]
             if not isinstance(text, str):
                 raise ValueError("text must be a string")
+            # The page's status on the ladder (an older viewer sends only "verified").
+            status = body.get("status") or ("proofread" if body.get("verified") else "draft")
             path = _gt_path(work, page)
-            path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text(text.rstrip("\n") + "\n", encoding="utf-8")
-            # Who reviewed it and whether they checked every line against the print.
             meta_path = path.with_suffix(".meta.json")
             old_meta = json.loads(meta_path.read_text(encoding="utf-8")) if meta_path.exists() else {}
-            # Keep what's already recorded (the reading it started from, fixes applied); update the review.
-            meta_path.write_text(json.dumps(old_meta | {
-                "reviewer": cfgmod.load().operator, "verified": verified,
-                "note": str(body.get("note", ""))[:2000],
-                "saved": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-            }, ensure_ascii=False, indent=1), encoding="utf-8")
-            self._json({"saved": str(path)})
+            # Check the step first (e.g. validating your own proofreading), so a refusal changes nothing.
+            # Keep what's already recorded (the reading it started from, fixes applied).
+            meta = ladder.change(old_meta, status, cfgmod.load().operator, str(body.get("note", ""))[:2000])
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(text.rstrip("\n") + "\n", encoding="utf-8")
+            meta_path.write_text(json.dumps(meta, ensure_ascii=False, indent=1), encoding="utf-8")
+            self._json({"saved": str(path), "status": meta["status"]})
         except LookupError as e:
             self._err(str(e), HTTPStatus.NOT_FOUND)
         except (ValueError, KeyError, json.JSONDecodeError) as e:

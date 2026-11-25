@@ -43,6 +43,26 @@ button.on { background: var(--accent); border-color: var(--accent); color: var(-
 button:hover, select:hover { border-color: var(--rose); }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 
+/* Page status on the ladder (draft → proofread → validated; problem; no text): same colours everywhere. */
+.st-none      { --st-bg: transparent; --st-fg: var(--muted); }
+.st-draft     { --st-bg: #fbe7c6; --st-fg: #7a4a00; }
+.st-proofread { --st-bg: #f6eeb0; --st-fg: #5c5200; }
+.st-validated { --st-bg: #d6efd8; --st-fg: #1d5e2a; }
+.st-problem   { --st-bg: #ead9f2; --st-fg: #5b2a78; }
+.st-blank     { --st-bg: #e9e6e3; --st-fg: #5a554f; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .st-draft     { --st-bg: #4a3410; --st-fg: #f6cf8c; }
+  :root:not([data-theme="light"]) .st-proofread { --st-bg: #45400f; --st-fg: #efe39a; }
+  :root:not([data-theme="light"]) .st-validated { --st-bg: #1c3d22; --st-fg: #a9e1b2; }
+  :root:not([data-theme="light"]) .st-problem   { --st-bg: #3a2347; --st-fg: #dcb6ef; }
+  :root:not([data-theme="light"]) .st-blank     { --st-bg: #34302d; --st-fg: #c9c3bd; }
+}
+:root[data-theme="dark"] .st-draft     { --st-bg: #4a3410; --st-fg: #f6cf8c; }
+:root[data-theme="dark"] .st-proofread { --st-bg: #45400f; --st-fg: #efe39a; }
+:root[data-theme="dark"] .st-validated { --st-bg: #1c3d22; --st-fg: #a9e1b2; }
+:root[data-theme="dark"] .st-problem   { --st-bg: #3a2347; --st-fg: #dcb6ef; }
+:root[data-theme="dark"] .st-blank     { --st-bg: #34302d; --st-fg: #c9c3bd; }
+
 /* The title band at the top of every page. */
 .brand {
   display: flex; flex-wrap: wrap; align-items: center; gap: 4px 20px;

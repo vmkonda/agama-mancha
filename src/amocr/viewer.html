@@ -80,6 +80,13 @@ sup.fn { color: var(--accent); font-weight: 700; font-size: .72em; line-height: 
 #gut .t-footnote { font-style: italic; }
 #gut .t-colophon { color: var(--accent); font-style: italic; }
 #gut .warn { background: var(--low); color: var(--low-text); border-radius: 3px; }
+.ladder { border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px 8px; margin: 8px 0 0; display: flex; flex-wrap: wrap; gap: 4px 16px; }
+.ladder legend { font-size: 12px; color: var(--muted); padding: 0 4px; }
+.ladder label { font-size: 13px; display: flex; align-items: baseline; gap: 5px; }
+.ladder label span { color: var(--muted); font-size: 12px; }
+.ladder input:disabled + b { opacity: .45; }
+.ladder label b { padding: 0 6px; border-radius: 4px; background: var(--st-bg); color: var(--st-fg); font-weight: 600; }
+.stchip { padding: 1px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; background: var(--st-bg); color: var(--st-fg); }
 .pagebar { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 13px; margin: 0 0 6px; }
 .pagebar b { font-weight: 600; }
 .pwarn { font-size: 13px; margin: 0 0 8px; }
@@ -378,15 +385,17 @@ function bestReading(res) {
 
 const PALETTE = ["ऽ", "।", "॥", "्", "ं", "ँ", "ः", "ॐ", "०", "१", "२", "३", "४", "५", "६", "७", "८", "९", "—"];
 
+const STATUS_LABEL = { none: "not proofread", draft: "draft", proofread: "proofread", validated: "validated", problem: "problem", blank: "no text" };
 function renderEdit() {
   const res = S.data.results;
+  const L = S.data.ladder || { status: res.groundtruth ? "draft" : "none", can_validate: false, why_not: "" };
   const src = res.groundtruth ? "groundtruth" : bestReading(res);
   const draftKey = `draft:${S.work}/${S.page}`;
   let draft = null; try { draft = JSON.parse(store.get(draftKey) || "null"); } catch {}
   const rv = (res.groundtruth && res.groundtruth.review) || {};
   const restored = draft && draft.text !== res[src].text;
   $("textpane").innerHTML = `
-    <div class="meta"><span>${res.groundtruth ? "Editing the saved ground truth" : `No ground truth yet; starting from <b>${esc(src)}</b>`}</span></div>
+    <div class="meta"><span class="stchip st-${esc(L.status)}">${esc(STATUS_LABEL[L.status] || L.status)}</span><span>${res.groundtruth ? "Editing the saved text" : `No saved text yet; starting from <b>${esc(src)}</b>`}</span>${L.proofread_by ? `<span class="muted">proofread by ${esc(L.proofread_by)}</span>` : ""}${L.validated_by ? `<span class="muted">validated by ${esc(L.validated_by)}</span>` : ""}</div>
     <p class="muted" style="font-size:13px;margin-top:0">Type what is printed, one printed line per line, blank line between paragraphs. Keep headers, footnote markers and signature marks.</p>
     ${restored ? `<div class="draftnote">Restored your unsaved edits from ${esc(new Date(draft.at).toLocaleString())}. <button id="discard">Discard them</button></div>` : ""}
     <div class="pal" id="pal">${PALETTE.map((c) => `<button class="deva" data-c="${c}" title="insert ${c}">${c}</button>`).join("")}</div>
@@ -395,15 +404,23 @@ function renderEdit() {
     <div class="ed withgut"><div id="gut" aria-hidden="true"></div><div id="hl" class="deva" aria-hidden="true"></div><textarea id="gt" class="deva" spellcheck="false" wrap="off"></textarea></div>
     <p class="keys muted"><span class="ln low" style="padding:0 4px">yellow</span> Tesseract was unsure · <kbd>F2</kbd> or <kbd>Alt ↓</kbd> next unsure line, with <kbd>Shift</kbd> / <kbd>Alt ↑</kbd> previous · <kbd>⌘/Ctrl S</kbd> save · <kbd>⌘/Ctrl ↵</kbd> save and next page · <kbd>⌘/Ctrl K</kbd> Claude checks the line(s) · <kbd>⌘/Ctrl ⇧ ↵</kbd> apply Claude's latest fix · edits are kept in this browser until saved</p>
     <div style="display:flex;flex-wrap:wrap;gap:8px 14px;margin-top:8px;align-items:center">
-      <label><input type="checkbox" id="verified"> I checked every line against the print (verified)</label>
-      <input id="note" placeholder="note for the next reviewer (optional)" style="flex:1;min-width:200px">
+      <input id="note" placeholder="note for the next reviewer (a problem page must say what)" style="flex:1;min-width:200px">
     </div>
+    <fieldset class="ladder" id="ladder"><legend>Save as</legend>
+      <label class="st-draft"><input type="radio" name="st" value="draft"> <b>Draft</b> <span>not every line checked yet</span></label>
+      <label class="st-proofread"><input type="radio" name="st" value="proofread"> <b>Proofread</b> <span>I checked every line against the print</span></label>
+      <label class="st-validated" title="${esc(L.why_not || "")}"><input type="radio" name="st" value="validated" ${L.can_validate ? "" : "disabled"}> <b>Validated</b> <span>${L.can_validate ? "I checked every line again, after someone else proofread it" : esc(L.why_not)}</span></label>
+      <label class="st-problem"><input type="radio" name="st" value="problem"> <b>Problem</b> <span>needs an expert, or the print is damaged</span></label>
+      <label class="st-blank"><input type="radio" name="st" value="blank"> <b>No text</b> <span>blank page or plate</span></label>
+    </fieldset>
     <div style="display:flex;gap:8px;margin-top:8px;align-items:center"><button id="save">Save</button><button id="savenext">Save and next ▶</button><button id="checkline" title="Claude checks the selected line(s) against the print and proposes fixes (⌘/Ctrl K)">Check with Claude</button><span id="saved" class="muted">${esc(S.flash || "")}</span></div>
-    ${rv.saved ? `<p class="muted" style="font-size:13px">Last saved by ${esc(rv.reviewer || "unknown")} on ${esc(rv.saved.slice(0, 10))}${rv.verified ? " · verified" : " · draft"}${rv.note ? " · note: " + esc(rv.note) : ""}</p>` : ""}`;
+    ${rv.saved ? `<p class="muted" style="font-size:13px">Last saved by ${esc(rv.reviewer || "unknown")} on ${esc(rv.saved.slice(0, 10))}${rv.note ? " · note: " + esc(rv.note) : ""}</p>` : ""}`;
   S.flash = "";
   const ta = $("gt"), hl = $("hl"), gut = $("gut"), TL = positionLines();
   ta.value = restored ? draft.text : res[src].text;
-  $("verified").checked = restored ? !!draft.verified : !!rv.verified;
+  const pick = (s) => { const r = document.querySelector(`#ladder input[value="${s}"]`); if (r && !r.disabled) r.checked = true; };
+  pick(restored && draft.status ? draft.status : (L.status === "none" ? "draft" : L.status));
+  const chosen = () => (document.querySelector("#ladder input:checked") || {}).value || "draft";
   $("note").value = restored ? draft.note || "" : rv.note || "";
 
   const rows = () => { let k = -1; return ta.value.split("\n").map((t) => ({ t, k: t.trim() ? ++k : null })); };
@@ -468,7 +485,7 @@ function renderEdit() {
     const x = tl(rs[c]);
     if (x) { showBox(x.bbox); scrollToBox(x.bbox); } else $("box").style.display = "none";
   }
-  const keepDraft = () => store.set(draftKey, JSON.stringify({ text: ta.value, verified: $("verified").checked, note: $("note").value, at: new Date().toISOString() }));
+  const keepDraft = () => store.set(draftKey, JSON.stringify({ text: ta.value, status: chosen(), note: $("note").value, at: new Date().toISOString() }));
   function onInput() {
     if (ta.value.includes("|") || ta.value.includes("।।")) {
       const p = ta.selectionStart, before = fixBars(ta.value.slice(0, p));
@@ -492,7 +509,7 @@ function renderEdit() {
   async function save(next) {
     const text = fixVerseDigits(ta.value), fixed = text !== ta.value;
     try {
-      const r = await api(`/api/${S.work}/${S.page}/groundtruth`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text, verified: $("verified").checked, note: $("note").value }) });
+      const r = await api(`/api/${S.work}/${S.page}/groundtruth`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text, status: chosen(), note: $("note").value }) });
       store.del(draftKey);
       S.flash = `Saved p${S.page} to ${r.saved}` + (fixed ? " (verse numbers changed to Devanagari digits)" : "");
       const i = S.pages.findIndex((p) => p.page === S.page), n = next ? S.pages[i + 1] : null;
@@ -506,7 +523,7 @@ function renderEdit() {
   ta.addEventListener("click", () => paint());
   ta.addEventListener("scroll", sync);
   structure();
-  $("verified").onchange = keepDraft;
+  document.querySelectorAll("#ladder input").forEach((r) => (r.onchange = keepDraft));
   $("note").oninput = keepDraft;
   $("pal").addEventListener("mousedown", (e) => e.preventDefault()); // keep the cursor in the text
   $("pal").onclick = (e) => { const b = e.target.closest("button[data-c]"); if (b) insert(b.dataset.c); };
@@ -521,7 +538,9 @@ function renderEdit() {
   const dirty = () => ta.value !== res[src].text;
   async function saveQuiet() { // save the editor's text without leaving the page, so Claude and Apply see it
     await api(`/api/${S.work}/${S.page}/groundtruth`, { method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text: fixVerseDigits(ta.value), verified: $("verified").checked, note: $("note").value }) });
+      // A quiet save (before Claude checks a line) never claims a step: it keeps the page's status,
+      // except that a validated page whose text changed needs validating again.
+      body: JSON.stringify({ text: fixVerseDigits(ta.value), status: L.status === "none" ? "draft" : L.status === "validated" ? "proofread" : L.status, note: $("note").value }) });
     store.del(draftKey);
   }
   function selectedLines() { // [n1, n2]: the lines of text the selection (or cursor) touches

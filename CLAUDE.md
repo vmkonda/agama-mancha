@@ -94,8 +94,9 @@ view changes it for all books, and the guide's section changes with it.
 ## Ground truth
 
 Claude-drafted ground truth must not be used to score a Claude engine until
-a person has verified it (the viewer's "verified" tick, stored in
-`data/works/<book>/groundtruth/pNNNN.meta.json`).
+a person has checked every line of it: status *proofread* or *validated* on the
+status ladder (`status` in `data/works/<book>/groundtruth/pNNNN.meta.json`; pages saved
+before the ladder have only `verified`). Never set a page's status yourself.
 
 ## Secrets
 

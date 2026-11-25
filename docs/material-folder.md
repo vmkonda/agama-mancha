@@ -40,7 +40,8 @@ Agama Mancha/
         │   └── p0231/             every reading of page 231: engine, version, confidence,
         │                          lines with positions and type; never overwritten
         ├── groundtruth/
-        │   └── p0231.txt, .meta.json   the proofread text, who saved it, whether verified
+        │   └── p0231.txt, .meta.json   the proofread text, its status (draft / proofread /
+        │                               validated / problem / no text), who proofread and validated it
         └── units/
             └── v002/              one build of the units, never changed after it's written
                 ├── units.jsonl    one unit per line (below)
@@ -68,7 +69,7 @@ tool's `B-…` id, which is derived from the checksum), access tier
 {"id": "SL-0001/13/34/mula", "work": "SL-0001", "chapter": 13, "verse": "34", "layer": "mula",
  "lang": "san", "text": "स्वदेहं चिन्तयेत्कृष्णं … ॥ ३४ ॥", "iast": "svadehaṃ cintayetkṛṣṇaṃ … || 34 ||",
  "pages": [231], "lines": [{"page": 231, "n": 3, "bbox": [404, 435, 1278, 503]}, …],
- "status": "verified", "source": ["groundtruth"], "types": "guessed"}
+ "status": "validated", "source": ["groundtruth"], "types": "guessed"}
 {"id": "SL-0001/13/34/hindi-mishra", "layer": "hindi-mishra", "explains": ["SL-0001/13/34/mula"], "lang": "hin", …}
 ```
 
@@ -76,8 +77,9 @@ tool's `B-…` id, which is derived from the checksum), access tier
   commentary is its own layer, named for its author. A commentary passage covering
   verses 35–36 gets `…/35-36/hindi-mishra` and links to both verses.
 - **Positions** point back to the page image, so any quotation can be shown on the scan.
-- **Status** comes from the pages: `verified` only if every line was checked by a person;
-  otherwise `draft`, which the librarian can still search but must flag.
+- **Status** comes from the pages: `validated` if every page it's on was validated (checked
+  by two people), `proofread` if checked by one, otherwise `draft`, which the librarian can
+  still search but must flag.
 - **Text** is NFC Devanagari, IAST generated from it; running headers, page numbers and
   signature marks are left out, words broken across lines with a hyphen are rejoined (the build counts them).
 
