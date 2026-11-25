@@ -95,7 +95,7 @@ details li { margin: 2px 0; }
 #chat.open { display: flex; }
 /* Wide screens: dock the panel in its own column so it never covers the text being edited. */
 @media (min-width: 1100px) {
-  #chat { top: 104px; bottom: 12px; right: 12px; height: auto; width: 420px; }
+  #chat { top: var(--chat-top, 160px); bottom: 12px; right: 12px; height: auto; width: 420px; }
   body.chat-open main { margin-right: 444px; }
 }
 #chat .head { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-bottom: 1px solid var(--line); font-size: 13px; }
@@ -230,8 +230,10 @@ const step = (d) => { const i = S.pages.findIndex((p) => p.page === S.page); con
 $("prev").onclick = () => step(-1); $("next").onclick = () => step(1);
 document.addEventListener("keydown", (e) => { if (e.target.tagName === "TEXTAREA" || e.target.tagName === "INPUT" || S.mode === "sugg") return; if (e.key === "ArrowLeft") step(-1); if (e.key === "ArrowRight") step(1); });
 
+let lastBox = null;
 function showBox(bbox) {
   const img = $("img"); if (!bbox || !img.naturalWidth) return;
+  lastBox = bbox;
   const s = img.clientWidth / img.naturalWidth, b = $("box");
   Object.assign(b.style, { display: "block", left: bbox[0] * s - 3 + "px", top: bbox[1] * s - 3 + "px", width: (bbox[2] - bbox[0]) * s + 6 + "px", height: (bbox[3] - bbox[1]) * s + 6 + "px" });
 }
@@ -750,6 +752,12 @@ function chatToggle(open) {
   if (CH.open) { chatWhere(); chatLoad(); CH.timer = setInterval(() => { chatWhere(); chatLoad(); }, 3000); $("chatin").focus(); }
   store.set("chat", CH.open ? "1" : "");
 }
+// The scan changes size when the chat panel opens or closes, the window resizes or the zoom moves:
+// redraw the line box at the new scale, and keep the docked panel just below the toolbars.
+new ResizeObserver(() => { if (lastBox && $("box").style.display === "block") showBox(lastBox); }).observe($("img"));
+const placeChat = () => document.documentElement.style.setProperty("--chat-top", Math.round(document.querySelector("main").getBoundingClientRect().top + 8) + "px");
+new ResizeObserver(placeChat).observe(document.body);
+placeChat();
 $("chatbtn").onclick = () => chatToggle();
 $("chatx").onclick = () => chatToggle(false);
 $("chatsend").onclick = chatSend;
