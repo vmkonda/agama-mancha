@@ -84,7 +84,7 @@ tool's `B-…` id, which is derived from the checksum), access tier
 |---|---|---|
 | Page readings with engine, version, confidence, positions | yes (Tesseract, Surya, Claude results; line and word boxes) | push them under `works/<id>/pages/` |
 | Proofread text, never overwritten | saved per page; Proton keeps file revisions | an explicit `history.jsonl` on every save |
-| Structure: header, verse (+ number), commentary (+ verses explained), footnote | yes, per line | chapter numbers; assembling units across pages (`amocr assemble`) |
+| Structure: header, verse (+ number), commentary (+ verses explained), footnote | yes: `amocr assemble` classes lines from the text, finds chapters, builds units across pages | unit types confirmed by a person (today `types: "guessed"`) |
 | Work card | the book brief (`amocr brief`) is a first draft | the card's fields and status |
 | Glossary | per book (`glossary.json`) | concept IDs with Devanagari, IAST, English and Hindi forms, shared across works |
 | Catalog | `works.toml` (pilot) and each book's `book.json` | `catalog/works.csv` with the design's fields |

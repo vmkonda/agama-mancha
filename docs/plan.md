@@ -14,9 +14,9 @@ Miscellaneous 66, Reference 60, Kula Internal Documents 15).
 | Phase | What | Status |
 |---|---|---|
 | A | **Catalog** of every PDF, with refresh; the **Library** page | done (#12) |
-| B | **Claims, stages and progress** per book; *Work on this* and *Release* | built, in review |
-| C | **Inventory** per book: text layer, page count, script (which need OCR) | built, in review |
-| D | **Assemble** units into the material folder layout ([material-folder.md](material-folder.md)) | later |
+| B | **Claims, stages and progress** per book; *Work on this* and *Release* | done (#13) |
+| C | **Inventory** per book: text layer, page count, script (which need OCR) | done (#14) |
+| D | **Assemble** units into the material folder layout ([material-folder.md](material-folder.md)) | built, in review |
 
 ### A. Catalog and Library page
 
@@ -90,8 +90,26 @@ deleting each after measuring). The Library page then shows only books needing O
 
 ### D. Assemble
 
-`amocr assemble`: page texts into units with IDs work/chapter/verse/layer, commentary
-linked to its verses, written to the material folder as numbered builds.
+`amocr assemble <book> [--commentary-layer hindi-mishra] [--chapter-at PAGE=CH] [--push]`:
+page texts into units with IDs work/chapter/verse/layer, written as numbered builds
+(`units/v001/`, never changed; an unchanged result makes no new build) and shared with the
+book's folder.
+
+- Each page's best text: the person's saved text, else Claude's, else Surya's.
+- Lines are classed from the text, not from the engines' labels (which proved unreliable):
+  running header, verse (ends in a daṇḍa, numbered ॥ ३४ ॥), commentary (Hindi words),
+  footnote (१. … at the foot), colophon (इति … तन्त्रे …, and the Hindi … अधिकार परिपूर्ण).
+- **Two streams.** A verse is complete at its number; a commentary passage at the number of
+  the verse(s) it explains (॥ ३५-३६ ॥), which gives `explains`. Commentary runs on across
+  pages while the next verses are printed above it.
+- Chapters from the running header (ordinal + अधिकारः/पटलः/अध्यायः, also -तितम forms and
+  OCR's dropped anusvāra); pages before chapter 1 and after the last colophon are left out.
+- Every unit is `draft` unless all its lines are on verified pages; `types: "guessed"`.
+- `build.json` lists, per chapter, verse numbers missing or seen twice: the places for a
+  proofreader to look (a misread number, or a line taken for the wrong layer).
+
+First build of the pilot (from Surya, unproofread): 23 chapters, 1,317 verse units,
+977 commentary passages, 461 footnotes; 15 verse numbers missing and 9 seen twice out of 1,280.
 
 ## Decisions
 
