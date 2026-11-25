@@ -1,5 +1,5 @@
 [project]
-name = "agama-mancha-ocr"
+name = "agama-mancha"
 version = "0.1.0"
 description = "OCR step of the Agama Mancha library: scanned Sanskrit/Hindi books to page-level text with confidence and provenance."
 readme = "README.md"

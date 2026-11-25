@@ -1,0 +1,83 @@
+/* Agama Mancha: shared look for every page, after the Vimarsha Foundation website
+   (madder red, warm sand, dark ink; Raleway headings, a book serif for titles).
+   Loaded after each page's own styles, so these base colours win; the pages keep their
+   own status colours (new, changed, verse, commentary ...). */
+
+@import url("https://fonts.googleapis.com/css2?family=Raleway:wght@400;600;700&family=Gentium+Basic:ital@0;1&family=Noto+Serif+Devanagari:wght@500&display=swap");
+
+:root {
+  --brand: #812911;          /* Vimarsha's madder red */
+  --brand-deep: #5e1d0c;
+  --brand-ink: #fdf6f1;      /* text on the brand band */
+  --sand: #f0e1da;
+  --rose: #c09488;
+
+  --bg: #f8f2ee; --panel: #fffdfb; --text: #23150f; --muted: #7a5e54; --line: #e8d9d1;
+  --accent: #812911; --hl: rgba(129, 41, 17, .14); --hl-border: #812911;
+  --here: #f3e4dc; --here-text: #6e2410;
+  --header: #f3e4dc; --verse: #f6ebe4;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --brand: #5e1d0c; --brand-deep: #3f1408; --brand-ink: #f0e1da;
+    --bg: #1a1210; --panel: #231915; --text: #f0e1da; --muted: #b39a90; --line: #3b2a23;
+    --accent: #e29a80; --hl: rgba(226, 154, 128, .22); --hl-border: #e29a80;
+    --here: #3a2119; --here-text: #f1c3b2;
+    --header: #33221b; --verse: #2b1d18;
+  }
+}
+:root[data-theme="dark"] {
+  --brand: #5e1d0c; --brand-deep: #3f1408; --brand-ink: #f0e1da;
+  --bg: #1a1210; --panel: #231915; --text: #f0e1da; --muted: #b39a90; --line: #3b2a23;
+  --accent: #e29a80; --hl: rgba(226, 154, 128, .22); --hl-border: #e29a80;
+  --here: #3a2119; --here-text: #f1c3b2;
+  --header: #33221b; --verse: #2b1d18;
+}
+
+body {
+  background: var(--bg);
+  font-family: "Avenir Next", Avenir, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+a { color: var(--accent); }
+button.on { background: var(--accent); border-color: var(--accent); color: var(--panel); }
+button:hover, select:hover { border-color: var(--rose); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+/* The title band at the top of every page. */
+.brand {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 4px 20px;
+  padding: 10px 16px; background: var(--brand); color: var(--brand-ink);
+  border-bottom: 3px solid var(--rose);
+}
+.brand .mark { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; text-decoration: none; color: inherit; }
+.brand .name {
+  font-family: Raleway, "Avenir Next", sans-serif; font-weight: 600; font-size: 20px;
+  letter-spacing: .14em; text-transform: uppercase;
+}
+.brand .deva {
+  font-family: "Noto Serif Devanagari", "Devanagari Sangam MN", "Kohinoor Devanagari", serif;
+  font-size: 19px; line-height: 1.2; opacity: .92;
+}
+.brand .by {
+  font-family: "Gentium Basic", Georgia, serif; font-style: italic; font-size: 14px; opacity: .8;
+}
+.brand nav { display: flex; gap: 4px; margin-left: auto; }
+.brand nav a {
+  color: var(--brand-ink); text-decoration: none; font-family: Raleway, sans-serif; font-size: 14px;
+  letter-spacing: .04em; padding: 4px 12px; border-radius: 999px; border: 1px solid transparent;
+}
+.brand nav a:hover { border-color: rgba(255, 255, 255, .45); }
+.brand nav a[aria-current="page"] { background: var(--brand-ink); color: var(--brand); font-weight: 600; }
+:root[data-theme="dark"] .brand nav a[aria-current="page"] { color: var(--brand-deep); }
+
+/* The page's own toolbars sit on the panel colour under the band. */
+header { background: var(--panel); }
+header h1 { font-family: Raleway, sans-serif; letter-spacing: .03em; }
+th { font-family: Raleway, sans-serif; letter-spacing: .02em; }
+
+@media (max-width: 600px) {
+  .brand { gap: 2px 12px; }
+  .brand .name { font-size: 17px; }
+  .brand .by { display: none; }
+  .brand nav { margin-left: 0; }
+}

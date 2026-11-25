@@ -98,10 +98,10 @@ def test_hook_allows(cmd):
 
 
 def test_hook_protects_safety_code():
-    ev = {"tool_name": "Edit", "tool_input": {"file_path": "/x/agama-mancha-ocr/src/amocr/proton.py"}}
+    ev = {"tool_name": "Edit", "tool_input": {"file_path": "/x/agama-mancha/src/amocr/proton.py"}}
     assert hook(ev) == 2
     assert hook(ev, {"AMOCR_DEV": "1"}) == 0
-    assert hook({"tool_name": "Write", "tool_input": {"file_path": "/x/agama-mancha-ocr/src/amocr/cli.py"}}) == 0
+    assert hook({"tool_name": "Write", "tool_input": {"file_path": "/x/agama-mancha/src/amocr/cli.py"}}) == 0
 
 
 def test_hook_blocks_scripts_that_would_delete():

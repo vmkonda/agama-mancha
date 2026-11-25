@@ -42,8 +42,8 @@ tools on the team folders while a Claude session is running.
 2. **Get this repository and start Claude in it.** In Terminal (Mac, Linux) or
    PowerShell (Windows):
    ```sh
-   git clone https://github.com/vmkonda/agama-mancha-ocr.git
-   cd agama-mancha-ocr
+   git clone https://github.com/vmkonda/agama-mancha.git
+   cd agama-mancha
    claude
    ```
    If your Mac asks to install "command line developer tools" for `git`, say
@@ -65,7 +65,7 @@ tools on the team folders while a Claude session is running.
    It finishes by running `uv run amocr doctor`, which should say *all good*.
 
 From now on, start Claude (and run any commands) from inside the
-`agama-mancha-ocr` folder: `cd ~/agama-mancha-ocr`, then `claude`.
+`agama-mancha` folder: `cd ~/agama-mancha`, then `claude`.
 
 ## 3. Claim a book
 
@@ -195,8 +195,8 @@ these lines one at a time.
 5. Get the repository and its Python packages:
    ```sh
    cd ~
-   git clone https://github.com/vmkonda/agama-mancha-ocr.git
-   cd agama-mancha-ocr
+   git clone https://github.com/vmkonda/agama-mancha.git
+   cd agama-mancha
    uv sync
    ```
 
@@ -222,8 +222,8 @@ Open **PowerShell** (Start menu, type `powershell`).
 5. Get the repository:
    ```powershell
    cd ~
-   git clone https://github.com/vmkonda/agama-mancha-ocr.git
-   cd agama-mancha-ocr
+   git clone https://github.com/vmkonda/agama-mancha.git
+   cd agama-mancha
    uv sync
    ```
 
