@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "agama-librarian": {
+      "type": "stdio",
+      "command": "uv",
+      "args": ["run", "--extra", "librarian", "librarian", "mcp"]
+    }
+  }
+}
