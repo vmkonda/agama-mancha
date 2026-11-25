@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Librarian · Agama Mancha</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%276%27 fill=%27%23812911%27/%3E%3Ctext x=%2716%27 y=%2723%27 font-size=%2720%27 text-anchor=%27middle%27 fill=%27%23f0e1da%27 font-family=%27serif%27%3E%E0%A4%86%3C/text%3E%3C/svg%3E">
+<style>
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { color: var(--text); font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+header { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; padding: 8px 16px; border-bottom: 1px solid var(--line); }
+select, button, input, textarea { font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 4px 8px; }
+button { cursor: pointer; } button:disabled { opacity: .6; cursor: default; }
+.grow { flex: 1; } .muted { color: var(--muted); }
+main { padding: 12px 16px 48px; max-width: 1100px; margin: 0 auto; }
+#q { flex: 1 1 320px; min-width: 220px; font-size: 15px; padding: 6px 10px; }
+.deva { font-family: "Kohinoor Devanagari", "Devanagari Sangam MN", "Noto Serif Devanagari", "Nirmala UI", serif; font-size: 17px; line-height: 1.7; }
+.iast { color: var(--muted); font-size: 13px; }
+.hit { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 10px 14px; margin-bottom: 10px; }
+.hit .top { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; font-size: 13px; margin-bottom: 4px; }
+.hit .title { font-family: Raleway, sans-serif; font-weight: 600; }
+.chip { font-size: 11px; padding: 1px 7px; border-radius: 999px; background: var(--here, #eee); color: var(--here-text, #333); }
+.chip.edition { background: #d6efd8; color: #1d5e2a; } .chip.draft { background: #fbe7c6; color: #7a4a00; }
+.chip.layer { background: transparent; border: 1px solid var(--line); color: var(--muted); }
+code { font-size: 12px; }
+.more { margin-top: 8px; border-top: 1px dashed var(--line); padding-top: 8px; }
+.more .hit { margin: 6px 0 6px 16px; }
+.tabs { display: flex; gap: 6px; }
+.tabs button.on { background: var(--accent); color: var(--panel); border-color: var(--accent); }
+.note { background: var(--panel); border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: 6px; padding: 8px 12px; margin-bottom: 12px; font-size: 13px; }
+table { width: 100%; border-collapse: collapse; background: var(--panel); border: 1px solid var(--line); }
+th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; font-size: 13px; }
+th { color: var(--muted); font-weight: 600; font-family: Raleway, sans-serif; }
+.q textarea { width: 100%; min-height: 54px; font-family: ui-monospace, monospace; font-size: 12px; }
+.q .acts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+.q .acts button { font-size: 12px; padding: 1px 8px; }
+.st-approved { background: #d6efd8; color: #1d5e2a; } .st-draft { background: #fbe7c6; color: #7a4a00; } .st-dropped { background: #e9e6e3; color: #5a554f; }
+.rank.ok { color: #1d7a34; font-weight: 600; } .rank.miss { color: #a3301b; font-weight: 600; }
+.sum { display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: center; margin-bottom: 12px; font-size: 13px; }
+.err { color: #a3301b; }
+</style>
+<link rel="stylesheet" href="/theme.css">
+</head>
+<body>
+<div class="brand">
+  <a class="mark" href="/library" title="Agama Mancha: the library">
+    <span class="name">Agama Mancha</span><span class="deva" lang="sa">आगम मञ्च</span>
+  </a>
+  <span class="by">Vimarsha Foundation · for internal use</span>
+  <nav aria-label="Sections"><a href="/library">Library</a><a href="/">Proofreading</a><a href="/librarian" aria-current="page">Librarian</a></nav>
+</div>
+<header>
+  <div class="tabs"><button id="t-search" class="on">Search</button><button id="t-eval">Evaluation</button></div>
+  <span class="grow"></span>
+  <span class="muted" id="hint"></span>
+</header>
+<main id="main"></main>
+<script>
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const api = async (u, opt) => { const r = await fetch(u, opt); const j = await r.json(); if (!r.ok) throw new Error(j.error || r.status); return j; };
+const store = { get: (k) => { try { return localStorage.getItem("lib:" + k); } catch { return null; } }, set: (k, v) => { try { localStorage.setItem("lib:" + k, v); } catch {} } };
+let WORKS = [];
+
+function card(u) {
+  const how = u.found_by ? Object.entries(u.found_by).map(([k, v]) => `${k} #${v}`).join(", ") : "";
+  return `<div class="hit" data-id="${esc(u.id)}">
+    <div class="top"><span class="title">${esc(u.title || u.work)}</span>
+      <code>${esc(u.id)}</code>
+      <span class="chip ${esc(u.status)}" title="${u.status === "draft" ? "unproofread OCR of the team's printed book" : "a published e-text"}">${esc(u.status)}</span>
+      <span class="chip layer">${esc(u.layer)}</span>
+      ${u.pages ? `<span class="muted">pp. ${esc(u.pages.join(", "))}</span>` : ""}
+      <span class="grow"></span><span class="muted">${esc(how)}</span></div>
+    <div class="deva" lang="${esc(u.lang || "sa")}">${esc(u.text)}</div>
+    ${u.iast && u.lang === "san" ? `<div class="iast">${esc(u.iast)}</div>` : ""}
+    <div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap">
+      <button data-open="${esc(u.id)}">${u.n_commentary ? `Commentary (${u.n_commentary}) and context` : "Context"}</button>
+      <button data-cite="${esc(u.id)}" title="Copy a citation">Copy citation</button>
+    </div>
+    <div class="more" hidden></div></div>`;
+}
+
+function wire(root) {
+  root.querySelectorAll("[data-open]").forEach((b) => (b.onclick = async () => {
+    const box = b.closest(".hit").querySelector(".more");
+    if (!box.hidden) { box.hidden = true; return; }
+    box.hidden = false; box.innerHTML = `<span class="muted">Reading…</span>`;
+    const u = await api(`/api/librarian/unit?id=${encodeURIComponent(b.dataset.open)}`);
+    const com = (u.commentary || []).map((c) => card(c)).join("");
+    box.innerHTML = `${com ? `<div class="muted" style="font-size:12px">Commentary on this passage</div>${com}` : `<div class="muted" style="font-size:12px">No commentary linked to this passage.</div>`}
+      <div class="muted" style="font-size:12px;margin-top:6px">Neighbours: ${(u.neighbours || []).map((n) => `<a href="#" data-goto="${esc(n)}"><code>${esc(n)}</code></a>`).join(" · ") || "none"}</div>`;
+    wire(box);
+    box.querySelectorAll("[data-goto]").forEach((a) => (a.onclick = (e) => { e.preventDefault(); $("q").value = ""; showUnit(a.dataset.goto); }));
+  }));
+  root.querySelectorAll("[data-cite]").forEach((b) => (b.onclick = async () => {
+    const h = b.closest(".hit"), id = b.dataset.cite;
+    const t = h.querySelector(".title").textContent, txt = h.querySelector(".deva").textContent;
+    try { await navigator.clipboard.writeText(`${txt}\n— ${t}, ${id}`); b.textContent = "Copied"; } catch { b.textContent = id; }
+  }));
+}
+
+async function showUnit(id) {
+  const u = await api(`/api/librarian/unit?id=${encodeURIComponent(id)}`);
+  $("results").innerHTML = card(u); wire($("results"));
+}
+
+function renderSearch() {
+  $("hint").textContent = "Search in Sanskrit (IAST or Devanagari), Hindi or English. Passages are read from the library.";
+  $("main").innerHTML = `
+    <div class="note">This page searches and reads. To <b>ask a question</b> and get a cited answer, ask Claude in a Claude Code session in the project folder: its <code>agama-librarian</code> tool answers only from these passages, with their ids.</div>
+    <form id="f" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px">
+      <input id="q" type="search" placeholder="e.g. caitanyam ātmā · स्पन्द · the gap between two breaths" autofocus>
+      <select id="work"><option value="">All works</option>${WORKS.map((w) => `<option value="${esc(w.id)}">${esc(w.title)} (${w.units})</option>`).join("")}</select>
+      <select id="layer"><option value="">All layers</option>${["mula", "vrtti", "varttika", "hindi-mishra"].map((l) => `<option>${l}</option>`).join("")}</select>
+      <button>Search</button>
+    </form>
+    <div id="results"></div>`;
+  $("q").value = store.get("q") || "";
+  $("f").onsubmit = async (e) => {
+    e.preventDefault();
+    const q = $("q").value.trim(); if (!q) return;
+    store.set("q", q);
+    $("results").innerHTML = `<p class="muted">Searching…</p>`;
+    try {
+      const hits = await api(`/api/librarian/search?q=${encodeURIComponent(q)}&k=12&work=${encodeURIComponent($("work").value)}&layer=${encodeURIComponent($("layer").value)}`);
+      $("results").innerHTML = hits.length ? hits.map(card).join("") : `<p class="muted">Nothing found. The library may not have it: say so rather than guess.</p>`;
+      wire($("results"));
+    } catch (err) { $("results").innerHTML = `<p class="err">${esc(err.message)}</p>`; }
+  };
+}
+
+async function renderEval() {
+  $("hint").textContent = "The yardstick: run it after every index rebuild.";
+  $("main").innerHTML = `<p class="muted">Loading…</p>`;
+  const E = await api("/api/librarian/eval");
+  const run = E.last_run;
+  LAST = Object.fromEntries(((run && run.rows) || []).map((r) => [r.id, r]));
+  const sum = run ? `<span><b>${run.hits}/${run.scored}</b> questions with a correct passage in the top ${run.k}</span>
+      ${Object.entries(run.by_type).map(([t, v]) => `<span>${esc(E.types[t] || t)}: <b>${v.hits}/${v.n}</b></span>`).join("")}
+      <span class="muted">build ${esc(run.build)} · ${esc(run.at.replace("T", " ").slice(0, 16))}${run.only_approved ? " · approved only" : ""}</span>` : `<span class="muted">Not run yet.</span>`;
+  $("main").innerHTML = `
+    <div class="note">Claude drafted these questions and the passages it thinks answer them. They count as the yardstick only once you approve them: correct the expected unit ids (one per line), add better passages from <i>top results</i>, or drop a question.</div>
+    <div class="sum">${sum}<span class="grow"></span>
+      <label class="muted"><input type="checkbox" id="onlyok"> approved only</label><button id="run">Run evaluation</button></div>
+    <table><thead><tr><th style="width:44%">Question</th><th>Expected passages</th><th style="width:22%">Top results (last run)</th></tr></thead>
+    <tbody>${E.questions.map((q) => qrow(q, E)).join("")}</tbody></table>`;
+  $("run").onclick = async () => {
+    $("run").disabled = true; $("run").textContent = "Running…";
+    try { const r = await api("/api/librarian/eval/run", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ only_approved: $("onlyok").checked }) });
+      renderEval(); }
+    catch (e) { alert(e.message); $("run").disabled = false; $("run").textContent = "Run evaluation"; }
+  };
+  document.querySelectorAll("tr.q").forEach((tr) => {
+    const id = tr.dataset.id;
+    const save = async (changes) => { await api(`/api/librarian/eval/${id}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(changes) }); renderEval(); };
+    tr.querySelector(".exp").onchange = (e) => save({ expected: e.target.value.split("\n") });
+    tr.querySelectorAll("[data-status]").forEach((b) => (b.onclick = () => save({ status: b.dataset.status, expected: tr.querySelector(".exp").value.split("\n") })));
+    tr.querySelectorAll("[data-add]").forEach((b) => (b.onclick = () => save({ expected: tr.querySelector(".exp").value.split("\n").concat([b.dataset.add]) })));
+    tr.querySelectorAll("[data-peek]").forEach((a) => (a.onclick = async (e) => { e.preventDefault(); const u = await api(`/api/librarian/unit?id=${encodeURIComponent(a.dataset.peek)}`); alert(`${u.title} · ${u.id}\n\n${u.text}\n\n${u.iast || ""}`); }));
+  });
+}
+let LAST = {};
+function qrow(q, E) {
+  const r = LAST[q.id];
+  const rank = !r ? "" : !r.scored ? `<span class="muted">not scored (the librarian must say "not found")</span>` : r.rank ? `<span class="rank ok">found at #${r.rank}</span>` : `<span class="rank miss">not in the top 10</span>`;
+  return `<tr class="q" data-id="${esc(q.id)}">
+    <td><b>${esc(q.id)}</b> <span class="chip layer">${esc(E.types[q.type] || q.type)}</span> <span class="chip layer">${esc(q.lang)}</span>
+      <span class="chip st-${esc(q.status)}">${esc(q.status)}</span><div style="margin-top:4px">${esc(q.question)}</div>
+      <div class="acts">${["approved", "draft", "dropped"].filter((s) => s !== q.status).map((s) => `<button data-status="${s}">${s === "approved" ? "Approve" : s === "draft" ? "Back to draft" : "Drop"}</button>`).join("")}</div>
+      ${q.note ? `<div class="muted" style="font-size:12px">${esc(q.note)}</div>` : ""}${q.edited_by ? `<div class="muted" style="font-size:11px">edited by ${esc(q.edited_by)}</div>` : ""}</td>
+    <td><textarea class="exp" placeholder="${q.type === "absent" ? "nothing: the library doesn't have it" : "one unit id per line"}">${esc((q.expected || []).join("\n"))}</textarea>
+      <div>${(q.expected || []).map((x) => `<a href="#" data-peek="${esc(x)}"><code>${esc(x)}</code></a>`).join(" · ")}</div><div>${rank}</div></td>
+    <td>${r ? r.top.map((t) => `<div><a href="#" data-peek="${esc(t)}"><code>${esc(t)}</code></a>${(q.expected || []).includes(t) ? " ✓" : ` <button data-add="${esc(t)}" style="font-size:11px;padding:0 6px">add</button>`}</div>`).join("") : `<span class="muted">run the evaluation</span>`}</td></tr>`;
+}
+
+async function init() {
+  try { WORKS = await api("/api/librarian/works"); }
+  catch (e) { $("main").innerHTML = `<p class="err">${esc(e.message)}</p>`; return; }
+  const tab = store.get("tab") || "search";
+  const go = (t) => { store.set("tab", t); $("t-search").classList.toggle("on", t === "search"); $("t-eval").classList.toggle("on", t === "eval"); t === "search" ? renderSearch() : renderEval().catch((e) => ($("main").innerHTML = `<p class="err">${esc(e.message)}</p>`)); };
+  $("t-search").onclick = () => go("search"); $("t-eval").onclick = () => go("eval");
+  go(tab);
+}
+init();
+</script>
+</body>
+</html>

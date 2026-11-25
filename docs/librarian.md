@@ -46,10 +46,30 @@ In Claude Code in this folder, the `agama-librarian` MCP tool (`.mcp.json`) give
 `get_unit` and `list_works`; approve it once when asked. Ask a question and Claude answers from the
 retrieved passages only, with citations.
 
+## In the app
+
+The **Librarian** page (next to Library and Proofreading; `amocr serve` started with
+`uv run --extra librarian amocr serve`) has two tabs:
+
+- **Search** reads passages in any language or script, filtered by work or layer, each with its
+  work, id, status (`edition` or `draft`), printed pages, and how it was found; *Context* opens the
+  commentary on it and its neighbours; *Copy citation* copies the passage with its id. Asking a
+  question and getting a cited answer happens in Claude Code, through the MCP tool.
+- **Evaluation** is the yardstick: 20 questions Claude drafted across the design's types (lookup,
+  concept, cross-language, commentary, not in the library), each with the passages it thinks answer
+  it. The owner corrects the expected unit ids (or *adds* one from the top results), approves or drops
+  each question, and runs the evaluation after every rebuild (`uv run librarian eval` does the same).
+  Questions and runs are in `data/library/eval/`.
+
+First baseline (2026-11-25, unreviewed draft answers): 11 of 18 scored questions have a correct
+passage in the top 10 (lookup 5/5, concept 3/5, cross-language 2/5, commentary 1/3). Some misses are
+the draft answers being too narrow: for the vāyavī dhāraṇā the top result is Miśra's commentary on
+13.34, a good answer the draft didn't list.
+
 ## Not yet
 
 - Work cards and the concept glossary (cross-language questions lean on meaning search until then).
 - Sandhi splitting and lemmas in the search fields.
-- The evaluation set: 20 questions with known passages, written by the owner; run after every rebuild.
+- The owner's review of the evaluation set (the answers are Claude's drafts until approved).
 - Mapping verse numbers between GRETIL's Mālinī and the printed edition, so the Hindi commentary links
   to the GRETIL mūla.

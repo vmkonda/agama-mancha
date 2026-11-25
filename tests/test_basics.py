@@ -612,7 +612,7 @@ def test_viewer_has_no_book_specific_code():
     import re
     from importlib.resources import files
 
-    for name in ("viewer.html", "theme.css", "library.html"):
+    for name in ("viewer.html", "theme.css", "library.html", "librarian.html"):
         src = files("amocr").joinpath(name).read_text(encoding="utf-8")
         assert not re.search(r"\b(B-[0-9a-f]{10}|SL-\d{4})\b", src), f"{name} mentions a specific book"
 

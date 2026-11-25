@@ -21,6 +21,8 @@ def main(argv=None) -> None:
     p = sub.add_parser("get", help="one passage, with its commentary")
     p.add_argument("id")
     sub.add_parser("works", help="the works in the library")
+    p = sub.add_parser("eval", help="run the evaluation questions against the current index")
+    p.add_argument("--approved", action="store_true", help="only the questions the owner approved")
     sub.add_parser("mcp", help="run the MCP tool (stdio), for Claude Code")
     a = ap.parse_args(argv)
 
@@ -50,6 +52,16 @@ def main(argv=None) -> None:
 
         for w in store.catalog():
             print(f"{w['id']:10} {w['units']:6}  {w['title']}  {w['author']}")
+    elif a.cmd == "eval":
+        from . import evals
+
+        r = evals.run(only_approved=a.approved)
+        print(f"{r['hits']}/{r['scored']} with a correct passage in the top {r['k']} (build {r['build']})")
+        for t, v in r["by_type"].items():
+            print(f"  {evals.TYPES.get(t, t)}: {v['hits']}/{v['n']}")
+        for row in r["rows"]:
+            if row["scored"] and not row["rank"]:
+                print(f"  miss {row['id']}: top {', '.join(row['top'])}")
     elif a.cmd == "mcp":
         from .mcp_server import main as run
 

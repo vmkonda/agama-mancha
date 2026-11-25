@@ -208,6 +208,10 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(files("amocr").joinpath("viewer.html").read_bytes(), "text/html; charset=utf-8")
             if parts == ["library"]:
                 return self._send(files("amocr").joinpath("library.html").read_bytes(), "text/html; charset=utf-8")
+            if parts == ["librarian"]:
+                return self._send(files("amocr").joinpath("librarian.html").read_bytes(), "text/html; charset=utf-8")
+            if parts[:2] == ["api", "librarian"]:
+                return self._json(_librarian_get(parts[2:], parse_qs(url.query)))
             if parts == ["theme.css"]:
                 return self._send(files("amocr").joinpath("theme.css").read_bytes(), "text/css; charset=utf-8")
             if parts == ["api", "catalog"]:
@@ -315,7 +319,7 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(img.read_bytes(), "image/png")
         except LookupError as e:
             return self._err(str(e), HTTPStatus.NOT_FOUND)
-        except (ValueError, IndexError, FileNotFoundError) as e:
+        except (ValueError, IndexError, FileNotFoundError, RuntimeError) as e:
             return self._err(str(e))
         self._err("not found", HTTPStatus.NOT_FOUND)
 
@@ -365,6 +369,13 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         parts = [p for p in urlparse(self.path).path.split("/") if p]
+        if parts[:3] == ["api", "librarian", "eval"]:
+            try:
+                return self._json(_librarian_eval_post(parts[3:], self._body()))
+            except LookupError as e:
+                return self._err(str(e), HTTPStatus.NOT_FOUND)
+            except (ValueError, RuntimeError, json.JSONDecodeError) as e:
+                return self._err(str(e))
         if parts == ["api", "catalog", "refresh"]:
             return self._json(_start_refresh())
         if len(parts) == 3 and parts[:2] == ["api", "board"]:
@@ -421,6 +432,49 @@ class Handler(BaseHTTPRequestHandler):
             self._err(str(e), HTTPStatus.NOT_FOUND)
         except (ValueError, KeyError, json.JSONDecodeError) as e:
             self._err(str(e))
+
+
+def _librarian():
+    """The librarian is an optional extra; say how to install it rather than failing obscurely."""
+    try:
+        from librarian import evals, index, store
+    except ImportError as e:
+        raise RuntimeError(f"the librarian isn't installed here ({e.name}): run `uv sync --extra librarian`") from None
+    return evals, index, store
+
+
+def _librarian_get(parts: list[str], q: dict) -> object:
+    evals, index, store = _librarian()
+    one = lambda k, d="": (q.get(k) or [d])[0]
+    if parts == ["works"]:
+        return store.catalog()
+    if parts == ["search"]:
+        query = one("q").strip()
+        if not query:
+            raise ValueError("q: what to search for")
+        hits = index.search(query, k=min(int(one("k", "10") or 10), 50), work=one("work") or None, layer=one("layer") or None)
+        out = []
+        for h in hits:
+            u = store.get(h["id"], context=0)
+            if u:
+                u.pop("neighbours", None)
+                out.append(u | {"found_by": {x: h[x] for x in ("keyword", "meaning") if x in h},
+                                "n_commentary": len(u.pop("commentary", []))})
+        return out
+    if parts == ["unit"]:
+        return store.get(one("id"), context=2) or {"error": "no such unit"}
+    if parts == ["eval"]:
+        return {"questions": evals.load(), "types": evals.TYPES, "last_run": evals.last_run()}
+    raise LookupError("not found")
+
+
+def _librarian_eval_post(parts: list[str], body: dict) -> object:
+    evals, _, _ = _librarian()
+    if parts == ["run"]:
+        return evals.run(only_approved=bool(body.get("only_approved")))
+    if len(parts) == 1:
+        return evals.update(parts[0], body, cfgmod.load().operator or "unknown")
+    raise LookupError("not found")
 
 
 def serve(port: int = 8791, open_browser: bool = True, page: str | None = None) -> None:
