@@ -541,3 +541,47 @@ def test_assemble_units(tmp_path, monkeypatch):
     assert assemble.assemble(w)["new"] is False        # unchanged text: no new build
     assert assemble.chapter_of("अथ एकविशतितमोऽधिकारः") == 21 and assemble.chapter_of("सप्तमोऽधिकारः") == 7
     assert assemble.chapter_of("प्रथमोऽधिकारःपृष्ठाङ्काः१.") is None      # a contents line isn't a heading
+
+
+def test_merge_duplicate_books(tmp_path, monkeypatch):
+    """Same PDF under two ids: copy what's missing, never overwrite, block on differing ground truth,
+    trash the duplicate, and keep its id as an alias."""
+    import json
+
+    import pytest
+
+    from amocr import dedupe
+    from amocr.catalog import Work, load_works, resolve
+
+    monkeypatch.setenv("AMOCR_DATA", str(tmp_path))
+    sha = "a" * 64
+    keep = Work(id="B-aaaaaaaaaa", title="t", languages=["san"], sha256=sha)
+    dup = Work(id="B-old0000001", title="t", languages=["san"], sha256=sha)
+    for w in (keep, dup):
+        w.save()
+
+    def put(w, rel, text):
+        f = w.workdir / rel
+        f.parent.mkdir(parents=True, exist_ok=True)
+        f.write_text(text, encoding="utf-8")
+
+    put(keep, "pages/0001/ocr/surya.json", json.dumps({"text": "क", "work": keep.id}))
+    put(dup, "pages/0001/ocr/surya.json", json.dumps({"text": "क", "work": dup.id}))   # same reading
+    put(dup, "pages/0001/ocr/tess.json", json.dumps({"text": "ख"}))                     # missing in keep
+    put(dup, "groundtruth/p0001.txt", "मेरा पाठ\n")                                      # a person's work
+    put(keep, "groundtruth/p0001.txt", "दूसरा पाठ\n")
+    assert [[w.id for w in g] for g in dedupe.duplicates()] == [["B-aaaaaaaaaa", "B-old0000001"]]
+
+    r = dedupe.merge(dup, keep)                                   # ground truth differs: nothing happens
+    assert r["conflicts"] == ["groundtruth/p0001.txt"] and not r["done"] and dup.workdir.exists()
+
+    (dup.workdir / "groundtruth/p0001.txt").unlink()
+    r = dedupe.merge(dup, keep)
+    assert r["done"] and r["copy"] == ["pages/0001/ocr/tess.json"] and r["same"] == 1
+    assert (keep.workdir / "pages/0001/ocr/tess.json").exists() and not dup.workdir.exists()
+    assert (tmp_path / r["trash"]).exists() if not r["trash"].startswith("/") else True
+    works = load_works()
+    assert "B-old0000001" not in works and resolve(works, "B-old0000001") == "B-aaaaaaaaaa"
+    assert (keep.workdir / "groundtruth/p0001.txt").read_text(encoding="utf-8") == "दूसरा पाठ\n"
+    with pytest.raises(SystemExit):
+        dedupe.merge(Work(id="B-x", title="t", languages=["san"], sha256="b" * 64), keep)   # different PDFs
