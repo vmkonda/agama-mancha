@@ -53,4 +53,4 @@ A local PDF without Proton: `uv run amocr add <file>`.
 
 ## "Upload my proofreading"
 
-`uv run amocr push <id>`, then report how many pages are now verified.
+`uv run amocr push <id>`, then report how many pages are now proofread and validated.

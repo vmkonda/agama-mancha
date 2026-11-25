@@ -122,7 +122,9 @@ def progress(work: Work) -> dict:
     """Page counts per step, from the book's files on this machine."""
     inv = work.workdir / "inventory.jsonl"
     pages = sum(1 for ln in inv.read_text(encoding="utf-8").splitlines() if ln.strip()) if inv.exists() else 0
-    read = surya = claude = proofread = verified = 0
+    from . import ladder
+
+    read = surya = claude = proofread = checked = validated = blank = problem = 0
     last = None
     for p in range(1, pages + 1):
         d = work.page_dir(p) / "ocr"
@@ -135,24 +137,32 @@ def progress(work: Work) -> dict:
             proofread += 1
             meta = gt.with_suffix(".meta.json")
             m = json.loads(meta.read_text(encoding="utf-8")) if meta.exists() else {}
-            verified += bool(m.get("verified"))
+            st = ladder.of(m)
+            checked += st in ladder.CHECKED
+            validated += st == "validated"
+            blank += st == "blank"
+            problem += st == "problem"
             last = max(last or "", m.get("saved") or "")
     builds = sorted((work.workdir / "units").glob("v[0-9][0-9][0-9]")) if (work.workdir / "units").exists() else []
     assembled = False
     if builds and (builds[-1] / "build.json").exists():
         b = json.loads((builds[-1] / "build.json").read_text(encoding="utf-8"))
-        assembled = bool(b.get("verified_units")) and b.get("verified_units") == sum(b.get("units", {}).values())
+        done = b.get("validated_units", 0)
+        assembled = bool(done) and done == sum(b.get("units", {}).values())
+    # proofread: pages with saved text; checked: every line checked by one person (proofread or
+    # validated); verified: nothing left to do (validated, or no text on the page).
     return {"pages": pages, "read": read, "surya": surya, "claude": claude, "proofread": proofread,
-            "verified": verified, "last_saved": last or None, "builds": len(builds), "assembled": assembled}
+            "checked": checked, "validated": validated, "blank": blank, "problem": problem,
+            "verified": validated + blank, "last_saved": last or None, "builds": len(builds), "assembled": assembled}
 
 
 def stage_of(p: dict | None) -> str:
     if not p or not p.get("pages"):
         return "listed"
     n = p["pages"]
-    if p.get("assembled"):          # the latest build has only verified units
+    if p.get("assembled"):          # the latest build has only validated units
         return "assembled"
-    if p.get("verified", 0) >= n:
+    if p.get("verified", 0) >= n:    # every page validated (or without text)
         return "verified"
     if p.get("proofread"):
         return "proofreading"

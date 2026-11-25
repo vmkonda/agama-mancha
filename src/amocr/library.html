@@ -199,7 +199,7 @@ function render() {
     const b = e.board;
     if (!b) return "";
     const p = b.progress || {};
-    const prog = p.pages ? `${p.read || 0}/${p.pages} read · ${p.proofread || 0} proofread · ${p.verified || 0} verified` : "";
+    const prog = p.pages ? `${p.read || 0}/${p.pages} read · ${p.proofread || 0} saved · ${p.checked ?? p.verified ?? 0} proofread · ${p.validated || 0} validated` : "";
     return `<div class="stage">${esc(b.stage_label)}</div>${prog ? `<div class="prog" title="reported by ${esc(b.by)}">${prog}</div>` : ""}`;
   };
   const inv = (e) => {

@@ -46,10 +46,7 @@ enlarge the scan.
    reading available, always in this order: your saved text, else Claude's
    reading, else Surya's, else Tesseract's. The line above the box names which.
 2. Read the scan line by line and correct the text in the box.
-3. If you checked **every** line against the print, tick *I checked every
-   line against the print (verified)*. If you only fixed what caught your eye,
-   leave it unticked: the page is saved as a draft, and the next reviewer
-   knows it still needs a full check.
+3. Choose what the save means, under **Save as** (the status ladder, below).
 4. Use the note field for anything the next person should know ("verse 36
    damaged in this copy", "check against the Kashmir edition").
 5. Press **Save**. Your name and the date are recorded with the page.
@@ -65,7 +62,7 @@ relearned from one book to the next. From top to bottom:
    commentary that closes on it.
 4. **Warnings**, if any: verse numbers the assembler can't use. Each jumps to its line.
 5. **The text**, with a **tag beside every line** and the scan beside it.
-6. **Verified** tick, note, **Save**, **Save and next**, **Check with Claude**.
+6. The note, **Save as** (the page's status), **Save**, **Save and next**, **Check with Claude**.
 
 The tags are always one of: `header` (with `ch N` on a chapter heading),
 `verse` (with its number on the last line), `comm.` (with `→ N`, the verse it
@@ -77,6 +74,29 @@ line with a warning.
 What a book brings is only data that fills these same places: its brief and
 glossary, its look-alike profile, and the rules learned from corrections.
 A book never gets its own layout, buttons or colours.
+
+### The status ladder: two pairs of eyes
+
+Every page has one status, shown as a coloured chip above the text:
+
+| Status | Means | Who |
+|---|---|---|
+| **not proofread** | only the engines' readings | |
+| **draft** | saved, but not every line checked yet (you fixed what caught your eye) | anyone |
+| **proofread** | one person checked **every** line against the print | anyone |
+| **validated** | a **second** person checked every line again | anyone except the person who proofread it |
+| **problem** | needs an expert, or the scan or print is damaged; the note says what | anyone |
+| **no text** | a blank page or a plate | anyone |
+
+A quick read misses look-alikes (ो for ी, बा for आ) far more often than a second
+reader does, so a page counts as done only when it is **validated** (or has no
+text). The viewer won't let you validate your own proofreading: the option is
+greyed out, with the reason. If you change the text of a validated page, save
+it as proofread; it then waits for a validation again.
+
+A unit of text (a verse, a commentary passage) is as far along as its least
+checked page, and a book is *verified* on the board only when every page is
+validated or has no text.
 
 ### Helpers in Proofread
 
@@ -134,7 +154,7 @@ same mistake on every other page that isn't verified yet.
    **a** accepts, **r** rejects, **j**/**k** move, **o** opens the page in Proofread.
 3. Reject anything that is printed that way: a misprint stays a misprint.
    Accepting changes only that page's draft. The page still needs its full
-   line-by-line check before you tick *verified*.
+   line-by-line check before you save it as *proofread*.
 
 Rules that could do harm start switched off, such as a short word that is
 usually right as read, or a fix inside words. The rule list at the bottom of
@@ -155,7 +175,7 @@ own Claude Code session. Start it once: in your Claude Code session, say
 - When Claude proposes a new line, it shows the old and new text with
   **Apply to the draft** (or **Apply all** when there are several), and
   **⌘/Ctrl ⇧ ↵** applies Claude's latest proposal from the keyboard. Nothing changes until you press it, and the page still
-  needs your full check before it's verified. A rule Claude adds has a button
+  needs your full check before you save it as proofread. A rule Claude adds has a button
   that opens its matches in Suggestions.
 
 You can also type the same requests into the Claude Code session directly:
@@ -217,6 +237,6 @@ or ideal text. Editorial judgement belongs in notes and in later stages.
 ## What happens to your work
 
 Saved pages go into the book's `groundtruth/` folder and are uploaded with
-the book to the shared drive. Verified pages are used to measure how
+the book to the shared drive. Proofread and validated pages are used to measure how
 accurate each reading method is, which decides how the team digitises the
 remaining books, and they become the text of record for those pages.

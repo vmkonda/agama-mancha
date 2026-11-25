@@ -104,7 +104,7 @@ book's folder.
   pages while the next verses are printed above it.
 - Chapters from the running header (ordinal + अधिकारः/पटलः/अध्यायः, also -तितम forms and
   OCR's dropped anusvāra); pages before chapter 1 and after the last colophon are left out.
-- Every unit is `draft` unless all its lines are on verified pages; `types: "guessed"`.
+- A unit is `validated` or `proofread` only if all its pages are; otherwise `draft`; `types: "guessed"`.
 - `build.json` lists, per chapter, verse numbers missing or seen twice: the places for a
   proofreader to look (a misread number, or a line taken for the wrong layer).
 

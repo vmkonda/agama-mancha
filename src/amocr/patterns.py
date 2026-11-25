@@ -80,7 +80,11 @@ def draft(work: Work, page: int) -> dict | None:
     boxes = boxes_of(best[1]) if best and all(boxes_of(best[1])) and boxes_of(best[1]) else (boxes_of(base[1]) if base else [])
     if t.exists():
         meta = json.loads(m.read_text(encoding="utf-8")) if m.exists() else {}
-        return {"text": t.read_text(encoding="utf-8"), "source": "groundtruth", "verified": bool(meta.get("verified")),
+        from . import ladder
+
+        # "verified" here means: leave the page alone (a person checked every line, or it has no text).
+        return {"text": t.read_text(encoding="utf-8"), "source": "groundtruth",
+                "verified": ladder.of(meta) in ("proofread", "validated", "blank"),
                 "meta": meta, "boxes": boxes}
     if best:
         return {"text": best[1]["text"], "source": best[0], "verified": False, "meta": {}, "boxes": boxes}
@@ -277,7 +281,7 @@ def write_draft(work: Work, page: int, d: dict, lines: list[str], counter: str) 
     t, m = gt_paths(work, page)
     t.parent.mkdir(parents=True, exist_ok=True)
     t.write_text("\n".join(lines).rstrip("\n") + "\n", encoding="utf-8")
-    meta = d["meta"] | {"reviewer": d["meta"].get("reviewer") or cfgmod.load().operator, "verified": False,
+    meta = d["meta"] | {"reviewer": d["meta"].get("reviewer") or cfgmod.load().operator, "verified": False, "status": "draft",
                         "saved": _now(), "base": d["meta"].get("base") or (d["source"] if d["source"] != "groundtruth" else None),
                         counter: d["meta"].get(counter, 0) + 1}
     m.write_text(json.dumps(meta, ensure_ascii=False, indent=1), encoding="utf-8")

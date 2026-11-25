@@ -536,7 +536,7 @@ def test_assemble_units(tmp_path, monkeypatch):
     assert "कथामानी" in c["text"] and c["explains"] == ["B-test000001/13/34/mula"]    # hyphen rejoined
     c = units["B-test000001/13/35-36/hindi-mishra"]   # runs on across the page; footnote marker 3 dropped
     assert c["pages"] == [2, 3] and c["explains"][-1] == "B-test000001/13/36/mula" and c["status"] == "draft"
-    assert units["B-test000001/13/36/mula"]["status"] == "verified"
+    assert units["B-test000001/13/36/mula"]["status"] == "proofread"     # saved as verified before the ladder
     assert r["numbering"]["13"] == {"last": 36, "missing": list(range(1, 34)), "twice": []}  # sample starts at 34
     assert assemble.assemble(w)["new"] is False        # unchanged text: no new build
     assert assemble.chapter_of("अथ एकविशतितमोऽधिकारः") == 21 and assemble.chapter_of("सप्तमोऽधिकारः") == 7
@@ -638,3 +638,33 @@ def test_reference_cross_check(tmp_path, monkeypatch):
     assert reference.deva("muhūrtād akhedataḥ") == "मुहूर्ताद् अखेदतः"
     assert reference.strip_markers("योगी२ तद्गते १षट्बिन्दु क० पु०") == "योगी तद्गते षट्बिन्दु क० पु०"
     assert reference.norm("vanaṃ gacchati") == reference.norm("vanam gacchati") == reference.norm("vanaṅgacchati")
+
+
+def test_status_ladder():
+    """Draft → proofread → validated by a second person; problem needs a note; old pages read sensibly."""
+    import pytest
+
+    from amocr import ladder
+
+    assert ladder.of(None) == "none" and ladder.of({"verified": True}) == "proofread" and ladder.of({"verified": False}) == "draft"
+    m = ladder.change(None, "draft", "anna", now="t1")
+    assert m["status"] == "draft" and m["verified"] is False
+    with pytest.raises(ValueError, match="only a proofread page"):
+        ladder.change(m, "validated", "bala")
+    m = ladder.change(m, "proofread", "anna", now="t2")
+    assert m["proofread_by"] == "anna" and m["verified"] is True
+    with pytest.raises(ValueError, match="second person"):
+        ladder.change(m, "validated", "anna")
+    assert ladder.can_validate(m, "anna")[0] is False and ladder.can_validate(m, "bala") == (True, "")
+    v = ladder.change(m, "validated", "bala", now="t3")
+    assert v["status"] == "validated" and v["validated_by"] == "bala" and v["proofread_by"] == "anna"
+    assert [h["status"] for h in v["history"]] == ["draft", "proofread", "validated"]
+    back = ladder.change(v, "proofread", "chandra", now="t4")         # text changed: validate again
+    assert "validated_by" not in back and back["proofread_by"] == "chandra"
+    with pytest.raises(ValueError, match="note"):
+        ladder.change(None, "problem", "anna")
+    assert ladder.change(None, "problem", "anna", note="verse 36 torn")["status"] == "problem"
+    old = {"reviewer": "anna", "verified": True}                       # saved before the ladder
+    with pytest.raises(ValueError, match="second person"):
+        ladder.change(old, "validated", "anna")
+    assert ladder.change(old, "validated", "bala")["proofread_by"] == "anna"

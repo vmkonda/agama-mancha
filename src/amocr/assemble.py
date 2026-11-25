@@ -149,7 +149,7 @@ def iast(text: str) -> str:
 # --- Page texts ---------------------------------------------------------------------------------
 
 def page_text(work: Work, page: int) -> tuple[list[dict], str, bool] | None:
-    """The page's best lines [{text, n, bbox?}], where they came from, and whether a person verified them."""
+    """The page's best lines [{text, n, bbox?}], where they came from, and the page's status on the ladder."""
     gt, meta = gt_paths(work, page)
     base = None
     ocr = work.page_dir(page) / "ocr"
@@ -161,10 +161,12 @@ def page_text(work: Work, page: int) -> tuple[list[dict], str, bool] | None:
     if gt.exists():
         texts = [ln for ln in gt.read_text(encoding="utf-8").split("\n") if ln.strip()]
         m = json.loads(meta.read_text(encoding="utf-8")) if meta.exists() else {}
-        source, verified = "groundtruth", bool(m.get("verified"))
+        from . import ladder
+
+        source, verified = "groundtruth", ladder.of(m)
     elif base:
         texts = [ln for ln in (base[1].get("text") or "").split("\n") if ln.strip()]
-        source, verified = base[0], False
+        source, verified = base[0], "none"
     else:
         return None
     # Positions from the engine's lines, when they line up one to one.
@@ -245,7 +247,7 @@ def build_units(work: Work, pages: list[int], layers: dict, chapter_at: dict[int
              "pages": sorted({pi["page"] for _, pi in lines}),
              "lines": [{"page": pi["page"], "n": ln["n"], **({"bbox": ln["bbox"]} if ln.get("bbox") else {})}
                        for ln, pi in lines],
-             "status": "verified" if all(pi["verified"] for _, pi in lines) else "draft",
+             "status": _unit_status([pi["verified"] for _, pi in lines]),
              "source": sorted({pi["source"] for _, pi in lines}), "types": "guessed"}
         units.append(u)
         return u
@@ -351,6 +353,15 @@ def numbering(units: list[dict], mula: str) -> dict:
     return out
 
 
+def _unit_status(page_statuses: list[str]) -> str:
+    """A unit is as far along as its least-checked page: validated, proofread, or draft."""
+    if page_statuses and all(s == "validated" for s in page_statuses):
+        return "validated"
+    if page_statuses and all(s in ("proofread", "validated") for s in page_statuses):
+        return "proofread"
+    return "draft"
+
+
 def builds_dir(work: Work) -> Path:
     return work.workdir / "units"
 
@@ -388,7 +399,8 @@ def assemble(work: Work, pages: list[int] | None = None, commentary_layer: str |
         counts[kind] = counts.get(kind, 0) + 1
     build = {"build": out.name, "date": now(), "by": cfgmod.load().operator, "amocr_version": __version__,
              "pages": [pages[0], pages[-1]] if pages else [], "units": counts,
-             "verified_units": sum(u["status"] == "verified" for u in units), "layers": layers} | report
+             "validated_units": sum(u["status"] == "validated" for u in units),
+             "proofread_units": sum(u["status"] == "proofread" for u in units), "layers": layers} | report
     (out / "build.json").write_text(json.dumps(build, ensure_ascii=False, indent=1), encoding="utf-8")
     return {"build": out.name, "new": True, "units": len(units), "path": str(out)} | report
 
