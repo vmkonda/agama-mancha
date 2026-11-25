@@ -444,6 +444,44 @@ def cmd_brief(work: Work, args) -> None:
     print(f"\nglossary: {len(brief.glossary(work))} terms ({brief.glossary_path(work)})")
 
 
+def cmd_assemble(work: Work, args) -> None:
+    """Page texts -> units (work/chapter/verse/layer), saved as a new numbered build; --push shares it."""
+    from . import assemble
+
+    rows = _inventory(work)
+    pages = parse_pages(args.pages, len(rows)) if args.pages else None
+    at = {}
+    for item in args.chapter_at or []:
+        page, _, ch = item.partition("=")
+        if not (page.isdigit() and ch.isdigit()):
+            raise SystemExit(f"--chapter-at wants PAGE=CHAPTER, e.g. 121=7 (got {item!r})")
+        at[int(page)] = int(ch)
+    if at:
+        work.extra.setdefault("chapter_at", {}).update({str(k): v for k, v in at.items()})
+        if work.origin == "book":
+            work.save()
+    r = assemble.assemble(work, pages=pages, commentary_layer=args.commentary_layer, chapter_at=at)
+    used = ", ".join(f"{n} {src}" for src, n in r["pages_used"].items())
+    print(f"{r['work_id']}{' (provisional id)' if r['work_id_provisional'] else ''}: {r['units']} units "
+          f"in {len(r['chapters'])} chapters from {used}")
+    print(f"  {'new build' if r['new'] else 'unchanged, still'} {r['build']}: {r['path']}")
+    if r["front_pages"]:
+        print(f"  before chapter 1 (not assembled): pages {r['front_pages'][0]}-{r['front_pages'][-1]}")
+    if r["skipped_after_colophon"]:
+        print(f"  after a chapter's colophon (not assembled): {len(r['skipped_after_colophon'])} pages, "
+              f"from {r['skipped_after_colophon'][0]}")
+    gaps = {ch: v for ch, v in r["numbering"].items() if v["missing"] or v["twice"]}
+    if gaps:
+        print("  verse numbers to look at (a misread number, or a line taken for the wrong layer):")
+        for ch, v in gaps.items():
+            print(f"    chapter {ch}: missing {v['missing'] or '-'}, twice {v['twice'] or '-'}")
+    if r["unnumbered_verse_lines"] or r["unmarked_commentary"]:
+        print(f"  {r['unnumbered_verse_lines']} verse lines without a number, {r['unmarked_commentary']} commentary "
+              "passages without a closing number (saved as 'unnumbered' / 'unmarked')")
+    if args.push:
+        cmd_push(work, args)
+
+
 def cmd_rule(work: Work, args) -> None:
     """Add a rule (Claude or a person generalising a fix), or switch one on or off."""
     from . import patterns as pat
@@ -860,6 +898,12 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--add-rules", action="store_true", help="send confident look-alike fixes to Suggestions")
     p = book_cmd("brief", cmd_brief, pages=True, help="the book's brief and glossary (or --sources to write them)")
     p.add_argument("--sources", action="store_true", help="collect structure, frequent words and the given pages' text")
+    p = book_cmd("assemble", cmd_assemble, pages=True,
+                 help="page texts -> units (work/chapter/verse/layer) as a numbered build (Phase D)")
+    p.add_argument("--commentary-layer", help="name of the commentary layer, e.g. hindi-mishra (remembered)")
+    p.add_argument("--chapter-at", action="append", metavar="PAGE=CHAPTER",
+                   help="where a chapter starts when its heading isn't recognised (repeatable, remembered)")
+    p.add_argument("--push", action="store_true", help="then upload the book's folder, builds included")
     p = book_cmd("rule", cmd_rule, help="add a rule, or switch one on/off")
     p.add_argument("action", choices=["add", "on", "off"])
     p.add_argument("id", nargs="?")

@@ -113,6 +113,9 @@ def export(work: Work) -> Path:
             text = "[not yet OCR'd]\n"
         parts.append(f"=== page {p} ({best or 'none'}) ===\n{text.rstrip()}\n")
     (out / "book.txt").write_text("\n".join(parts), encoding="utf-8")
+    units = work.workdir / "units"
+    if units.exists():      # assembled builds (amocr assemble); each is written once and never changed
+        shutil.copytree(units, out / "units")
     meta = {
         "id": work.id, "title": work.title, "sha256": work.sha256, "source_name": work.source_name,
         "remote": work.remote, "languages": work.languages, "restricted": work.restricted,

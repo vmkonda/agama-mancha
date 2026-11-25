@@ -489,3 +489,55 @@ def test_inventory_judges_text_layers():
     assert inv.effective(base | {"quality": {"grade": "poor"}}) == "layer-poor"
     assert inv.effective(base | {"quality": {"grade": "good"}}) == "text"
     assert inv.effective({"verdict": "text", "layer": "digital", "screen": junk}) == "garbled"
+
+
+def test_assemble_units(tmp_path, monkeypatch):
+    """Two streams: verses close at their number, commentary at the number it explains, across pages;
+    footnotes per page; the chapter from the running header; a colophon ends the chapter."""
+    import json
+
+    from amocr import assemble
+    from amocr.catalog import Work
+
+    monkeypatch.setenv("AMOCR_DATA", str(tmp_path))
+    w = Work(id="B-test000001", title="t", languages=["san", "hin"], sha256="0" * 64)
+    w.workdir.mkdir(parents=True)
+    (w.workdir / "inventory.jsonl").write_text('{"page": 1}\n' * 4)
+    pages = {   # invented lines in the edition's shape (no book text in the repo)
+        1: ["विषयक्रमः", "भूमिका और अनुक्रमणिका यहाँ है ।"],
+        2: ["अथ त्रयोदशोऽधिकारः", "१९७",
+            "रामः वनं गच्छति सीता अपि गच्छति ।", "लक्ष्मणः अनुगच्छति भरतः तिष्ठति ॥ ३४ ॥",
+            "नदी वहति पर्वतः तिष्ठति सदा ।", "वृक्षः फलति२ पक्षी उड्डयते नभः ॥ ३५ ॥",
+            "यहाँ से वन यात्रा का वर्णन किया जा रहा है । यह कथा-", "मानी जाती है ॥ ३४ ॥",
+            "इस श्लोक में नदी और पर्वत की तुलना की गयी है और यह बताया",
+            "१. क० पु० वहतीति पाठः ;"],
+        3: ["१९८", "श्रीपरीक्षातन्त्रम्",
+            "चन्द्रः प्रकाशते रात्रौ सूर्यः दिवा ॥ ३६ ॥",
+            "है । पाठक इसे सरलता से समझ जाता है ॥ ३५-३६३ ॥",
+            "इति श्रीपरीक्षातन्त्रे त्रयोदशोऽधिकारः ॥ १३ ॥",
+            "परीक्षा नामक तेरहवाँ अधिकार परिपूर्ण ॥ १३ ॥"],
+        4: ["अनुक्रमणिका", "रामः वनं ३०२"],
+    }
+    w.gt_dir.mkdir()
+    for p, lines in pages.items():
+        (w.gt_dir / f"p{p:04d}.txt").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    (w.gt_dir / "p0003.meta.json").write_text(json.dumps({"verified": True}))
+
+    r = assemble.assemble(w, commentary_layer="hindi-mishra")
+    units = {u["id"]: u for u in map(json.loads, open(f"{r['path']}/units.jsonl", encoding="utf-8"))}
+    assert r["new"] and r["chapters"] == {"13": 2} and r["front_pages"] == [1] and r["skipped_after_colophon"] == [4]
+    assert list(units) == [
+        "B-test000001/13/34/mula", "B-test000001/13/35/mula", "B-test000001/13/34/hindi-mishra",
+        "B-test000001/13/p2/footnote-1", "B-test000001/13/36/mula", "B-test000001/13/35-36/hindi-mishra",
+        "B-test000001/13/colophon/mula", "B-test000001/13/colophon/hindi-mishra"]
+    v = units["B-test000001/13/34/mula"]
+    assert v["iast"].startswith("rāmaḥ vanaṃ gacchati") and v["lines"] == [{"page": 2, "n": 3}, {"page": 2, "n": 4}]
+    c = units["B-test000001/13/34/hindi-mishra"]
+    assert "कथामानी" in c["text"] and c["explains"] == ["B-test000001/13/34/mula"]    # hyphen rejoined
+    c = units["B-test000001/13/35-36/hindi-mishra"]   # runs on across the page; footnote marker 3 dropped
+    assert c["pages"] == [2, 3] and c["explains"][-1] == "B-test000001/13/36/mula" and c["status"] == "draft"
+    assert units["B-test000001/13/36/mula"]["status"] == "verified"
+    assert r["numbering"]["13"] == {"last": 36, "missing": list(range(1, 34)), "twice": []}  # sample starts at 34
+    assert assemble.assemble(w)["new"] is False        # unchanged text: no new build
+    assert assemble.chapter_of("अथ एकविशतितमोऽधिकारः") == 21 and assemble.chapter_of("सप्तमोऽधिकारः") == 7
+    assert assemble.chapter_of("प्रथमोऽधिकारःपृष्ठाङ्काः१.") is None      # a contents line isn't a heading
