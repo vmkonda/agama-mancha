@@ -1,11 +1,10 @@
-# The material folder (proposal)
+# The material folder
 
 The OCR work here exists to produce the **library layer** of Agama Mancha (the
 Sarvamnaya library design: originals, cleaned text and catalog, immutable and
 versioned, with permanent IDs). The **material folder** on the shared drive is
-where that material collects. This page proposes its layout. It's a proposal
-for the team and the folder owner to approve; today the tool still writes the
-per-book layout described in the coordinator guide.
+where that material collects. **Everything in it is for Vimarsha's internal
+use**; nothing is published.
 
 ## Where it lives
 
@@ -21,16 +20,19 @@ the PDFs in it too. The tool only ever writes inside the material folder.
 Set it with `amocr init --material "/shared-with-me/[OCR Mirror]/Agama Mancha"`.
 The tool never creates that folder and refuses to run without the setting.
 
-## Proposed layout: by work, not by file path
+## Layout: legible names, like the library
+
+Each book's material sits at the same path as its PDF in the library, in a folder
+named after the PDF, so anyone can find a book's text by its name:
 
 ```
 Agama Mancha/
 ├── README.md                      how the material is organised
 ├── catalog/
 │   └── works.csv                  one row per work (the catalog's CSV export)
-└── works/
-    └── SL-0001/                   permanent work ID, never a file name
-        ├── work.json              catalog record (below)
+└── Texts/Agamas/Shri Malini Vijayottara Tantra/
+    └── Shri Malini Vijayottara Tantra (Hindi, Paramhansa Mishra).amocr/
+        ├── work.json              catalog record, with the permanent work ID (below)
         ├── card.md                work card: scope, out of scope, standpoint, relationships,
         │                          key terms, reliability notes, status (AI-drafted / verified)
         ├── glossary.json          the work's terms, to feed the shared concept glossary
@@ -45,6 +47,9 @@ Agama Mancha/
                 ├── units.jsonl    one unit per line (below)
                 └── build.json     date, tool version, pages verified at build time
 ```
+
+Folder names may change when the library is reorganised; the permanent work ID
+(`SL-0001`) in `work.json` doesn't, and units and citations use it, never the path.
 
 ### `work.json`
 
@@ -87,9 +92,12 @@ tool's `B-…` id, which is derived from the checksum), access tier
 
 ## Decisions for the team
 
-1. **Location and owner**: `[OCR Mirror]/Agama Mancha`, or a new share; owned by the team.
-2. **Work IDs**: who assigns `SL-…` numbers (one list, one person).
-3. **Rights**: record each work's copyright status in `work.json`. Text that starts from
-   Surya's reading may carry Surya's share-alike licence (see [engines.md](engines.md)).
-4. **Restricted works**: which ones, so the tool never sends them to Claude.
-5. **Commentary layer names**: e.g. `hindi-mishra` for Paramahaṃsa Miśra's Hindi commentary.
+Decided (2026-11-25): the material folder is **`[OCR Mirror]/Agama Mancha`**, folders use
+**legible names** (the PDF's), and all output is for **Vimarsha's internal use**.
+
+Still open:
+1. **Work IDs**: who assigns `SL-…` numbers (one list, one person).
+2. **Rights notes**: record each work's copyright status in `work.json`, so that any later
+   wish to share outside Vimarsha can be checked work by work.
+3. **Restricted works**: which ones, so the tool never sends them to Claude.
+4. **Commentary layer names**: e.g. `hindi-mishra` for Paramahaṃsa Miśra's Hindi commentary.
