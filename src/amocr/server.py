@@ -376,7 +376,7 @@ class Handler(BaseHTTPRequestHandler):
 
                 b = self._body()
                 return self._json(study.post("user", str(b.get("text", "")), unit=str(b.get("unit") or "") or None,
-                                             by=cfgmod.load().operator or ""))
+                                             quote=str(b.get("quote") or "") or None, by=cfgmod.load().operator or ""))
             except (ValueError, RuntimeError, json.JSONDecodeError) as e:
                 return self._err(str(e))
         if parts[:3] == ["api", "librarian", "eval"]:

@@ -79,6 +79,8 @@ def main(argv=None) -> None:
                 print("no question yet (timed out); wait again")
                 raise SystemExit(3)
             print(f"question {m['id']}{' about ' + m['unit'] if m.get('unit') else ''}:\n  {m['text']}\n")
+            if m.get("quote"):
+                print(f"the words they selected (the question is about these):\n  «{m['quote']}»\n")
             if m.get("unit"):
                 u = store.get(m["unit"], context=2)
                 if u:

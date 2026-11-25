@@ -48,10 +48,11 @@ th { color: var(--muted); font-weight: 600; font-family: Raleway, sans-serif; }
 .unit.l-com { margin-left: 28px; background: color-mix(in srgb, var(--panel) 70%, var(--bg)); border-left: 3px solid var(--line); }
 .unit.l-com .deva { font-size: 15px; }
 .unit.l-note .deva { font-size: 13px; color: var(--muted); }
-.unit.target { outline: 2px solid var(--accent); background: var(--hl); }
+.unit.target .ref::after { content: "cited"; display: block; color: var(--accent); font-weight: 600; }
 .unit .acts { font-size: 12px; }
 .unit .acts a { margin-right: 10px; }
-.unit { cursor: pointer; } .unit.focus { box-shadow: inset 3px 0 0 var(--accent); background: color-mix(in srgb, var(--hl) 60%, transparent); }
+.unit { cursor: pointer; } .unit.focus { outline: 2px solid var(--accent); background: var(--hl); }
+#sabout b { font-weight: 600; } #sabout q { font-family: "Kohinoor Devanagari", "Noto Serif Devanagari", serif; }
 #study { position: fixed; top: var(--study-top, 110px); right: 12px; bottom: 12px; width: 420px; display: none; flex-direction: column;
   background: var(--panel); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 6px 24px rgba(0,0,0,.12); z-index: 5; }
 #study.open { display: flex; }
@@ -89,7 +90,7 @@ body.study-open main { margin-right: 444px; max-width: none; }
   <div class="shead"><span class="dot" id="sdot"></span><span id="sstate" class="grow">…</span><button id="sx" title="Close">✕</button></div>
   <div id="slog"></div>
   <div class="sfoot">
-    <span class="muted" style="font-size:12px">About: <span id="sabout">click a passage to ask about it</span></span>
+    <span class="muted" style="font-size:12px">About: <span id="sabout">click a passage, or select words in it</span></span>
     <textarea id="sin" placeholder="Ask about this passage: a translation, a term, what the commentary says, where else the idea appears. ⌘/Ctrl ↵ sends."></textarea>
     <div style="display:flex;gap:8px;align-items:center"><button id="ssend">Ask Claude</button><span class="muted" id="sinfo" style="font-size:12px"></span></div>
   </div>
@@ -267,18 +268,37 @@ async function renderReader(id, chapter) {
   const t = c.target && document.getElementById("u-" + c.target);
   if (t) t.scrollIntoView({ block: "center" });
   setFocus(c.target || (c.units[0] || {}).id);
-  document.querySelectorAll(".unit").forEach((el) => (el.onclick = (e) => { if (e.target.closest("a")) return; setFocus(el.id.slice(2)); }));
+  document.querySelectorAll(".unit").forEach((el) => (el.onclick = (e) => {
+    if (e.target.closest("a") || (window.getSelection() || "").toString().trim()) return;   // a selection is handled on mouseup
+    setFocus(el.id.slice(2));
+  }));
   $("studybtn").onclick = () => studyToggle(true);
 }
 
 // Study with Claude: questions about the passage in focus, answered by the listening Claude Code session.
-const ST = { open: false, focus: null, timer: null, seen: 0 };
-function setFocus(id) {
-  ST.focus = id || null;
+const ST = { open: false, focus: null, quote: null, timer: null, seen: 0 };
+function aboutLabel() {
+  const el = ST.focus && document.getElementById("u-" + ST.focus);
+  if (!el) return "click a passage, or select words in it";
+  const title = (document.querySelector(".reader h2") || {}).textContent || "";
+  const ref = el.querySelector(".ref span").textContent, layer = el.querySelector(".ref .lay").textContent;
+  const words = (ST.quote || el.querySelector(".deva").textContent).trim();
+  const short = words.length > 70 ? words.slice(0, 70) + "…" : words;
+  return `${ST.quote ? "your selection in " : ""}<b>${esc(title)} ${esc(ref)}</b> (${esc(layer)}): <q>${esc(short)}</q>`;
+}
+function setFocus(id, quote = null) {
+  ST.focus = id || null; ST.quote = quote;
   document.querySelectorAll(".unit.focus").forEach((x) => x.classList.remove("focus"));
   const el = id && document.getElementById("u-" + id); if (el) el.classList.add("focus");
-  $("sabout").innerHTML = id ? `<code>${esc(id)}</code>` : "click a passage to ask about it";
+  $("sabout").innerHTML = aboutLabel();
 }
+// Selecting words in the reader makes them the subject of the next question.
+document.addEventListener("mouseup", () => {
+  const sel = window.getSelection(), t = sel ? sel.toString().trim() : "";
+  if (!t || !sel.anchorNode) return;
+  const u = (sel.anchorNode.nodeType === 1 ? sel.anchorNode : sel.anchorNode.parentElement).closest(".unit");
+  if (u && t.length <= 2000) setFocus(u.id.slice(2), t);
+});
 function studyToggle(open) {
   ST.open = open ?? !ST.open;
   $("study").classList.toggle("open", ST.open); document.body.classList.toggle("study-open", ST.open);
@@ -295,7 +315,7 @@ async function studyLoad() {
   if (d.messages.length === ST.seen) return;
   ST.seen = d.messages.length;
   const log = $("slog"), atEnd = log.scrollHeight - log.scrollTop - log.clientHeight < 40;
-  log.innerHTML = d.messages.map((m) => `<div class="smsg ${m.role}">${m.unit ? `<span class="about">about <a href="#read=${encodeURIComponent(m.unit)}">${esc(m.unit)}</a></span>` : ""}${fmt(m.text)}${
+  log.innerHTML = d.messages.map((m) => `<div class="smsg ${m.role}">${m.unit ? `<span class="about">about <a href="#read=${encodeURIComponent(m.unit)}">${esc(m.unit)}</a>${m.quote ? `: «${esc(m.quote.length > 80 ? m.quote.slice(0, 80) + "…" : m.quote)}»` : ""}</span>` : ""}${fmt(m.text)}${
     m.cites ? `<div class="cites">${m.cites.map((c) => `<a href="#read=${encodeURIComponent(c)}" title="Read in context">${esc(c)}</a>`).join("")}</div>` : ""}</div>`).join("")
     || `<p class="muted" style="font-size:13px">Ask about the passage in focus. Claude answers from the library only, quoting the original with a translation, and every passage it relies on is a link you can read in context.</p>`;
   const waiting = d.messages.length && d.messages[d.messages.length - 1].role === "user";
@@ -305,7 +325,7 @@ async function studyLoad() {
 async function studySend() {
   const text = $("sin").value.trim(); if (!text) return;
   $("ssend").disabled = true;
-  try { await api("/api/librarian/study", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text, unit: ST.focus }) });
+  try { await api("/api/librarian/study", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text, unit: ST.focus, quote: ST.quote }) });
     $("sin").value = ""; ST.seen = -1; await studyLoad(); }
   catch (e) { $("sinfo").textContent = e.message; }
   $("ssend").disabled = false;

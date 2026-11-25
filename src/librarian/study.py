@@ -40,7 +40,7 @@ def load() -> list[dict]:
 
 
 def post(role: str, text: str, unit: str | None = None, reply_to: str | None = None,
-         cites: list[str] | None = None, by: str = "") -> dict:
+         cites: list[str] | None = None, by: str = "", quote: str | None = None) -> dict:
     from . import store
 
     if role not in ("user", "claude"):
@@ -54,7 +54,8 @@ def post(role: str, text: str, unit: str | None = None, reply_to: str | None = N
     if bad:
         raise ValueError(f"no such unit(s): {', '.join(bad)}; cite ids from the library")
     msg = {"id": f"{int(time.time() * 1000):x}{secrets.token_hex(2)}", "at": _now(), "role": role, "text": text}
-    for k, v in (("unit", unit), ("reply_to", reply_to), ("cites", cites or None), ("by", by or None)):
+    quote = (quote or "").strip()[:2000] or None          # the words the person selected in the reader
+    for k, v in (("unit", unit), ("quote", quote), ("reply_to", reply_to), ("cites", cites or None), ("by", by or None)):
         if v:
             msg[k] = v
     study_dir().mkdir(parents=True, exist_ok=True)

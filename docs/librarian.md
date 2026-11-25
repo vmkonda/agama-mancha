@@ -64,8 +64,9 @@ the drive; the works the librarian can search, e-texts included, are under **Lib
   source: for the team's printed books, *scan p. N* opens that page in the viewer with the cited lines
   outlined on the scan; for e-texts, the edition and licence, and a link to the GRETIL file. A reading
   can be shared as a link: `/librarian#read=<unit id>`.
-- **Study with Claude** (a button in the reader) opens a panel beside the text. Click a passage to
-  put it in focus, ask about it (a translation, a term, what the commentary says, where else the
+- **Study with Claude** (a button in the reader) opens a panel beside the text. The outlined passage
+  is the one a question is about (on arrival, the cited one; click another to move the outline), or
+  select words with the mouse to ask about exactly those; the panel says which, in words. Ask about it (a translation, a term, what the commentary says, where else the
   idea appears), and Claude answers from the library only, quoting the original with a translation;
   every passage it cites is a link that opens in the reader. As with the proofreading chat, the app
   can't call Claude: a Claude Code session in the project answers, after being asked to "listen to the
