@@ -428,7 +428,8 @@ def quality(pdf: Path, facts: dict, reader: _Reader, pages: int = 3) -> dict:
 
     t0 = time.time()
     doc = pymupdf.open(pdf)
-    lp = facts.get("layer_pages") or []
+    # Pages with text over a scan; for a layer known only from its producer, any page with text.
+    lp = facts.get("layer_pages") or [i + 1 for i in range(doc.page_count) if len(doc[i].get_text().strip()) > 200]
     picks = sorted({lp[int(len(lp) * f)] for f in (0.25, 0.5, 0.75)})[:pages] if lp else []
     layer_txt, fresh_txt, per_page = [], [], []
     with tempfile.TemporaryDirectory(dir=data_dir()) as td:
@@ -464,7 +465,7 @@ def run_quality(limit: int | None = None, share: bool = True, redo: bool = False
             return False
         if "layer" not in f:  # measured before OCR layers were told apart
             return bool(f.get("scans"))
-        return f.get("layer") == "ocr" and (redo or not f.get("quality"))
+        return f.get("layer") == "ocr" and (redo or (f.get("quality") or {}).get("grade") in (None, "unknown"))
 
     todo = [e for e in cat.get("entries", []) if e.get("state") != "gone" and candidate(facts.get(e.get("sha1") or "", {}))]
     todo.sort(key=lambda e: e.get("size") or 0)
@@ -504,6 +505,15 @@ def run_quality(limit: int | None = None, share: bool = True, redo: bool = False
     return {"todo": len(todo), **graded, "engine": reader.name, "shared": shared}
 
 
+def why_grade(q: dict) -> str:
+    """The weakest of the three measures, in words."""
+    p, r, d = q.get("precision"), q.get("recall"), q.get("diacritics_kept")
+    parts = [(p, f"{round(100 * p)}% of its words confirmed"), (r, f"has {round(100 * r)}% of the page's words")]
+    if d is not None:
+        parts.append((d, f"{round(100 * d)}% of diacritics kept"))
+    return min((x for x in parts if x[0] is not None), key=lambda x: x[0])[1]
+
+
 def effective(facts: dict) -> str:
     """The verdict, with OCR layers judged by their quality: a poor or unchecked layer needs OCR."""
     v = facts.get("verdict", "unknown")
@@ -537,7 +547,7 @@ def short(facts: dict | None) -> dict | None:
         label = "text layer garbled" + (f" ({round(100 * sc['deva_broken'], 1)}% broken Devanagari)" if (sc.get("deva_broken") or 0) >= GARBLED_DEVA
                                         else f" ({round(100 * sc['odd_letters'], 1)}% legacy-font letters)")
     elif facts.get("layer") == "ocr":
-        pct = f" ({round(100 * q['precision'])}% of words confirmed)" if q.get("precision") is not None else ""
+        pct = f" ({why_grade(q)})" if q.get("precision") is not None else ""
         label = {"layer-poor": "OCR layer, poor", "layer-fair": "OCR layer, fair", "layer-unchecked": "OCR layer, not checked"
                  }.get(v, "OCR layer, good") + pct
     elif facts.get("layer") == "digital":
