@@ -33,7 +33,7 @@ def drive(tmp_path, monkeypatch):
 
 def volunteer(tmp_path, monkeypatch, name, fake):
     monkeypatch.setenv("AMOCR_DATA", str(tmp_path / name))
-    main(["init", "--operator", name, "--proton-root", TEAM + "/", "--proton-bin", str(fake)])
+    main(["init", "--operator", name, "--proton-root", TEAM + "/", "--proton-bin", str(fake), "--material", "OCR Mirror"])
 
 
 def test_mirror_dir():
@@ -107,7 +107,7 @@ def test_push_needs_operator_and_team_folder(tmp_path, monkeypatch, drive):
     monkeypatch.setenv("AMOCR_DATA", str(tmp_path / "x"))
     with pytest.raises(SystemExit, match="team folder"):
         main(["fetch", f"{TEAM}/Tantra/Test Book.pdf"])
-    main(["init", "--proton-root", TEAM, "--proton-bin", str(fake)])
+    main(["init", "--proton-root", TEAM, "--proton-bin", str(fake), "--material", "OCR Mirror"])
     with pytest.raises(SystemExit, match="outside|not inside"):
         main(["fetch", "/my-files/elsewhere.pdf"])
 

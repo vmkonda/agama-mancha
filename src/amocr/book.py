@@ -1,8 +1,8 @@
 """Volunteer operations: add/fetch a book, export results, push to and pull from Proton Drive.
 
-Shared-drive layout, next to the originals' tree (as the team's OCR Mirror already is):
+Shared-drive layout in the material folder, next to the originals' tree:
 
-  <root>/OCR Mirror/<path of the original>/<book>.amocr/
+  <material folder>/<path of the original>/<book>.amocr/
     book.json                 id, source fingerprint, per-page status and credits
     book.txt                  best text of every page, in order
     pages/p0231/<result>.json one file per engine result (text, regions, confidence, operator)
@@ -156,8 +156,9 @@ def _proton() -> tuple[Proton, cfgmod.Config]:
     cfg = cfgmod.load()
     if not cfg.proton_root:
         raise SystemExit("team folder not set; run `amocr init --proton-root \"/shared-with-me/<team folder>\"`")
+    _need_material(cfg)
     try:
-        return Proton(cfg.proton_bin, write_root=results_root(cfg.proton_root, cfg.mirror)), cfg
+        return Proton(cfg.proton_bin, write_root=results_root(cfg.proton_root, cfg.material)), cfg
     except ProtonError as e:
         raise SystemExit(str(e)) from None
 
@@ -168,9 +169,17 @@ def remote_results(work: Work) -> str:
     return _mirror(work.remote, cfgmod.load())
 
 
+def _need_material(cfg: cfgmod.Config) -> None:
+    # Without it the write root would be the library itself; never guess.
+    if not cfg.material.strip():
+        raise SystemExit('material folder not set; run `amocr init --material "/shared-with-me/<material folder>"` '
+                         "(ask the coordinator which folder; see docs/drive-setup.md)")
+
+
 def _mirror(remote_pdf: str, cfg: cfgmod.Config) -> str:
+    _need_material(cfg)
     try:
-        return mirror_dir(remote_pdf, cfg.proton_root, cfg.mirror)
+        return mirror_dir(remote_pdf, cfg.proton_root, cfg.material)
     except ValueError as e:
         raise SystemExit(str(e)) from None
 

@@ -10,7 +10,7 @@ page, as a team. Part of Agama Mancha, a library of the Sarvāmnāya literature.
 - **Proofreaders** check pages against the print in a side-by-side viewer.
   Their verified pages measure the accuracy of every method.
 - **Proton Drive** is the shared store: results go to the team's
-  *OCR Mirror* folder, next to the originals, so anyone can continue a book.
+  *material folder* for Agama Mancha, never to the originals, so anyone can continue a book.
 
 ## Which guide is for you
 
@@ -22,6 +22,7 @@ page, as a team. Part of Agama Mancha, a library of the Sarvāmnāya literature.
 | Coordinating the team: access, assigning books, restricted texts | [Coordinator guide](docs/coordinator-guide.md) |
 | A developer working on the code | [Developer guide](docs/developer-guide.md) |
 | Choosing or installing an OCR engine (Tesseract, Surya, Claude), and their licences | [Engines](docs/engines.md) |
+| What the OCR produces for Agama Mancha, and where it goes on the drive | [Material folder](docs/material-folder.md) |
 
 ## The short version
 

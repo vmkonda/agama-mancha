@@ -190,10 +190,16 @@ This is a summary, not legal advice.
     have to be published under this licence, with its use restrictions.
   - **Output rights (section 6):** Datalab claims no rights in the output.
 
-**Decision for the team before publishing anything Surya produced:** the
+**Decided (2026-11-25): Agama Mancha's material is for Vimarsha's internal use only.**
+Vimarsha is a non-profit, well under the licence's $5M limits, and nothing is
+distributed, so Surya can be used. Keep the attribution (the `engine` and
+`engine_version` recorded with every reading do that) and revisit this if the
+material is ever to be shared outside Vimarsha.
+
+**Background, should outside publication ever be considered:** the
 share-alike clause may conflict with how the library wants to license its texts
 (for example public domain or a Creative Commons licence). Options: accept the
 licence for Surya-derived text, use Surya only as a private aid and publish
 text proofread from another engine's reading, or ask Datalab
 (hi@datalab.to) how the clauses apply to a non-commercial digital library.
-Until that's decided, keep Surya results internal to the team.
+Until then, Surya results stay internal to Vimarsha.

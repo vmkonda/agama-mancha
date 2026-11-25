@@ -48,24 +48,26 @@ and try again.
 
 ## 4. Find the shared folders
 
-`uv run amocr folders`. Expect the library and `OCR Mirror` under
-/shared-with-me.
+`uv run amocr folders`. Expect the library and the material folder (for example
+`[OCR Mirror]/Agama Mancha`) under /shared-with-me.
 
 - Nothing there: check `data/bin/proton-drive invitation list`. If invitations
   are pending, ask the user to accept them in the Proton Drive web app (or run
   `! data/bin/proton-drive invitation accept <id>` themselves). If there are
   none, the coordinator hasn't invited their Proton account yet: draft a short
   message they can send, asking for viewer access to the library and editor
-  access to OCR Mirror. Share links won't work with the tool.
+  access to the material folder. Share links won't work with the tool.
 - Folders present: confirm with the user which one is the library and which
-  is OCR Mirror. Don't guess between similar names.
+  is the material folder. Don't guess between similar names: the team's `[OCR Mirror]`
+  itself holds their OCR'd PDFs; the material folder is the `Agama Mancha` folder inside it
+  (or whatever the coordinator named).
 
 ## 5. Save their settings
 
 Ask for the name they want credited on their pages, then:
 
 ```sh
-uv run amocr init --operator "<name>" --proton-root "/shared-with-me/<library>" --mirror "/shared-with-me/<OCR Mirror>"
+uv run amocr init --operator "<name>" --proton-root "/shared-with-me/<library>" --material "/shared-with-me/<material folder>"
 uv run amocr doctor
 ```
 
