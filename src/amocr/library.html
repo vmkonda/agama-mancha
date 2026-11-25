@@ -49,6 +49,7 @@ td.when { white-space: nowrap; color: var(--muted); }
 tr.gone td { opacity: .6; }
 .c-mine { background: var(--new); color: var(--new-text); } .c-other { background: var(--here); color: var(--here-text); }
 .c-stale { background: var(--chg); color: var(--chg-text); }
+.inv { font-size: 12px; white-space: nowrap; } .inv.bad { color: var(--gone-text); }
 .stage { white-space: nowrap; } .prog { font-size: 12px; color: var(--muted); white-space: nowrap; }
 td.act { white-space: nowrap; text-align: right; } td.act button { font-size: 12px; padding: 2px 8px; }
 .empty { padding: 24px; text-align: center; color: var(--muted); }
@@ -61,6 +62,9 @@ td.act { white-space: nowrap; text-align: right; } td.act button { font-size: 12
   <input id="q" type="search" placeholder="Search title or path" aria-label="Search">
   <select id="folder" aria-label="Folder"><option value="">All folders</option></select>
   <select id="show" aria-label="Show">
+    <option value="needs">Needs OCR (or not checked yet)</option>
+    <option value="text">Has a text layer</option>
+    <option value="problem">Not a PDF / couldn't check</option>
     <option value="">All PDFs</option>
     <option value="mine">Mine</option>
     <option value="taken">Being worked on</option>
@@ -109,7 +113,7 @@ async function load() {
   $("folder").innerHTML = `<option value="">All folders</option>` + folders.map((f) =>
     `<option value="${esc(f)}">${esc(f)} (${S.cat.entries.filter((e) => e.folder === f && e.state !== "gone").length})</option>`).join("");
   if (folders.includes(keep)) $("folder").value = keep;
-  $("show").value = store.get("show") || "";
+  $("show").value = store.get("show") ?? "needs";
   $("q").value = store.get("q") || "";
   status(); render();
   if (S.cat.refresh.running || S.cat.job.running) poll();
@@ -123,6 +127,10 @@ function status() {
     const lc = c.last_change;
     html = `<b>${c.count}</b> PDFs · refreshed ${esc(ago(c.age_hours))}${c.refreshed_by ? " by " + esc(c.refreshed_by) : ""}`;
     if (lc) html += ` · last refresh: +${lc.added} new, ${lc.moved} moved, ${lc.changed} changed, ${lc.gone} gone`;
+    const iv = c.inventory || {};
+    const checked = (iv.pdfs || 0) - (iv.unknown || 0);
+    const need = NEEDS.reduce((n, k) => n + (iv[k] || 0), 0);
+    html += ` · text layers checked: ${checked} of ${iv.pdfs || 0}` + (checked ? ` (${need} need OCR, of which ${iv["layer-unchecked"] || 0} have an OCR layer not yet graded and ${iv.garbled || 0} a garbled layer; ${iv.text || 0} have good text; ${(iv.notpdf || 0) + (iv.error || 0)} problem files)` : "");
     if (lc && lc.unreadable && lc.unreadable.length) html += ` · <span class="err" title="${esc(lc.unreadable.map((u) => u.folder + ": " + u.error).join("\n"))}">${lc.unreadable.length} folder(s) couldn't be read</span>`;
     if (lc && lc.shared) html += ` · <span title="${esc(lc.shared)}">${lc.shared.startsWith("shared") ? "shared with the team" : esc(lc.shared)}</span>`;
   }
@@ -143,7 +151,10 @@ function rows() {
   const q = $("q").value.trim().toLowerCase(), f = $("folder").value, show = $("show").value;
   let es = S.cat.entries.filter((e) => {
     if (f && e.folder !== f) return false;
-    const h = e.board && e.board.holder;
+    const h = e.board && e.board.holder, v = e.inv && e.inv.verdict;
+    if (show === "needs" && v && !NEEDS.includes(v)) return false;
+    if (show === "text" && v !== "text") return false;
+    if (show === "problem" && !["notpdf", "error", "empty"].includes(v)) return false;
     if (show === "mine" && h !== S.cat.me) return false;
     if (show === "taken" && !h) return false;
     if (show === "free" && h) return false;
@@ -182,6 +193,13 @@ function render() {
     const prog = p.pages ? `${p.read || 0}/${p.pages} read · ${p.proofread || 0} proofread · ${p.verified || 0} verified` : "";
     return `<div class="stage">${esc(b.stage_label)}</div>${prog ? `<div class="prog" title="reported by ${esc(b.by)}">${prog}</div>` : ""}`;
   };
+  const inv = (e) => {
+    const v = e.inv;
+    if (!v) return `<span class="inv muted" title="not checked yet: amocr catalog inventory">–</span>`;
+    const tip = [v.why, v.error, v.kinds && Object.entries(v.kinds).map(([k, n]) => `${n} pages ${k}`).join(", ")].filter(Boolean).join("; ");
+    return `<div class="inv ${["notpdf", "error", "garbled", "layer-poor"].includes(v.verdict) ? "bad" : ""}" title="${esc(tip + (v.producer ? "; made with " + v.producer : ""))}">${esc(v.label)}</div>`
+      + (v.script || v.pages ? `<div class="prog">${esc([v.script, v.pages ? v.pages + " pp" : ""].filter(Boolean).join(" · "))}</div>` : "");
+  };
   const act = (e) => {
     if (e.state === "gone" || !e.sha1) return "";
     const h = e.board && e.board.holder;
@@ -192,12 +210,12 @@ function render() {
   };
   const shown = es.slice(0, 1000);
   $("list").innerHTML = es.length ? `<table>
-    <thead><tr><th data-k="title">Title${arrow("title")}</th><th data-k="who">Who${arrow("who")}</th><th data-k="stage">Stage${arrow("stage")}</th>
+    <thead><tr><th data-k="title">Title${arrow("title")}</th><th>Text</th><th data-k="who">Who${arrow("who")}</th><th data-k="stage">Stage${arrow("stage")}</th>
     <th data-k="path" class="hide-sm">Folder${arrow("path")}</th>
     <th data-k="size" class="hide-sm">Size${arrow("size")}</th><th data-k="modified" class="hide-sm">Added${arrow("modified")}</th><th></th></tr></thead>
     <tbody>${shown.map((e) => `<tr class="${e.state === "gone" ? "gone" : ""}">
       <td><div>${esc(title(e))}</div><div>${chips(e)}</div></td>
-      <td>${who(e)}</td><td>${stage(e)}</td>
+      <td>${inv(e)}</td><td>${who(e)}</td><td>${stage(e)}</td>
       <td class="path hide-sm">${esc(segs(e.path).slice(0, -1).join(" › "))}</td>
       <td class="num hide-sm">${mb(e.size)}</td><td class="when hide-sm">${esc(day(e.modified))}</td><td class="act">${act(e)}</td></tr>`).join("")}</tbody></table>
     <p class="muted">${es.length} shown${es.length > shown.length ? ` (first ${shown.length}; narrow the search to see the rest)` : ""}.</p>`
@@ -214,6 +232,8 @@ function render() {
   };
 }
 
+// Verdicts that mean the text has to come from OCR (or a font conversion).
+const NEEDS = ["ocr", "mixed", "garbled", "layer-poor", "layer-fair", "layer-unchecked"];
 const STAGES = ["listed", "inventoried", "read", "reviewed", "proofreading", "verified", "assembled"];
 function jobText(what) {
   if (!what) return "";

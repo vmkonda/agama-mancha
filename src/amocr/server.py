@@ -85,9 +85,10 @@ _job = {"running": False, "what": None, "started": None, "result": None, "error"
 
 
 def _library(works: dict[str, Work]) -> dict:
-    from . import board, library
+    from . import board, inventory, library
 
     cat = library.load()
+    facts = inventory.merged()
     root = cat.get("root", "").rstrip("/")
     here = {w.remote: w.id for w in works.values() if w.remote}
     me = cfgmod.load().operator
@@ -97,6 +98,9 @@ def _library(works: dict[str, Work]) -> dict:
         e = dict(e)
         if f"{root}/{e['path']}" in here:
             e["book"] = here[f"{root}/{e['path']}"]
+        inv = inventory.short(facts.get(e.get("sha1") or ""))
+        if inv:
+            e["inv"] = inv
         x = b.get(e.get("sha1") or "")
         if x:
             p = x.get("progress") or {}
@@ -113,7 +117,7 @@ def _library(works: dict[str, Work]) -> dict:
     age = library.age_hours(cat)
     return {"root": root, "refreshed_at": cat.get("refreshed_at"), "refreshed_by": cat.get("refreshed_by"),
             "age_hours": age, "count": cat.get("count", 0), "entries": entries, "last_change": last, "me": me,
-            "stale_days": board.STALE_DAYS, "refresh": dict(_refresh), "job": dict(_job)}
+            "stale_days": board.STALE_DAYS, "inventory": inventory.stats(cat, facts), "refresh": dict(_refresh), "job": dict(_job)}
 
 
 def _background(state: dict, fn, **info) -> dict:

@@ -439,3 +439,53 @@ def test_library_names_with_slashes_and_unreadable_folders():
     e2, c2 = merge(e1, [], "t2", unread=["T/X"])  # T/X couldn't be listed this time
     assert c2["gone"] == [] and e2[0]["path"] == "T/X/a.pdf" and e2[0]["state"] != "gone"
     assert issubclass(ProtonError, Exception)
+
+
+def test_inventory_facts(tmp_path):
+    import pymupdf
+
+    from amocr import inventory
+
+    pdf = tmp_path / "t.pdf"
+    doc = pymupdf.open()
+    for _ in range(3):
+        doc.new_page().insert_text((72, 72), "The study of the Tantra and the history of its schools is old. " * 3)
+    doc.save(pdf)
+    f = inventory.summarize(pdf)
+    assert f["verdict"] == "text" and f["kinds"] == {"latin": 3} and f["pages"] == 3
+
+    blank = tmp_path / "b.pdf"
+    d2 = pymupdf.open()
+    d2.new_page()
+    d2.save(blank)
+    assert inventory.summarize(blank)["verdict"] == "ocr"
+
+    stub = tmp_path / "s.pdf"
+    stub.write_bytes(b"bplist00\x00\x01")
+    assert inventory.summarize(stub)["why"].startswith("a macOS placeholder")
+    html = tmp_path / "h.pdf"
+    html.write_text("<!DOCTYPE html><html><body>blocked</body></html>")
+    assert inventory.summarize(html)["verdict"] == "notpdf"
+    assert inventory.page_kind("dk;Z djrs gS vkSj ;g ,d iqLrd gS " * 5) == "suspect"  # legacy-font Hindi
+
+
+def test_inventory_judges_text_layers():
+    from amocr import inventory as inv
+
+    real = inv.screen(["स्वदेहं चिन्तयेत्कृष्णं ध्यायेद्देवीं परां शिवाम् । " * 20])
+    junk = inv.screen(["भथतानलर्िखाीं स " * 30])
+    assert real["deva_broken"] == 0 and not inv.garbled(real)
+    assert inv.garbled(junk)
+    assert not inv.garbled(inv.screen(["bhagavān śivaḥ kṛṣṇaṁ ēkaṁ vadati " * 40]))  # IAST and ISO 15919
+    assert inv.garbled(inv.screen(["bhagavËn ÝivaÆ kÎÌÆa vadati µ " * 40]))  # legacy-font leftovers
+
+    same = inv.compare("śivaḥ paramaḥ sūkṣmaḥ " * 10, "sūkṣmaḥ śivaḥ paramaḥ " * 10)
+    assert same["precision"] == 1.0 and inv.grade(same) == "good"  # order doesn't matter
+    lost = inv.compare("sivah paramah suksmah " * 10, "śivaḥ paramaḥ sūkṣmaḥ " * 10)
+    assert inv.grade(lost) == "poor"  # diacritics lost
+
+    base = {"verdict": "text", "layer": "ocr"}
+    assert inv.effective(base) == "layer-unchecked"
+    assert inv.effective(base | {"quality": {"grade": "poor"}}) == "layer-poor"
+    assert inv.effective(base | {"quality": {"grade": "good"}}) == "text"
+    assert inv.effective({"verdict": "text", "layer": "digital", "screen": junk}) == "garbled"
