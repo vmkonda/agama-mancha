@@ -69,6 +69,18 @@ details li { margin: 2px 0; }
 #hl { position: absolute; inset: 0; overflow: hidden; color: transparent; pointer-events: none; padding-bottom: 80px; }
 #hl > div { height: var(--lh); border-radius: 3px; }
 #hl .lowl { background: var(--low); }
+.ed.withgut textarea, .ed.withgut #hl { padding-left: 128px; }
+#gut { position: absolute; left: 0; top: 0; bottom: 0; width: 120px; overflow: hidden; pointer-events: none; padding: 10px 0 80px 0; border-right: 1px solid var(--line); z-index: 1; }
+#gut > div { height: var(--lh); line-height: var(--lh); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 11px; padding: 0 6px; color: var(--muted); letter-spacing: .02em; }
+#gut .t-header, #gut .t-signature { opacity: .7; }
+#gut .t-verse { color: var(--accent); font-weight: 600; }
+#gut .t-footnote { font-style: italic; }
+#gut .t-colophon { color: var(--accent); font-style: italic; }
+#gut .warn { background: var(--low); color: var(--low-text); border-radius: 3px; }
+.pagebar { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 13px; margin: 0 0 6px; }
+.pagebar b { font-weight: 600; }
+.pwarn { font-size: 13px; margin: 0 0 8px; }
+.pwarn button { font-size: 12px; padding: 1px 8px; margin: 2px 6px 2px 0; background: var(--low); color: var(--low-text); border-color: transparent; }
 #hl .cur { box-shadow: inset 3px 0 0 var(--accent); }
 #hl .cur:not(.lowl) { background: var(--hl); }
 .pal { display: flex; flex-wrap: wrap; gap: 4px; margin: 0 0 6px; }
@@ -157,7 +169,7 @@ details li { margin: 2px 0; }
 const $ = (id) => document.getElementById(id);
 const S = { work: null, page: null, pages: [], data: null, mode: "view" };
 const store = { get(k) { try { return localStorage.getItem(k); } catch { return null; } }, set(k, v) { try { localStorage.setItem(k, v); } catch {} }, del(k) { try { localStorage.removeItem(k); } catch {} } };
-const esc = (s) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 const api = async (u, opt) => { const r = await fetch(u, opt); const j = await r.json(); if (!r.ok) throw new Error(j.error || r.status); return j; };
 const LOW = 70;
 
@@ -368,7 +380,8 @@ function renderEdit() {
     ${restored ? `<div class="draftnote">Restored your unsaved edits from ${esc(new Date(draft.at).toLocaleString())}. <button id="discard">Discard them</button></div>` : ""}
     <div class="pal" id="pal">${PALETTE.map((c) => `<button class="deva" data-c="${c}" title="insert ${c}">${c}</button>`).join("")}</div>
     <div class="rom"><input id="rom" placeholder="romanised (IAST kṛṣṇa or Harvard-Kyoto kRSNa), Enter inserts" autocomplete="off" spellcheck="false"><span id="romout" class="deva"></span></div>
-    <div class="ed"><div id="hl" class="deva" aria-hidden="true"></div><textarea id="gt" class="deva" spellcheck="false" wrap="off"></textarea></div>
+    <div class="pagebar" id="pagebar"></div><div class="pwarn" id="pwarn"></div>
+    <div class="ed withgut"><div id="gut" aria-hidden="true"></div><div id="hl" class="deva" aria-hidden="true"></div><textarea id="gt" class="deva" spellcheck="false" wrap="off"></textarea></div>
     <p class="keys muted"><span class="ln low" style="padding:0 4px">yellow</span> Tesseract was unsure · <kbd>F2</kbd> or <kbd>Alt ↓</kbd> next unsure line, with <kbd>Shift</kbd> / <kbd>Alt ↑</kbd> previous · <kbd>⌘/Ctrl S</kbd> save · <kbd>⌘/Ctrl ↵</kbd> save and next page · <kbd>⌘/Ctrl K</kbd> Claude checks the line(s) · <kbd>⌘/Ctrl ⇧ ↵</kbd> apply Claude's latest fix · edits are kept in this browser until saved</p>
     <div style="display:flex;flex-wrap:wrap;gap:8px 14px;margin-top:8px;align-items:center">
       <label><input type="checkbox" id="verified"> I checked every line against the print (verified)</label>
@@ -377,7 +390,7 @@ function renderEdit() {
     <div style="display:flex;gap:8px;margin-top:8px;align-items:center"><button id="save">Save</button><button id="savenext">Save and next ▶</button><button id="checkline" title="Claude checks the selected line(s) against the print and proposes fixes (⌘/Ctrl K)">Check with Claude</button><span id="saved" class="muted">${esc(S.flash || "")}</span></div>
     ${rv.saved ? `<p class="muted" style="font-size:13px">Last saved by ${esc(rv.reviewer || "unknown")} on ${esc(rv.saved.slice(0, 10))}${rv.verified ? " · verified" : " · draft"}${rv.note ? " · note: " + esc(rv.note) : ""}</p>` : ""}`;
   S.flash = "";
-  const ta = $("gt"), hl = $("hl"), TL = positionLines();
+  const ta = $("gt"), hl = $("hl"), gut = $("gut"), TL = positionLines();
   ta.value = restored ? draft.text : res[src].text;
   $("verified").checked = restored ? !!draft.verified : !!rv.verified;
   $("note").value = restored ? draft.note || "" : rv.note || "";
@@ -387,7 +400,51 @@ function renderEdit() {
   const curN = () => { const rs = rows(), c = curRow(); return rs[c] && rs[c].k != null ? rs[c].k + 1 : null; };
   const tl = (r) => (r && r.k != null ? TL[r.k] : null);
   const isLow = (r) => { const x = tl(r); return !!x && x.conf < LOW; };
-  const sync = () => { hl.scrollTop = ta.scrollTop; hl.scrollLeft = ta.scrollLeft; };
+  const sync = () => { hl.scrollTop = ta.scrollTop; hl.scrollLeft = ta.scrollLeft; gut.scrollTop = ta.scrollTop; };
+  // What the assembler will make of this page: a tag per line, the page's place in the book, warnings.
+  let ST = null, stTimer = null;
+  const TAG = (t) => !t ? "" : t.type === "verse" ? (t.verse ? `verse · ${t.verse}` : "verse")
+    : t.type === "commentary" ? (t.explains ? `comm. → ${t.explains}` : "comm.")
+    : t.type === "footnote" ? `footnote${t.note ? " " + t.note : ""}`
+    : t.type === "header" ? (t.chapter ? `header · ch ${t.chapter}` : "header") : t.type;
+  function drawStructure() {
+    if (!ST) return;
+    const warnAt = new Set(ST.warnings.map((w) => w.line));
+    gut.innerHTML = rows().map((r) => {
+      if (r.k == null) return "<div></div>";
+      const t = ST.lines[r.k];
+      return `<div class="t-${esc(t ? t.type : "")}${warnAt.has(r.k + 1) ? " warn" : ""}" title="${esc(TAG(t))}">${esc(TAG(t))}</div>`;
+    }).join("");
+    sync();
+    const span = (a) => a.length ? (a.length === 1 ? a[0] : `${a[0].split("-")[0]}–${a[a.length - 1].split("-").pop()}`) : "none";
+    const bits = [];
+    if (ST.chapter) bits.push(`<span>Chapter <b>${esc(ST.chapter)}</b></span>`);
+    if (ST.printed_page) bits.push(`<span>printed p. <b>${esc(ST.printed_page)}</b></span>`);
+    bits.push(`<span>verses <b>${esc(span(ST.verses))}</b></span>`);
+    bits.push(`<span>commentary on <b>${esc(ST.commentary.length ? ST.commentary.join(", ") : "none closing here")}</b></span>`);
+    bits.push(`<span class="muted">tags are guessed from the text, as the assembler will${ST.build ? "; context from build " + esc(ST.build) : ""}</span>`);
+    $("pagebar").innerHTML = bits.join("");
+    $("pwarn").innerHTML = ST.warnings.map((w) => `<button data-line="${w.line}" title="go to line ${w.line}">line ${w.line}: ${esc(w.text)}</button>`).join("");
+    $("pwarn").querySelectorAll("button").forEach((b) => b.onclick = () => {
+      const want = +b.dataset.line, rs = rows();
+      const i = rs.findIndex((r) => r.k === want - 1);
+      if (i < 0) return;
+      const start = rs.slice(0, i).reduce((n, r) => n + r.t.length + 1, 0);
+      ta.focus(); ta.setSelectionRange(start, start + rs[i].t.length);
+      ta.scrollTop = Math.max(0, i * parseFloat(getComputedStyle(ta).lineHeight) - ta.clientHeight / 3);
+      paint();
+    });
+  }
+  function structure() {
+    clearTimeout(stTimer);
+    stTimer = setTimeout(async () => {
+      try {
+        ST = await api(`/api/${encodeURIComponent(S.work)}/structure`, { method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ page: S.page, text: ta.value }) });
+        drawStructure();
+      } catch (e) { $("pagebar").innerHTML = `<span class="muted">structure unavailable: ${esc(e.message)}</span>`; }
+    }, 300);
+  }
   function paint(follow = true) {
     const rs = rows(), c = curRow();
     hl.innerHTML = rs.map((r, i) => `<div class="${[isLow(r) ? "lowl" : "", i === c ? "cur" : ""].join(" ").trim()}">${esc(r.t) || " "}</div>`).join("");
@@ -403,7 +460,7 @@ function renderEdit() {
       ta.value = before + fixBars(ta.value.slice(p));
       ta.selectionStart = ta.selectionEnd = before.length;
     }
-    keepDraft(); paint();
+    keepDraft(); paint(); structure();
   }
   function insert(s) { ta.setRangeText(s, ta.selectionStart, ta.selectionEnd, "end"); onInput(); }
   function jump(dir) {
@@ -433,6 +490,7 @@ function renderEdit() {
   ta.addEventListener("keyup", () => paint());
   ta.addEventListener("click", () => paint());
   ta.addEventListener("scroll", sync);
+  structure();
   $("verified").onchange = keepDraft;
   $("note").oninput = keepDraft;
   $("pal").addEventListener("mousedown", (e) => e.preventDefault()); // keep the cursor in the text
