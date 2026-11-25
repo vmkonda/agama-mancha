@@ -605,3 +605,13 @@ def test_page_structure_for_proofreading(tmp_path, monkeypatch):
     assert r["lines"][3]["verse"] == "34" and r["lines"][8]["explains"] == "34" and r["lines"][9]["note"] == "1"
     assert r["warnings"][0] == {"line": 6, "text": "verse number not between ॥ … ॥: «॥ ३५ ।»"}
     assert any(w_["line"] == 8 and "after verse 34" in w_["text"] for w_ in r["warnings"])
+
+
+def test_viewer_has_no_book_specific_code():
+    """Proofread is one standard view (CLAUDE.md): no branch, style or text tied to a particular book."""
+    import re
+    from importlib.resources import files
+
+    for name in ("viewer.html", "theme.css", "library.html"):
+        src = files("amocr").joinpath(name).read_text(encoding="utf-8")
+        assert not re.search(r"\b(B-[0-9a-f]{10}|SL-\d{4})\b", src), f"{name} mentions a specific book"

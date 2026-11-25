@@ -43,7 +43,8 @@ enlarge the scan.
 ## How to proofread a page
 
 1. Open the page and choose **Proofread**. The box starts from the best
-   reading available (the existing proofread text, or Claude's reading).
+   reading available, always in this order: your saved text, else Claude's
+   reading, else Surya's, else Tesseract's. The line above the box names which.
 2. Read the scan line by line and correct the text in the box.
 3. If you checked **every** line against the print, tick *I checked every
    line against the print (verified)*. If you only fixed what caught your eye,
@@ -52,6 +53,30 @@ enlarge the scan.
 4. Use the note field for anything the next person should know ("verse 36
    damaged in this copy", "check against the Kashmir edition").
 5. Press **Save**. Your name and the date are recorded with the page.
+
+### The same view for every book
+
+Proofread looks and works the same in every book, so nothing has to be
+relearned from one book to the next. From top to bottom:
+
+1. **Where the text came from** (saved text, or the reading it starts from).
+2. **The button row** of hard characters and the **romanised typing** box.
+3. **The page bar:** chapter, printed page number, the verses on the page, the
+   commentary that closes on it.
+4. **Warnings**, if any: verse numbers the assembler can't use. Each jumps to its line.
+5. **The text**, with a **tag beside every line** and the scan beside it.
+6. **Verified** tick, note, **Save**, **Save and next**, **Check with Claude**.
+
+The tags are always one of: `header` (with `ch N` on a chapter heading),
+`verse` (with its number on the last line), `comm.` (with `→ N`, the verse it
+explains, on its last line), `footnote N`, `colophon`, `signature`. The
+highlights are always: the current line (a bar at the left), yellow for an
+unsure line, an outlined box for a footnote marker, and a yellow tag for a
+line with a warning.
+
+What a book brings is only data that fills these same places: its brief and
+glossary, its look-alike profile, and the rules learned from corrections.
+A book never gets its own layout, buttons or colours.
 
 ### Helpers in Proofread
 
@@ -67,6 +92,12 @@ enlarge the scan.
   insert it in Devanagari. It accepts IAST (`kṛṣṇa`, `prathamo'dhikāraḥ`)
   and Harvard-Kyoto (`kRSNa`, `prathamo'dhikAraH`), but not loose spellings
   like `krishna`, where `ri` could be ऋ or रि.
+- **Line tags and the page bar** show what the assembler will make of the
+  page, worked out from your text as you type. If a tag looks wrong, the text
+  usually is: a misread daṇḍa or verse number. The warnings point at those.
+- **Footnote markers stand out.** A digit right after a letter (योगी२) or
+  right before a word (१षट्…) is outlined, because Devanagari digits look like
+  letters (२ like र, ३ like इ). In View mode they are shown raised, as printed.
 - **Look-alikes are fixed for you.** A vertical bar `|` becomes `।` and `||`
   becomes `॥` as you type. On save, Latin digits in verse numbers
   (`॥ 39 ॥`) become Devanagari (`॥ ३९ ॥`).
