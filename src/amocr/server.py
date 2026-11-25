@@ -81,16 +81,29 @@ def _crop(work: Work, page: int, b: list[int], pad: int = 8) -> bytes:
 # ---- the Library page: the shared catalog (docs/plan.md, phase A) -------------------
 
 _refresh = {"running": False, "started": None, "result": None, "error": None}
+_job = {"running": False, "what": None, "started": None, "result": None, "error": None}  # claim / release / fetch
 
 
 def _library(works: dict[str, Work]) -> dict:
-    from . import library
+    from . import board, library
 
     cat = library.load()
     root = cat.get("root", "").rstrip("/")
     here = {w.remote: w.id for w in works.values() if w.remote}
-    entries = [e | ({"book": here[f"{root}/{e['path']}"]} if f"{root}/{e['path']}" in here else {})
-               for e in cat.get("entries", [])]
+    me = cfgmod.load().operator
+    b = board.merge(board.load_all())
+    entries = []
+    for e in cat.get("entries", []):
+        e = dict(e)
+        if f"{root}/{e['path']}" in here:
+            e["book"] = here[f"{root}/{e['path']}"]
+        x = b.get(e.get("sha1") or "")
+        if x:
+            p = x.get("progress") or {}
+            e["board"] = {"holder": x.get("holder"), "since": x.get("since"), "stale": x.get("stale", False),
+                          "stage": x["stage"], "stage_label": board.STAGE_LABEL[x["stage"]], "by": x.get("by"),
+                          "progress": {k: p.get(k) for k in ("pages", "read", "claude", "proofread", "verified")}}
+        entries.append(e)
     last = None
     log = library.local_dir() / "changes.jsonl"
     if log.exists():
@@ -99,30 +112,61 @@ def _library(works: dict[str, Work]) -> dict:
             last = {k: v for k, v in json.loads(lines[-1]).items() if k != "details"}
     age = library.age_hours(cat)
     return {"root": root, "refreshed_at": cat.get("refreshed_at"), "refreshed_by": cat.get("refreshed_by"),
-            "age_hours": age, "count": cat.get("count", 0), "entries": entries, "last_change": last,
-            "refresh": {k: v for k, v in _refresh.items()}}
+            "age_hours": age, "count": cat.get("count", 0), "entries": entries, "last_change": last, "me": me,
+            "stale_days": board.STALE_DAYS, "refresh": dict(_refresh), "job": dict(_job)}
 
 
-def _start_refresh() -> dict:
+def _background(state: dict, fn, **info) -> dict:
     import threading
 
-    from . import library
-
-    if _refresh["running"]:
-        return dict(_refresh)
+    if state["running"]:
+        return dict(state)
 
     def run():
         try:
-            _refresh["result"] = {k: v for k, v in library.refresh().items() if k != "details"}
-            _refresh["error"] = None
+            state["result"] = fn()
+            state["error"] = None
         except BaseException as e:  # SystemExit from the Proton wrapper carries the reason
-            _refresh["error"] = str(e) or e.__class__.__name__
+            state["error"] = str(e) or e.__class__.__name__
         finally:
-            _refresh["running"] = False
+            state["running"] = False
 
-    _refresh.update(running=True, started=datetime.now(timezone.utc).isoformat(timespec="seconds"), error=None)
+    state.update(running=True, started=datetime.now(timezone.utc).isoformat(timespec="seconds"), error=None,
+                 result=None, **info)
     threading.Thread(target=run, daemon=True).start()
-    return dict(_refresh)
+    return dict(state)
+
+
+def _start_refresh() -> dict:
+    from . import library
+
+    def go():
+        return {k: v for k, v in library.refresh().items() if k != "details"}
+
+    return _background(_refresh, go)
+
+
+def _start_job(action: str, key: str, handler) -> dict:
+    """Claim (and fetch the PDF if it isn't here), release, or sync the board, in the background."""
+    from . import board, book, library
+
+    def work_on():
+        r = board.claim(key)
+        if not r["ok"]:
+            return r
+        root = library.load().get("root", "").rstrip("/")
+        remote = f"{root}/{r['entry']['path']}"
+        if not any(w.remote == remote for w in handler.works.values()):
+            w, _ = book.fetch(remote)
+            handler.works = load_works()
+            r["fetched"] = w.id
+        board.refresh_board()
+        return r
+
+    fns = {"claim": work_on, "release": lambda: board.release(key), "sync": lambda: (board.refresh_board(), {"ok": True})[1]}
+    if action not in fns:
+        raise LookupError("not found")
+    return _background(_job, lambda: {k: v for k, v in fns[action]().items() if k != "entry"}, what=f"{action} {key}".strip())
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -269,6 +313,16 @@ class Handler(BaseHTTPRequestHandler):
         parts = [p for p in urlparse(self.path).path.split("/") if p]
         if parts == ["api", "catalog", "refresh"]:
             return self._json(_start_refresh())
+        if len(parts) == 3 and parts[:2] == ["api", "board"]:
+            try:
+                key = str(self._body().get("key", "")) if parts[2] != "sync" else ""
+                if parts[2] != "sync" and not re.fullmatch(r"[0-9a-f]{40}", key):
+                    raise ValueError("key: the book's SHA-1")
+                return self._json(_start_job(parts[2], key, type(self)))
+            except LookupError as e:
+                return self._err(str(e), HTTPStatus.NOT_FOUND)
+            except (ValueError, json.JSONDecodeError) as e:
+                return self._err(str(e))
         if len(parts) >= 3 and parts[0] == "api" and parts[2] in ("patterns", "suggestions", "chat"):
             try:
                 return self._post_patterns(parts)

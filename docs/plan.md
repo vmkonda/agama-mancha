@@ -13,8 +13,8 @@ Miscellaneous 66, Reference 60, Kula Internal Documents 15).
 
 | Phase | What | Status |
 |---|---|---|
-| A | **Catalog** of every PDF, with refresh; the **Library** page | built, in review |
-| B | **Claims, stages and progress** per book; *Work on this* and *Release* | next |
+| A | **Catalog** of every PDF, with refresh; the **Library** page | done (#12) |
+| B | **Claims, stages and progress** per book; *Work on this* and *Release* | built, in review |
 | C | **Inventory** per book: text layer, page count, script (which need OCR) | later |
 | D | **Assemble** units into the material folder layout ([material-folder.md](material-folder.md)) | later |
 
@@ -39,13 +39,23 @@ Miscellaneous 66, Reference 60, Kula Internal Documents 15).
 
 ### B. Claims, stages, progress
 
-- Each book's `status.json` in its material folder: stage, who holds it and since when,
-  page counts per step, a short history.
+- **The board**: `<material folder>/catalog/board/<person>.json`, one small file per
+  person with their claims and the progress of every book on their machine (page counts
+  per step, stage). Nobody edits a shared file, so two people never overwrite each
+  other; everyone's app reads all the files and merges them. Books are keyed by the
+  PDF's checksum, so claims survive the library being reorganised. (The plan first had
+  one `status.json` per book; with no locks on Proton, two people saving it at once
+  would lose one of the saves.)
 - Stages: listed → inventoried → read by Surya → reviewed → proofreading → verified →
   assembled. Updated automatically as people work.
-- *Work on this* reads the status, writes the claim, reads it back to confirm (Proton
-  has no locks). A claim with no activity for 14 days shows as stale; anyone may then
-  release it, and the release is recorded. Whole books first; page ranges later.
+- *Work on this* reads the board, writes the claim, reads the board back to confirm
+  (Proton has no locks); the earliest claim wins, and a later one withdraws itself. It
+  also downloads the PDF if it isn't on this machine. A claim with no activity for 14
+  days shows as stale; anyone may then release it, and the release is recorded in the
+  releaser's own file. Whole books first; page ranges later.
+- Progress is shared on every `amocr push` and `amocr start`, and with *Sync board*.
+- Commands: `amocr board` (show), `amocr board sync`, `amocr board claim <book>`,
+  `amocr board release <book> [--why …]`.
 
 ### C. Inventory
 

@@ -71,8 +71,14 @@ from the PDF itself, so it's the same on every machine and changes only if
 the file changes. The page counts can be read from the book's `book.json`
 in the material folder, or with `uv run amocr status <id>`.
 
-A book can be handed over: the next volunteer runs `amocr fetch` on the same
-PDF and receives everything already uploaded.
+Who is working on which book, and how far each has got, is on the app's
+**Library** page (or `uv run amocr board`). It's shared through
+`<material folder>/catalog/board/`, one small file per person. A claim with no
+activity for 14 days shows as stale, and anyone may release it; the release is
+recorded with their name.
+
+A book can be handed over: the holder presses *Release*, and the next volunteer
+presses *Work on this*, which downloads the PDF and everything already uploaded.
 
 ## Restricted texts
 
