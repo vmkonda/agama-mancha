@@ -162,13 +162,15 @@ def remote_dir(cfg) -> str | None:
     return posixpath.join(results_root(cfg.proton_root, cfg.material), "catalog")
 
 
-def refresh(operator: str = "") -> dict:
-    """List the library, merge, save locally, and share through the material folder when it exists."""
+def refresh(operator: str = "", share: bool = True) -> dict:
+    """List the library, merge, save locally, and share through the material folder when it exists.
+
+    share=False reads only: no shared copy is pulled or uploaded."""
     from . import book
     from . import config as cfgmod
 
     pd, cfg = book._proton()
-    old = pull(pd, cfg) or load()
+    old = (pull(pd, cfg) if share else None) or load()
     listing = list_library(pd, cfg.proton_root)
     entries, changes = merge(old.get("entries", []), listing)
     cat = {"root": cfg.proton_root, "refreshed_at": _now(), "refreshed_by": operator or cfgmod.load().operator,
@@ -178,7 +180,7 @@ def refresh(operator: str = "") -> dict:
                **{k: len(v) for k, v in changes.items()}, "details": changes}
     with (local_dir() / "changes.jsonl").open("a", encoding="utf-8") as f:
         f.write(json.dumps(summary, ensure_ascii=False) + "\n")
-    summary["shared"] = push(pd, cfg)
+    summary["shared"] = push(pd, cfg) if share else "not shared: --local"
     return summary
 
 

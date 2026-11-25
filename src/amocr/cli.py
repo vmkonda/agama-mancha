@@ -654,7 +654,7 @@ def cmd_catalog(args) -> None:
         if args.if_older is not None and age is not None and age < args.if_older:
             print(f"catalog is {age:.1f} h old; not refreshing")
             return
-        s = library.refresh()
+        s = library.refresh(share=not args.local)
         print(f"{s['pdfs']} PDFs: +{s['added']} new, {s['moved']} moved, {s['changed']} changed, {s['gone']} gone ({s['shared']})")
         return
     cat = library.load()
@@ -723,6 +723,7 @@ def main(argv: list[str] | None = None) -> None:
     p = plain_cmd("catalog", cmd_catalog, "the shared catalog of every PDF in the library")
     p.add_argument("action", choices=["refresh", "show"])
     p.add_argument("--if-older", type=float, help="refresh only if older than this many hours")
+    p.add_argument("--local", action="store_true", help="read the library only; don't pull or share the catalog")
     p = plain_cmd("start", cmd_start, "refresh the catalog if stale, then open the viewer")
     p.add_argument("--port", type=int, default=8791)
     p.add_argument("--no-browser", action="store_true")

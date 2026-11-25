@@ -13,7 +13,7 @@ Miscellaneous 66, Reference 60, Kula Internal Documents 15).
 
 | Phase | What | Status |
 |---|---|---|
-| A | **Catalog** of every PDF, with refresh; the **Library** page | in progress |
+| A | **Catalog** of every PDF, with refresh; the **Library** page | built, in review |
 | B | **Claims, stages and progress** per book; *Work on this* and *Release* | next |
 | C | **Inventory** per book: text layer, page count, script (which need OCR) | later |
 | D | **Assemble** units into the material folder layout ([material-folder.md](material-folder.md)) | later |

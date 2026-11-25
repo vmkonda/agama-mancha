@@ -406,3 +406,22 @@ def test_library_merge():
     assert next(e for e in e2 if e["path"] == "S/a.pdf")["moved_from"] == ["T/a.pdf"]
     e3, c3 = merge(e2, [moved | {"sha1": "z"}], "t3")
     assert c3["changed"] == ["S/a.pdf"] and any(e["state"] == "gone" for e in e3)  # gone entries are kept
+
+
+def test_library_page_marks_books_on_this_machine(tmp_path, monkeypatch):
+    import json
+
+    from amocr import library, server
+    from amocr.catalog import Work
+
+    monkeypatch.setenv("AMOCR_DATA", str(tmp_path))
+    entries, _ = library.merge([], [
+        {"path": "T/a.pdf", "name": "a.pdf", "folder": "T", "size": 1, "modified": "", "sha1": "x", "added_by": None},
+        {"path": "T/b.pdf", "name": "b.pdf", "folder": "T", "size": 2, "modified": "", "sha1": "y", "added_by": None},
+    ], "t1")
+    library.save({"root": "/shared-with-me/L/", "refreshed_at": "2026-11-25T00:00:00+00:00", "count": 2, "entries": entries})
+    w = Work(id="B-1", title="A", languages=["san"], sha256="0", remote="/shared-with-me/L/T/a.pdf")
+    out = server._library({"B-1": w})
+    assert out["count"] == 2 and not out["refresh"]["running"]
+    assert {e["path"]: e.get("book") for e in out["entries"]} == {"T/a.pdf": "B-1", "T/b.pdf": None}
+    json.dumps(out)  # the page gets it as JSON

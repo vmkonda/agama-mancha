@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Library</title>
+<style>
+:root {
+  --bg: #f7f6f3; --panel: #ffffff; --text: #1d1d1b; --muted: #6b6a66; --line: #e3e1dc;
+  --accent: #2f6fd6; --new: #d4f0dc; --new-text: #12602d; --gone: #fbd9d6; --gone-text: #8a1c12;
+  --chg: #fff1c7; --chg-text: #6a4b00; --here: #e3eefc; --here-text: #1d4f9c;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #161615; --panel: #1f1f1d; --text: #e8e6e1; --muted: #9a9890; --line: #33322f;
+    --accent: #7aa7f0; --new: #173f25; --new-text: #a6e5b8; --gone: #5a1f1a; --gone-text: #ffb4ab;
+    --chg: #4a3a0c; --chg-text: #f3d68a; --here: #1d2b40; --here-text: #a9c8f5;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #161615; --panel: #1f1f1d; --text: #e8e6e1; --muted: #9a9890; --line: #33322f;
+  --accent: #7aa7f0; --new: #173f25; --new-text: #a6e5b8; --gone: #5a1f1a; --gone-text: #ffb4ab;
+  --chg: #4a3a0c; --chg-text: #f3d68a; --here: #1d2b40; --here-text: #a9c8f5;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--bg); color: var(--text); font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+header { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; padding: 8px 16px; border-bottom: 1px solid var(--line); background: var(--panel); position: sticky; top: 0; z-index: 1; }
+header h1 { font-size: 15px; margin: 0 8px 0 0; font-weight: 600; }
+select, button, input { font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 4px 8px; }
+button { cursor: pointer; } button:hover { border-color: var(--accent); }
+button:disabled { opacity: .6; cursor: default; }
+a { color: var(--accent); }
+.grow { flex: 1; }
+.muted { color: var(--muted); }
+#q { min-width: 220px; flex: 1 1 220px; max-width: 420px; }
+#status { padding: 8px 16px; font-size: 13px; }
+#status .err { color: var(--gone-text); }
+main { padding: 0 16px 40px; }
+table { width: 100%; border-collapse: collapse; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+th, td { text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-size: 12px; font-weight: 600; color: var(--muted); background: var(--bg); cursor: pointer; user-select: none; white-space: nowrap; }
+td.num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+td.when { white-space: nowrap; color: var(--muted); }
+.path { color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
+.chip { display: inline-block; font-size: 11px; padding: 1px 6px; border-radius: 10px; margin-right: 4px; white-space: nowrap; }
+.c-new { background: var(--new); color: var(--new-text); } .c-gone { background: var(--gone); color: var(--gone-text); }
+.c-changed, .c-moved { background: var(--chg); color: var(--chg-text); } .c-here { background: var(--here); color: var(--here-text); }
+tr.gone td { opacity: .6; }
+.empty { padding: 24px; text-align: center; color: var(--muted); }
+@media (max-width: 700px) { .hide-sm { display: none; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>Library</h1>
+  <input id="q" type="search" placeholder="Search title or path" aria-label="Search">
+  <select id="folder" aria-label="Folder"><option value="">All folders</option></select>
+  <select id="show" aria-label="Show">
+    <option value="">All PDFs</option>
+    <option value="here">On this machine</option>
+    <option value="new">New since last refresh</option>
+    <option value="changed">Changed or moved</option>
+    <option value="gone">Gone from the library</option>
+  </select>
+  <span class="grow"></span>
+  <button id="refresh" title="Read the library listing again and update the shared catalog">Refresh</button>
+  <a href="/">Viewer</a>
+  <button id="theme" title="Toggle theme">◐</button>
+</header>
+<div id="status" class="muted">Loading…</div>
+<main><div id="list"></div></main>
+<script>
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const store = { get: (k) => { try { return localStorage.getItem("lib." + k); } catch { return null; } },
+                set: (k, v) => { try { localStorage.setItem("lib." + k, v); } catch {} } };
+const S = { cat: null, sort: store.get("sort") || "path", dir: +(store.get("dir") || 1) };
+
+const theme = store.get("theme"); if (theme) document.documentElement.dataset.theme = theme;
+$("theme").onclick = () => {
+  const dark = document.documentElement.dataset.theme ? document.documentElement.dataset.theme === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+  document.documentElement.dataset.theme = dark ? "light" : "dark"; store.set("theme", document.documentElement.dataset.theme);
+};
+
+const mb = (n) => n ? (n / 1048576 >= 100 ? Math.round(n / 1048576) : (n / 1048576).toFixed(1)) + " MB" : "";
+const day = (s) => s ? String(s).slice(0, 10) : "";
+const title = (e) => e.name.replace(/\.pdf$/i, "");
+function ago(h) {
+  if (h == null) return "never";
+  if (h < 1) return `${Math.max(1, Math.round(h * 60))} min ago`;
+  if (h < 48) return `${Math.round(h)} h ago`;
+  return `${Math.round(h / 24)} days ago`;
+}
+
+async function load() {
+  const r = await fetch("/api/catalog"); S.cat = await r.json();
+  const folders = [...new Set(S.cat.entries.map((e) => e.folder).filter(Boolean))].sort();
+  const keep = $("folder").value || store.get("folder") || "";
+  $("folder").innerHTML = `<option value="">All folders</option>` + folders.map((f) =>
+    `<option value="${esc(f)}">${esc(f)} (${S.cat.entries.filter((e) => e.folder === f && e.state !== "gone").length})</option>`).join("");
+  if (folders.includes(keep)) $("folder").value = keep;
+  $("show").value = store.get("show") || "";
+  $("q").value = store.get("q") || "";
+  status(); render();
+  if (S.cat.refresh.running) poll();
+}
+
+function status() {
+  const c = S.cat, rf = c.refresh;
+  let html;
+  if (!c.refreshed_at) html = `No catalog yet. Press <b>Refresh</b> to read the library listing (a few minutes).`;
+  else {
+    const lc = c.last_change;
+    html = `<b>${c.count}</b> PDFs · refreshed ${esc(ago(c.age_hours))}${c.refreshed_by ? " by " + esc(c.refreshed_by) : ""}`;
+    if (lc) html += ` · last refresh: +${lc.added} new, ${lc.moved} moved, ${lc.changed} changed, ${lc.gone} gone`;
+    if (lc && lc.shared) html += ` · <span title="${esc(lc.shared)}">${lc.shared.startsWith("shared") ? "shared with the team" : esc(lc.shared)}</span>`;
+  }
+  if (rf.running) html = `Refreshing since ${esc(rf.started.slice(11, 16))} UTC: reading every folder of the library… · ` + html;
+  if (rf.error) html += ` · <span class="err">Refresh failed: ${esc(rf.error)}</span>`;
+  $("status").innerHTML = html;
+  $("refresh").disabled = rf.running;
+  $("refresh").textContent = rf.running ? "Refreshing…" : "Refresh";
+}
+
+function rows() {
+  const q = $("q").value.trim().toLowerCase(), f = $("folder").value, show = $("show").value;
+  let es = S.cat.entries.filter((e) => {
+    if (f && e.folder !== f) return false;
+    if (show === "here" && !e.book) return false;
+    if (show === "new" && e.state !== "new") return false;
+    if (show === "changed" && !["changed", "moved"].includes(e.state)) return false;
+    if (show === "gone" ? e.state !== "gone" : e.state === "gone" && show !== "") return false;
+    return !q || e.path.toLowerCase().includes(q);
+  });
+  const k = S.sort, d = S.dir;
+  const val = (e) => k === "size" ? (e.size || 0) : k === "modified" ? (e.modified || "") : k === "title" ? title(e).toLowerCase() : e.path.toLowerCase();
+  return es.sort((a, b) => (val(a) < val(b) ? -1 : val(a) > val(b) ? 1 : 0) * d);
+}
+
+function render() {
+  if (!S.cat.entries.length) { $("list").innerHTML = ""; return; }
+  const es = rows();
+  const arrow = (k) => S.sort === k ? (S.dir > 0 ? " ▲" : " ▼") : "";
+  const chips = (e) => [
+    e.book ? `<a class="chip c-here" href="/#${encodeURIComponent(e.book)}" title="Open in the viewer">on this machine · open</a>` : "",
+    ["new", "changed", "moved", "gone"].includes(e.state) ? `<span class="chip c-${e.state}" title="${esc(e.state === "moved" ? "was at " + (e.moved_from || []).slice(-1)[0] : e.state === "gone" ? "not in the library since " + day(e.gone_since) : "")}">${e.state}</span>` : "",
+  ].join("");
+  const shown = es.slice(0, 1000);
+  $("list").innerHTML = es.length ? `<table>
+    <thead><tr><th data-k="title">Title${arrow("title")}</th><th data-k="path" class="hide-sm">Folder${arrow("path")}</th>
+    <th data-k="size" class="hide-sm">Size${arrow("size")}</th><th data-k="modified" class="hide-sm">Added${arrow("modified")}</th></tr></thead>
+    <tbody>${shown.map((e) => `<tr class="${e.state === "gone" ? "gone" : ""}">
+      <td><div>${esc(title(e))}</div><div>${chips(e)}</div></td>
+      <td class="path hide-sm">${esc(e.path.split("/").slice(0, -1).join(" / "))}</td>
+      <td class="num hide-sm">${mb(e.size)}</td><td class="when hide-sm">${esc(day(e.modified))}</td></tr>`).join("")}</tbody></table>
+    <p class="muted">${es.length} shown${es.length > shown.length ? ` (first ${shown.length}; narrow the search to see the rest)` : ""}.</p>`
+    : `<div class="empty">No PDFs match.</div>`;
+  for (const th of document.querySelectorAll("th[data-k]")) th.onclick = () => {
+    S.dir = S.sort === th.dataset.k ? -S.dir : 1; S.sort = th.dataset.k; store.set("sort", S.sort); store.set("dir", S.dir); render();
+  };
+}
+
+let timer;
+$("q").oninput = () => { clearTimeout(timer); timer = setTimeout(() => { store.set("q", $("q").value); render(); }, 120); };
+$("folder").onchange = () => { store.set("folder", $("folder").value); render(); };
+$("show").onchange = () => { store.set("show", $("show").value); render(); };
+$("refresh").onclick = async () => {
+  const r = await fetch("/api/catalog/refresh", { method: "POST" }); S.cat.refresh = await r.json(); status(); poll();
+};
+async function poll() {
+  await new Promise((r) => setTimeout(r, 3000));
+  const r = await fetch("/api/catalog"); const c = await r.json();
+  if (c.refresh.running) { S.cat.refresh = c.refresh; status(); return poll(); }
+  await load();
+}
+load().catch((e) => { $("status").innerHTML = `<span class="err">Couldn't load the catalog: ${esc(e)}</span>`; });
+</script>
+</body>
+</html>
