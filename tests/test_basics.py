@@ -341,3 +341,20 @@ def test_chat_check_range(tmp_path, monkeypatch):
     assert "n2" not in chat.post(w, "user", "one line", page=2, n=3, n2=3)
     with pytest.raises(ValueError):
         chat.post(w, "user", "backwards", page=2, n=4, n2=2)
+
+
+def test_suspects_signals():
+    from collections import Counter
+
+    from amocr.suspects import CharModel, lookalikes, syllables
+
+    assert syllables("स्वदेहं चिन्तयेत्कृष्णं वृत्तं १षट्बिन्दुलाञ्छितम् ।") == 16
+    assert syllables("चलं सचूचूशब्दं च वायवीं धारणां श्रितः ॥ ३४ ॥") == 16
+    rules = [["ो", "ी", "shape"], ["^भा", "आ", "shape"], ["+र्", "", "reph"]]
+    got = {v for v, _ in lookalikes("देवो", rules)}
+    assert "देवी" in got
+    assert ("आता", "shape") in lookalikes("भाता", rules)
+    assert "अमरार्चित" in {v for v, _ in lookalikes("अमराचित", rules)}
+    assert lookalikes("देवो", []) == []  # nothing is built in: a book without a profile gets no look-alikes
+    lm = CharModel(Counter({"मालिनी": 50, "देवी": 40, "उसी": 30, "विजय": 20}))
+    assert lm.score("मालिनीविजय") > lm.score("मालिनोविजय")

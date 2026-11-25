@@ -55,6 +55,38 @@ the intended ी and sometimes the shape; proofreaders should expect this.
 
 Surya-derived text is still Surya output for licence purposes (see below).
 
+## Suspect lines: what to check first (free, text only)
+
+`amocr suspects <book>` scores every line from the text alone, with no Claude and no
+tokens:
+
+| Signal | What it looks for |
+|---|---|
+| look-alike | a word that is rare in this book while a look-alike of it is common (देवो/देवी, बादि/आदि, अमराचित/अमरार्चित), whole words first, then a character model trained on the book's own text (catches compounds) |
+| metre | a verse line with the wrong syllable count |
+| verse number | a verse number out of sequence |
+| Tesseract | Tesseract reads the same line differently |
+| rare | a word that occurs once and looks unusual for this book |
+
+**Which letters look alike depends on the typeface**, so nothing is built in. Each
+book has a profile (`amocr profile <book>`) with its look-alike pairs and metre,
+and pairs people correct at least twice are learned automatically. A new book
+starts with the general signals only.
+
+Measured on the Mālinīvijayottara pilot, against the 42 lines corrected so far on
+8 pages:
+
+| Setting | Known errors caught | Lines flagged |
+|---|---|---|
+| score ≥ 3 (look-alike, verse number) | 9 of 42 | 18 of 219, half of them real errors |
+| score ≥ 2 (adds Tesseract disagreement) | 36 of 42 | 117 of 219 |
+
+So the confident look-alikes are good Suggestions (`--add-rules`), and score ≥ 2
+roughly halves the lines that need an image check while keeping most errors. It
+doesn't replace reading: the misses are single wrong letters that form valid
+words, and footnote markers. These numbers come from one book; measure again on
+each new one (`amocr suspects <book> --eval`).
+
 ## Surya
 
 ### Install (optional)
