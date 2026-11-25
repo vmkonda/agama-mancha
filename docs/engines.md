@@ -203,3 +203,20 @@ licence for Surya-derived text, use Surya only as a private aid and publish
 text proofread from another engine's reading, or ask Datalab
 (hi@datalab.to) how the clauses apply to a non-commercial digital library.
 Until then, Surya results stay internal to Vimarsha.
+
+## Local vision models instead of Claude: tested, not used
+
+Tested 2026-11-25: can a local model do Claude's line review? Each line's image,
+Surya's reading and the book's conventions went to the model, which returned the
+corrected line. Test set: the 12 lines a proofreader fixed (pp 1, 10, 11) and
+every line of pp 231–235 (151 lines, against Claude's line review).
+
+| Model | Speed per line | Needed fixes made | Correct lines broken | Character errors |
+|---|---|---|---|---|
+| Qwen 3.8 (27B) | ~2 s | 9 of 45 | 39 of 118 | 0.86% → 2.24% (pp 231–235) |
+| Qwen3-VL 32B | 116–382 s | stopped after 2 lines: missed one fix, broke a correct footnote marker, replaced one misreading with another | | |
+
+Both make the text worse: they replace correct Sanskrit with plausible-looking
+wrong Sanskrit, the error proofreaders are least likely to catch. Local models
+stay where they're strong: Surya for reading, and the text-only scorer for
+choosing which lines Claude checks.

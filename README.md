@@ -42,6 +42,14 @@ your name and folders. After that:
 
 Everything is also available as plain commands (`uv run amocr --help`).
 
+**The Library.** `uv run amocr start` opens the app; its *Library* page lists every
+PDF in the team library, with search and folder filters, and marks the books
+already on your machine. The catalog behind it refreshes itself when it is more
+than a day old, and the page's *Refresh* button reads the library again at any
+time (a few minutes; it only reads the library). The refreshed catalog is shared
+with the team in the material folder's `catalog/`. `uv run amocr catalog refresh
+--local` refreshes your copy only.
+
 ## Relation to the team's ocrmypdf method
 
 The team's `ocrmypdf -l iast+eng+san` searchable PDFs stay as they are. This

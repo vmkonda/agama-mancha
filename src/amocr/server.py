@@ -78,6 +78,53 @@ def _crop(work: Work, page: int, b: list[int], pad: int = 8) -> bytes:
     return buf.getvalue()
 
 
+# ---- the Library page: the shared catalog (docs/plan.md, phase A) -------------------
+
+_refresh = {"running": False, "started": None, "result": None, "error": None}
+
+
+def _library(works: dict[str, Work]) -> dict:
+    from . import library
+
+    cat = library.load()
+    root = cat.get("root", "").rstrip("/")
+    here = {w.remote: w.id for w in works.values() if w.remote}
+    entries = [e | ({"book": here[f"{root}/{e['path']}"]} if f"{root}/{e['path']}" in here else {})
+               for e in cat.get("entries", [])]
+    last = None
+    log = library.local_dir() / "changes.jsonl"
+    if log.exists():
+        lines = [ln for ln in log.read_text(encoding="utf-8").splitlines() if ln.strip()]
+        if lines:
+            last = {k: v for k, v in json.loads(lines[-1]).items() if k != "details"}
+    age = library.age_hours(cat)
+    return {"root": root, "refreshed_at": cat.get("refreshed_at"), "refreshed_by": cat.get("refreshed_by"),
+            "age_hours": age, "count": cat.get("count", 0), "entries": entries, "last_change": last,
+            "refresh": {k: v for k, v in _refresh.items()}}
+
+
+def _start_refresh() -> dict:
+    import threading
+
+    from . import library
+
+    if _refresh["running"]:
+        return dict(_refresh)
+
+    def run():
+        try:
+            _refresh["result"] = {k: v for k, v in library.refresh().items() if k != "details"}
+            _refresh["error"] = None
+        except BaseException as e:  # SystemExit from the Proton wrapper carries the reason
+            _refresh["error"] = str(e) or e.__class__.__name__
+        finally:
+            _refresh["running"] = False
+
+    _refresh.update(running=True, started=datetime.now(timezone.utc).isoformat(timespec="seconds"), error=None)
+    threading.Thread(target=run, daemon=True).start()
+    return dict(_refresh)
+
+
 class Handler(BaseHTTPRequestHandler):
     works: dict[str, Work] = {}
 
@@ -111,6 +158,10 @@ class Handler(BaseHTTPRequestHandler):
         try:
             if not parts:
                 return self._send(files("amocr").joinpath("viewer.html").read_bytes(), "text/html; charset=utf-8")
+            if parts == ["library"]:
+                return self._send(files("amocr").joinpath("library.html").read_bytes(), "text/html; charset=utf-8")
+            if parts == ["api", "catalog"]:
+                return self._json(_library(self.works))
             if parts == ["api", "works"]:
                 return self._json([{"id": w.id, "title": w.title} for w in self.works.values()])
             if parts[0] == "api" and len(parts) == 3 and parts[2] == "pages":
@@ -216,6 +267,8 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         parts = [p for p in urlparse(self.path).path.split("/") if p]
+        if parts == ["api", "catalog", "refresh"]:
+            return self._json(_start_refresh())
         if len(parts) >= 3 and parts[0] == "api" and parts[2] in ("patterns", "suggestions", "chat"):
             try:
                 return self._post_patterns(parts)

@@ -644,6 +644,39 @@ def cmd_folders(args) -> None:
         print("  (empty: ask the coordinator to share the library and the material folder with your Proton account)")
 
 
+def cmd_catalog(args) -> None:
+    """The shared catalog of every PDF in the library (docs/plan.md, phase A)."""
+    from . import library
+
+    if args.action == "refresh":
+        cat = library.load()
+        age = library.age_hours(cat)
+        if args.if_older is not None and age is not None and age < args.if_older:
+            print(f"catalog is {age:.1f} h old; not refreshing")
+            return
+        s = library.refresh(share=not args.local)
+        print(f"{s['pdfs']} PDFs: +{s['added']} new, {s['moved']} moved, {s['changed']} changed, {s['gone']} gone ({s['shared']})")
+        for u in s["unreadable"]:
+            print(f"  couldn't list {u['folder']}: {u['error']} (its books keep their last state)")
+        return
+    cat = library.load()
+    print(f"{cat.get('count', 0)} PDFs, refreshed {cat.get('refreshed_at', 'never')} by {cat.get('refreshed_by', '-')}")
+
+
+def cmd_start(args) -> None:
+    """Refresh the catalog if it is more than a day old, then open the viewer."""
+    from . import library
+
+    age = library.age_hours(library.load())
+    if age is None or age > 24:
+        try:
+            s = library.refresh()
+            print(f"catalog: {s['pdfs']} PDFs, +{s['added']} new ({s['shared']})")
+        except SystemExit as e:
+            print(f"catalog not refreshed: {e}")
+    cmd_serve(args)
+
+
 def cmd_serve(args) -> None:
     from .server import serve
 
@@ -689,6 +722,14 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--restricted", action="store_true")
     p = plain_cmd("status", cmd_status, "progress per book")
     p.add_argument("work", nargs="?", metavar="book")
+    p = plain_cmd("catalog", cmd_catalog, "the shared catalog of every PDF in the library")
+    p.add_argument("action", choices=["refresh", "show"])
+    p.add_argument("--if-older", type=float, help="refresh only if older than this many hours")
+    p.add_argument("--local", action="store_true", help="read the library only; don't pull or share the catalog")
+    p = plain_cmd("start", cmd_start, "refresh the catalog if stale, then open the viewer")
+    p.add_argument("--port", type=int, default=8791)
+    p.add_argument("--no-browser", action="store_true")
+    p.add_argument("--open", help="start at a page")
     p = plain_cmd("serve", cmd_serve, "side-by-side viewer at http://127.0.0.1:8791")
     p.add_argument("--port", type=int, default=8791)
     p.add_argument("--no-browser", action="store_true")

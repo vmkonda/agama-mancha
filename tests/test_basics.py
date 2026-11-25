@@ -391,3 +391,51 @@ def test_material_setting(tmp_path, monkeypatch):
     config.save(config.Config(proton_root="/shared-with-me/L"))
     with pytest.raises(SystemExit, match="material folder not set"):
         book._mirror("/shared-with-me/L/T/B.pdf", config.load())  # never write into the library by default
+
+
+def test_library_merge():
+    from amocr.library import merge
+
+    a = {"path": "T/a.pdf", "name": "a.pdf", "folder": "T", "size": 10, "modified": "", "sha1": "x", "added_by": None}
+    b = {"path": "T/b.pdf", "name": "b.pdf", "folder": "T", "size": 20, "modified": "", "sha1": "y", "added_by": None}
+    e1, c1 = merge([], [a, b], "t1")
+    assert c1["added"] == ["T/a.pdf", "T/b.pdf"] and all(e["state"] == "new" for e in e1)
+    moved = a | {"path": "S/a.pdf", "folder": "S"}
+    e2, c2 = merge(e1, [moved], "t2")
+    assert c2["moved"] == ["T/a.pdf -> S/a.pdf"] and c2["gone"] == ["T/b.pdf"]
+    assert next(e for e in e2 if e["path"] == "S/a.pdf")["moved_from"] == ["T/a.pdf"]
+    e3, c3 = merge(e2, [moved | {"sha1": "z"}], "t3")
+    assert c3["changed"] == ["S/a.pdf"] and any(e["state"] == "gone" for e in e3)  # gone entries are kept
+
+
+def test_library_page_marks_books_on_this_machine(tmp_path, monkeypatch):
+    import json
+
+    from amocr import library, server
+    from amocr.catalog import Work
+
+    monkeypatch.setenv("AMOCR_DATA", str(tmp_path))
+    entries, _ = library.merge([], [
+        {"path": "T/a.pdf", "name": "a.pdf", "folder": "T", "size": 1, "modified": "", "sha1": "x", "added_by": None},
+        {"path": "T/b.pdf", "name": "b.pdf", "folder": "T", "size": 2, "modified": "", "sha1": "y", "added_by": None},
+    ], "t1")
+    library.save({"root": "/shared-with-me/L/", "refreshed_at": "2026-11-25T00:00:00+00:00", "count": 2, "entries": entries})
+    w = Work(id="B-1", title="A", languages=["san"], sha256="0", remote="/shared-with-me/L/T/a.pdf")
+    out = server._library({"B-1": w})
+    assert out["count"] == 2 and not out["refresh"]["running"]
+    assert {e["path"]: e.get("book") for e in out["entries"]} == {"T/a.pdf": "B-1", "T/b.pdf": None}
+    json.dumps(out)  # the page gets it as JSON
+
+
+def test_library_names_with_slashes_and_unreadable_folders():
+    from amocr.library import _seg, merge, split_path
+    from amocr.proton import ProtonError
+
+    assert _seg("Durga/ Shakta") == "Durga\\/ Shakta"
+    assert split_path("Texts/Durga\\/ Shakta/b.pdf") == ["Texts", "Durga/ Shakta", "b.pdf"]
+
+    a = {"path": "T/X/a.pdf", "name": "a.pdf", "folder": "T", "size": 1, "modified": "", "sha1": "x", "added_by": None}
+    e1, _ = merge([], [a], "t1")
+    e2, c2 = merge(e1, [], "t2", unread=["T/X"])  # T/X couldn't be listed this time
+    assert c2["gone"] == [] and e2[0]["path"] == "T/X/a.pdf" and e2[0]["state"] != "gone"
+    assert issubclass(ProtonError, Exception)
