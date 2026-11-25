@@ -391,3 +391,88 @@ def assemble(work: Work, pages: list[int] | None = None, commentary_layer: str |
              "verified_units": sum(u["status"] == "verified" for u in units), "layers": layers} | report
     (out / "build.json").write_text(json.dumps(build, ensure_ascii=False, indent=1), encoding="utf-8")
     return {"build": out.name, "new": True, "units": len(units), "path": str(out)} | report
+
+
+# --- For the proofreader: what the assembler will make of one page ----------------------------
+
+def _context(work: Work, page: int) -> dict:
+    """Chapter at this page and the last verse number before it, from the latest build."""
+    b = latest_build(work)
+    if not b:
+        return {"chapter": None, "last_verse": 0}
+    info = json.loads((b / "build.json").read_text(encoding="utf-8"))
+    starts = sorted((p, int(ch)) for ch, p in (info.get("chapters") or {}).items())
+    chapter = next((ch for p, ch in reversed(starts) if p <= page), None)
+    last = 0
+    mula = (info.get("layers") or {}).get("mula", "mula")
+    for line in (b / "units.jsonl").read_text(encoding="utf-8").splitlines():
+        u = json.loads(line)
+        if u["chapter"] == chapter and u["layer"] == mula and u["pages"] and max(u["pages"]) < page:
+            last = max([last] + _span(u["verse"]))
+    return {"chapter": chapter, "last_verse": last, "build": b.name}
+
+
+def page_structure(work: Work, page: int, text: str) -> dict:
+    """Per line: its type and number, as the assembler sees it; and warnings worth a look."""
+    lines = [t.strip() for t in text.split("\n") if t.strip()]
+    types = classify(lines)
+    ctx = _context(work, page)
+    found = next((c for t, ty in zip(lines, types) if ty == "header" for c in [chapter_of(t)] if c), None)
+    chapter = found or ctx["chapter"]
+    last = 0 if found and found != ctx["chapter"] else ctx["last_verse"]
+    printed = next((t.translate(DEVA_DIGITS) for t, ty in zip(lines, types)
+                    if ty == "header" and t.translate(DEVA_DIGITS).strip().isdigit()), None)
+    out, warnings, verses, comments = [], [], [], []
+    for n, (t, ty) in enumerate(zip(lines, types), 1):
+        tag = {"type": ty}
+        m = VERSE_NO.search(t)
+        if ty in ("verse", "commentary") and m:
+            key = verse_key(m.group(1), last)
+            span = _span(key)
+            if ty == "verse":
+                tag["verse"] = key
+                if span and last and span[0] != last + 1:
+                    warnings.append({"line": n, "text": f"verse {key} after verse {last}: a misread number?"})
+                verses.append(key)
+                last = max([last] + span)
+            else:
+                tag["explains"] = key
+                comments.append(key)
+                if span and span[-1] > last:
+                    warnings.append({"line": n, "text": f"commentary on {key}, but the last verse so far is {last}"})
+        elif ty == "footnote":
+            fm = re.match(r"\s*([०-९0-9]+)", t)
+            if fm:
+                tag["note"] = fm.group(1).translate(DEVA_DIGITS)
+        elif ty == "header" and chapter_of(t):
+            tag["chapter"] = chapter_of(t)
+        out.append(tag)
+    # Verse lines against the book's reference e-text, if it has one (a place to look, not a correction).
+    from . import reference
+    ref = reference.info(work)
+    if ref:
+        for n, (t, tag) in enumerate(zip(lines, out), 1):
+            if tag["type"] != "verse":
+                continue
+            c = reference.compare_line(work, VERSE_NO.sub("", t), chapter)
+            if not c:
+                continue
+            tag["ref"] = c["key"]
+            if c["diffs"]:
+                shown = "; ".join(f"{d['ours']} → {ref['name']}: {d['ref']}" for d in c["diffs"][:3])
+                more = f" (+{len(c['diffs']) - 3} more)" if len(c["diffs"]) > 3 else ""
+                warnings.append({"line": n, "kind": "reference", "diffs": c["diffs"], "key": c["key"],
+                                 "text": f"{shown}{more} ({ref['name']} {c['key']}). Check the print; editions differ",
+                                 "ref": c["ref_deva"]})
+    # A verse number that isn't closed properly ("॥ ३८ ।", "। ३८ ॥", "॥ ३८"): the assembler can't see it.
+    bad_no = re.compile(r"[।॥]\s*[०-९0-9]+(?:\s*[-–]\s*[०-९0-9]+)?\s*[।॥]?\s*$")
+    for n, (t, tag) in enumerate(zip(lines, out), 1):
+        if tag["type"] in ("verse", "commentary") and not VERSE_NO.search(t) and bad_no.search(t):
+            warnings.insert(0, {"line": n, "text": f"verse number not between ॥ … ॥: «{bad_no.search(t).group(0).strip()}»"})
+    # A verse line at the end of the page without a number simply runs on; one in the middle doesn't.
+    for k in range(len(out) - 1):
+        if out[k]["type"] == "verse" and "verse" not in out[k] and out[k + 1]["type"] not in ("verse",):
+            if any(o["type"] == "verse" for o in out[k + 1:]):
+                warnings.append({"line": k + 1, "text": "verse lines end here without a number (॥ N ॥)"})
+    return {"lines": out, "chapter": chapter, "printed_page": printed, "verses": verses, "commentary": comments,
+            "warnings": warnings, "build": ctx.get("build"), "reference": (ref or {}).get("name")}

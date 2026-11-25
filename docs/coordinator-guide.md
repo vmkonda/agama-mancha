@@ -16,7 +16,7 @@ login can edit the originals, a mistake can damage them. Set Proton up so it can
    With viewer rights, nothing a volunteer's computer does can change an
    original, whatever the software or Claude does. This is the protection that
    matters most; everything below is a backstop.
-2. **Create the results folder yourself.** The tool never creates it and
+2. **Create the material folder yourself.** The tool never creates it and
    refuses to write anywhere else.
 3. **Keep an offline backup of the originals** (an external disk or a second
    account the volunteers can't reach), and refresh it when books are added.
@@ -35,7 +35,7 @@ What the software adds on top (enforced in code and tested):
 
 - `amocr` can only read, list, download, create folders and upload. It has no
   delete, trash, move, rename, restore or sharing operations at all.
-- It writes only inside the results folder, and only below it.
+- It writes only inside the material folder, and only below it.
 - Re-uploading a page adds a new version of the file; nothing is trashed.
 - Every Proton call is logged on the volunteer's machine (`data/proton.log`).
 - A Claude Code guard in the repo blocks Claude from running Proton write

@@ -69,6 +69,21 @@ details li { margin: 2px 0; }
 #hl { position: absolute; inset: 0; overflow: hidden; color: transparent; pointer-events: none; padding-bottom: 80px; }
 #hl > div { height: var(--lh); border-radius: 3px; }
 #hl .lowl { background: var(--low); }
+sup.fn { color: var(--accent); font-weight: 700; font-size: .72em; line-height: 0; padding: 0 1px; }
+/* Footnote markers (a digit right after a letter: योगी२) look like letters in Devanagari fonts (२/र, ३/इ); tint them. */
+#hl .fnm { background: color-mix(in srgb, var(--accent) 28%, transparent); border-radius: 3px; box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 55%, transparent); }
+.ed.withgut textarea, .ed.withgut #hl { padding-left: 128px; }
+#gut { position: absolute; left: 0; top: 0; bottom: 0; width: 120px; overflow: hidden; pointer-events: none; padding: 10px 0 80px 0; border-right: 1px solid var(--line); z-index: 1; }
+#gut > div { height: var(--lh); line-height: var(--lh); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 11px; padding: 0 6px; color: var(--muted); letter-spacing: .02em; }
+#gut .t-header, #gut .t-signature { opacity: .7; }
+#gut .t-verse { color: var(--accent); font-weight: 600; }
+#gut .t-footnote { font-style: italic; }
+#gut .t-colophon { color: var(--accent); font-style: italic; }
+#gut .warn { background: var(--low); color: var(--low-text); border-radius: 3px; }
+.pagebar { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 13px; margin: 0 0 6px; }
+.pagebar b { font-weight: 600; }
+.pwarn { font-size: 13px; margin: 0 0 8px; }
+.pwarn button { font-size: 12px; padding: 1px 8px; margin: 2px 6px 2px 0; background: var(--low); color: var(--low-text); border-color: transparent; }
 #hl .cur { box-shadow: inset 3px 0 0 var(--accent); }
 #hl .cur:not(.lowl) { background: var(--hl); }
 .pal { display: flex; flex-wrap: wrap; gap: 4px; margin: 0 0 6px; }
@@ -83,7 +98,7 @@ details li { margin: 2px 0; }
 #chat.open { display: flex; }
 /* Wide screens: dock the panel in its own column so it never covers the text being edited. */
 @media (min-width: 1100px) {
-  #chat { top: 104px; bottom: 12px; right: 12px; height: auto; width: 420px; }
+  #chat { top: var(--chat-top, 160px); bottom: 12px; right: 12px; height: auto; width: 420px; }
   body.chat-open main { margin-right: 444px; }
 }
 #chat .head { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-bottom: 1px solid var(--line); font-size: 13px; }
@@ -157,7 +172,13 @@ details li { margin: 2px 0; }
 const $ = (id) => document.getElementById(id);
 const S = { work: null, page: null, pages: [], data: null, mode: "view" };
 const store = { get(k) { try { return localStorage.getItem(k); } catch { return null; } }, set(k, v) { try { localStorage.setItem(k, v); } catch {} }, del(k) { try { localStorage.removeItem(k); } catch {} } };
-const esc = (s) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+// Devanagari text with footnote markers shown as raised, coloured digits (योगी२ → योगी^२), so a marker
+// can't pass for a letter (२/र, ३/इ). A marker is a digit right after a letter, or right before a word;
+// a lone ० after a letter is the abbreviation sign (क० पु०); verse numbers stand alone and stay as they are.
+const FNM_AFTER = /([\u0900-\u0963\u0971-\u097F])((?!०(?![०-९]))[०-९0-9]+)/g, FNM_BEFORE = /(^|\s)([१-९])(?=[\u0905-\u0939])/g;
+const deva = (t) => esc(t).replace(FNM_AFTER, '$1<sup class="fn" title="footnote marker">$2</sup>')
+  .replace(FNM_BEFORE, '$1<sup class="fn" title="footnote marker">$2</sup>');
 const api = async (u, opt) => { const r = await fetch(u, opt); const j = await r.json(); if (!r.ok) throw new Error(j.error || r.status); return j; };
 const LOW = 70;
 
@@ -218,8 +239,10 @@ const step = (d) => { const i = S.pages.findIndex((p) => p.page === S.page); con
 $("prev").onclick = () => step(-1); $("next").onclick = () => step(1);
 document.addEventListener("keydown", (e) => { if (e.target.tagName === "TEXTAREA" || e.target.tagName === "INPUT" || S.mode === "sugg") return; if (e.key === "ArrowLeft") step(-1); if (e.key === "ArrowRight") step(1); });
 
+let lastBox = null;
 function showBox(bbox) {
   const img = $("img"); if (!bbox || !img.naturalWidth) return;
+  lastBox = bbox;
   const s = img.clientWidth / img.naturalWidth, b = $("box");
   Object.assign(b.style, { display: "block", left: bbox[0] * s - 3 + "px", top: bbox[1] * s - 3 + "px", width: (bbox[2] - bbox[0]) * s + 6 + "px", height: (bbox[3] - bbox[1]) * s + 6 + "px" });
 }
@@ -245,7 +268,7 @@ function renderView(label) {
     lines.forEach((ln) => {
       const key = ln.type + "|" + (ln.verse ?? "");
       if (key !== cur) { if (cur) h += `</div>`; h += `<div class="region r-${esc(ln.type)}"><div class="tag">${esc(ln.type)}${ln.verse ? " · v" + esc(ln.verse) : ""}</div>`; cur = key; }
-      h += `<div class="ln">${esc(ln.text)}</div>`;
+      h += `<div class="ln">${deva(ln.text)}</div>`;
     });
     if (cur) h += `</div>`;
   } else if (lines.length && lines[0].bbox) {
@@ -255,10 +278,10 @@ function renderView(label) {
       const para = ln.block + "." + ln.par;
       if (prev && para !== prev) h += `<div class="gap"></div>`;
       prev = para;
-      h += `<div class="ln${ln.conf < LOW ? " low" : ""}" data-i="${i}" title="conf ${ln.conf}">${esc(ln.text)}</div>`;
+      h += `<div class="ln${ln.conf < LOW ? " low" : ""}" data-i="${i}" title="conf ${ln.conf}">${deva(ln.text)}</div>`;
     });
   } else {
-    h += r.text.split("\n").map((t) => (t.trim() ? `<div class="ln">${esc(t)}</div>` : `<div class="gap"></div>`)).join("");
+    h += r.text.split("\n").map((t) => (t.trim() ? `<div class="ln">${deva(t)}</div>` : `<div class="gap"></div>`)).join("");
   }
   h += `</div>`;
   if (r.changes && r.changes.length) h += `<details open><summary>${r.changes.length} changes from Tesseract</summary><ul class="deva" style="font-size:15px">${r.changes.map((c) => `<li><del style="color:var(--del-text)">${esc(c.from)}</del> → <b>${esc(c.to)}</b> <span class="muted" style="font-size:12px">${esc(c.why || "")}</span></li>`).join("")}</ul></details>`;
@@ -368,7 +391,8 @@ function renderEdit() {
     ${restored ? `<div class="draftnote">Restored your unsaved edits from ${esc(new Date(draft.at).toLocaleString())}. <button id="discard">Discard them</button></div>` : ""}
     <div class="pal" id="pal">${PALETTE.map((c) => `<button class="deva" data-c="${c}" title="insert ${c}">${c}</button>`).join("")}</div>
     <div class="rom"><input id="rom" placeholder="romanised (IAST kṛṣṇa or Harvard-Kyoto kRSNa), Enter inserts" autocomplete="off" spellcheck="false"><span id="romout" class="deva"></span></div>
-    <div class="ed"><div id="hl" class="deva" aria-hidden="true"></div><textarea id="gt" class="deva" spellcheck="false" wrap="off"></textarea></div>
+    <div class="pagebar" id="pagebar"></div><div class="pwarn" id="pwarn"></div>
+    <div class="ed withgut"><div id="gut" aria-hidden="true"></div><div id="hl" class="deva" aria-hidden="true"></div><textarea id="gt" class="deva" spellcheck="false" wrap="off"></textarea></div>
     <p class="keys muted"><span class="ln low" style="padding:0 4px">yellow</span> Tesseract was unsure · <kbd>F2</kbd> or <kbd>Alt ↓</kbd> next unsure line, with <kbd>Shift</kbd> / <kbd>Alt ↑</kbd> previous · <kbd>⌘/Ctrl S</kbd> save · <kbd>⌘/Ctrl ↵</kbd> save and next page · <kbd>⌘/Ctrl K</kbd> Claude checks the line(s) · <kbd>⌘/Ctrl ⇧ ↵</kbd> apply Claude's latest fix · edits are kept in this browser until saved</p>
     <div style="display:flex;flex-wrap:wrap;gap:8px 14px;margin-top:8px;align-items:center">
       <label><input type="checkbox" id="verified"> I checked every line against the print (verified)</label>
@@ -377,7 +401,7 @@ function renderEdit() {
     <div style="display:flex;gap:8px;margin-top:8px;align-items:center"><button id="save">Save</button><button id="savenext">Save and next ▶</button><button id="checkline" title="Claude checks the selected line(s) against the print and proposes fixes (⌘/Ctrl K)">Check with Claude</button><span id="saved" class="muted">${esc(S.flash || "")}</span></div>
     ${rv.saved ? `<p class="muted" style="font-size:13px">Last saved by ${esc(rv.reviewer || "unknown")} on ${esc(rv.saved.slice(0, 10))}${rv.verified ? " · verified" : " · draft"}${rv.note ? " · note: " + esc(rv.note) : ""}</p>` : ""}`;
   S.flash = "";
-  const ta = $("gt"), hl = $("hl"), TL = positionLines();
+  const ta = $("gt"), hl = $("hl"), gut = $("gut"), TL = positionLines();
   ta.value = restored ? draft.text : res[src].text;
   $("verified").checked = restored ? !!draft.verified : !!rv.verified;
   $("note").value = restored ? draft.note || "" : rv.note || "";
@@ -387,10 +411,58 @@ function renderEdit() {
   const curN = () => { const rs = rows(), c = curRow(); return rs[c] && rs[c].k != null ? rs[c].k + 1 : null; };
   const tl = (r) => (r && r.k != null ? TL[r.k] : null);
   const isLow = (r) => { const x = tl(r); return !!x && x.conf < LOW; };
-  const sync = () => { hl.scrollTop = ta.scrollTop; hl.scrollLeft = ta.scrollLeft; };
+  const sync = () => { hl.scrollTop = ta.scrollTop; hl.scrollLeft = ta.scrollLeft; gut.scrollTop = ta.scrollTop; };
+  // What the assembler will make of this page: a tag per line, the page's place in the book, warnings.
+  let ST = null, stTimer = null;
+  const TAG = (t) => !t ? "" : t.type === "verse" ? (t.verse ? `verse · ${t.verse}` : "verse")
+    : t.type === "commentary" ? (t.explains ? `comm. → ${t.explains}` : "comm.")
+    : t.type === "footnote" ? `footnote${t.note ? " " + t.note : ""}`
+    : t.type === "header" ? (t.chapter ? `header · ch ${t.chapter}` : "header") : t.type;
+  function drawStructure() {
+    if (!ST) return;
+    const warnAt = new Set(ST.warnings.map((w) => w.line));
+    gut.innerHTML = rows().map((r) => {
+      if (r.k == null) return "<div></div>";
+      const t = ST.lines[r.k];
+      return `<div class="t-${esc(t ? t.type : "")}${warnAt.has(r.k + 1) ? " warn" : ""}" title="${esc(TAG(t))}">${esc(TAG(t))}</div>`;
+    }).join("");
+    sync();
+    const span = (a) => a.length ? (a.length === 1 ? a[0] : `${a[0].split("-")[0]}–${a[a.length - 1].split("-").pop()}`) : "none";
+    const bits = [];
+    if (ST.chapter) bits.push(`<span>Chapter <b>${esc(ST.chapter)}</b></span>`);
+    if (ST.printed_page) bits.push(`<span>printed p. <b>${esc(ST.printed_page)}</b></span>`);
+    bits.push(`<span>verses <b>${esc(span(ST.verses))}</b></span>`);
+    bits.push(`<span>commentary on <b>${esc(ST.commentary.length ? ST.commentary.join(", ") : "none closing here")}</b></span>`);
+    if (ST.reference) bits.push(`<span>verses checked against <b>${esc(ST.reference)}</b></span>`);
+    bits.push(`<span class="muted">tags are guessed from the text, as the assembler will${ST.build ? "; context from build " + esc(ST.build) : ""}</span>`);
+    $("pagebar").innerHTML = bits.join("");
+    $("pwarn").innerHTML = ST.warnings.map((w) => `<button data-line="${w.line}" title="${w.ref ? "reference: " + esc(w.ref) + " · " : ""}go to line ${w.line}">line ${w.line}: ${esc(w.text)}</button>`).join("");
+    $("pwarn").querySelectorAll("button").forEach((b) => b.onclick = () => {
+      const want = +b.dataset.line, rs = rows();
+      const i = rs.findIndex((r) => r.k === want - 1);
+      if (i < 0) return;
+      const start = rs.slice(0, i).reduce((n, r) => n + r.t.length + 1, 0);
+      ta.focus(); ta.setSelectionRange(start, start + rs[i].t.length);
+      ta.scrollTop = Math.max(0, i * parseFloat(getComputedStyle(ta).lineHeight) - ta.clientHeight / 3);
+      paint();
+    });
+  }
+  function structure() {
+    clearTimeout(stTimer);
+    stTimer = setTimeout(async () => {
+      try {
+        ST = await api(`/api/${encodeURIComponent(S.work)}/structure`, { method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ page: S.page, text: ta.value }) });
+        drawStructure();
+      } catch (e) { $("pagebar").innerHTML = `<span class="muted">structure unavailable: ${esc(e.message)}</span>`; }
+    }, 300);
+  }
   function paint(follow = true) {
     const rs = rows(), c = curRow();
-    hl.innerHTML = rs.map((r, i) => `<div class="${[isLow(r) ? "lowl" : "", i === c ? "cur" : ""].join(" ").trim()}">${esc(r.t) || " "}</div>`).join("");
+    // A marker is a digit right after a letter (योगी२) or right before a word (१षट्…); a lone ० after a
+    // letter is the abbreviation sign (क० पु०), not a marker.
+    const marks = (t) => esc(t).replace(FNM_AFTER, '$1<span class="fnm">$2</span>').replace(FNM_BEFORE, '$1<span class="fnm">$2</span>');
+    hl.innerHTML = rs.map((r, i) => `<div class="${[isLow(r) ? "lowl" : "", i === c ? "cur" : ""].join(" ").trim()}">${marks(r.t) || " "}</div>`).join("");
     sync();
     if (!follow) return;
     const x = tl(rs[c]);
@@ -403,7 +475,7 @@ function renderEdit() {
       ta.value = before + fixBars(ta.value.slice(p));
       ta.selectionStart = ta.selectionEnd = before.length;
     }
-    keepDraft(); paint();
+    keepDraft(); paint(); structure();
   }
   function insert(s) { ta.setRangeText(s, ta.selectionStart, ta.selectionEnd, "end"); onInput(); }
   function jump(dir) {
@@ -433,6 +505,7 @@ function renderEdit() {
   ta.addEventListener("keyup", () => paint());
   ta.addEventListener("click", () => paint());
   ta.addEventListener("scroll", sync);
+  structure();
   $("verified").onchange = keepDraft;
   $("note").oninput = keepDraft;
   $("pal").addEventListener("mousedown", (e) => e.preventDefault()); // keep the cursor in the text
@@ -612,7 +685,7 @@ async function chatLoad() {
     const acts = (m.actions || []).map((a, i) => {
       if (a.type === "line") {
         const done = applied.has(`${m.id}:${i}`);
-        return `<div class="act"><span class="where">p${a.page} · line ${a.n}</span><div class="deva"><del>${esc(a.from)}</del><br><ins>${esc(a.to)}</ins></div>
+        return `<div class="act"><span class="where">p${a.page} · line ${a.n}</span><div class="deva"><del>${deva(a.from)}</del><br><ins>${deva(a.to)}</ins></div>
           <button data-apply="${esc(m.id)}:${i}" ${done ? "disabled" : ""}>${done ? "Applied" : "Apply to the draft"}</button></div>`;
       }
       return `<div class="act">Rule <code>${esc(a.id)}</code> <button data-rule="${esc(a.id)}">Review its matches in Suggestions</button></div>`;
@@ -692,6 +765,12 @@ function chatToggle(open) {
   if (CH.open) { chatWhere(); chatLoad(); CH.timer = setInterval(() => { chatWhere(); chatLoad(); }, 3000); $("chatin").focus(); }
   store.set("chat", CH.open ? "1" : "");
 }
+// The scan changes size when the chat panel opens or closes, the window resizes or the zoom moves:
+// redraw the line box at the new scale, and keep the docked panel just below the toolbars.
+new ResizeObserver(() => { if (lastBox && $("box").style.display === "block") showBox(lastBox); }).observe($("img"));
+const placeChat = () => document.documentElement.style.setProperty("--chat-top", Math.round(document.querySelector("main").getBoundingClientRect().top + 8) + "px");
+new ResizeObserver(placeChat).observe(document.body);
+placeChat();
 $("chatbtn").onclick = () => chatToggle();
 $("chatx").onclick = () => chatToggle(false);
 $("chatsend").onclick = chatSend;

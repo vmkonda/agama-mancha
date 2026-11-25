@@ -290,6 +290,13 @@ class Handler(BaseHTTPRequestHandler):
 
         work, _ = self._work_page(parts[1:2])
         body = self._body()
+        if parts[2:] == ["structure"]:      # the assembler's view of a page being proofread (read-only)
+            from . import assemble
+
+            text = body.get("text")
+            if not isinstance(text, str) or len(text) > 200_000:
+                raise ValueError("text: the page's text")
+            return self._json(assemble.page_structure(work, int(body.get("page") or 0), text))
         if parts[2:] == ["patterns", "mine"]:
             data = pat.merge_mined(work, include_claude=bool(body.get("include_claude")))
             return self._json({"rules": len(data["rules"])})
@@ -329,7 +336,7 @@ class Handler(BaseHTTPRequestHandler):
                 return self._err(str(e), HTTPStatus.NOT_FOUND)
             except (ValueError, json.JSONDecodeError) as e:
                 return self._err(str(e))
-        if len(parts) >= 3 and parts[0] == "api" and parts[2] in ("patterns", "suggestions", "chat"):
+        if len(parts) >= 3 and parts[0] == "api" and parts[2] in ("patterns", "suggestions", "chat", "structure"):
             try:
                 return self._post_patterns(parts)
             except LookupError as e:

@@ -585,3 +585,56 @@ def test_merge_duplicate_books(tmp_path, monkeypatch):
     assert (keep.workdir / "groundtruth/p0001.txt").read_text(encoding="utf-8") == "दूसरा पाठ\n"
     with pytest.raises(SystemExit):
         dedupe.merge(Work(id="B-x", title="t", languages=["san"], sha256="b" * 64), keep)   # different PDFs
+
+
+def test_page_structure_for_proofreading(tmp_path, monkeypatch):
+    """The proofreader sees each line's type and number, and warnings for a number the assembler can't use."""
+    from amocr import assemble
+    from amocr.catalog import Work
+
+    monkeypatch.setenv("AMOCR_DATA", str(tmp_path))
+    w = Work(id="B-test000002", title="t", languages=["san", "hin"], sha256="0" * 64)
+    text = "\n".join(["अथ त्रयोदशोऽधिकारः", "१९७",
+                      "रामः वनं गच्छति सीता अपि गच्छति ।", "लक्ष्मणः अनुगच्छति भरतः तिष्ठति ॥ ३४ ॥",
+                      "नदी वहति पर्वतः तिष्ठति सदा ।", "वृक्षः फलति पक्षी उड्डयते नभः ॥ ३५ ।",
+                      "चन्द्रः प्रकाशते रात्रौ सूर्यः दिवा ।", "तारा दृश्यते आकाशे सदा ॥ ३६ ॥",
+                      "यहाँ से वन यात्रा का वर्णन किया जा रहा है ॥ ३४ ॥", "१. क० पु० वहतीति पाठः ;"])
+    r = assemble.page_structure(w, 5, text)
+    assert r["chapter"] == 13 and r["printed_page"] == "197" and r["verses"] == ["34", "36"]
+    assert [t["type"] for t in r["lines"]][:4] == ["header", "header", "verse", "verse"]
+    assert r["lines"][3]["verse"] == "34" and r["lines"][8]["explains"] == "34" and r["lines"][9]["note"] == "1"
+    assert r["warnings"][0] == {"line": 6, "text": "verse number not between ॥ … ॥: «॥ ३५ ।»"}
+    assert any(w_["line"] == 8 and "after verse 34" in w_["text"] for w_ in r["warnings"])
+
+
+def test_viewer_has_no_book_specific_code():
+    """Proofread is one standard view (CLAUDE.md): no branch, style or text tied to a particular book."""
+    import re
+    from importlib.resources import files
+
+    for name in ("viewer.html", "theme.css", "library.html"):
+        src = files("amocr").joinpath(name).read_text(encoding="utf-8")
+        assert not re.search(r"\b(B-[0-9a-f]{10}|SL-\d{4})\b", src), f"{name} mentions a specific book"
+
+
+def test_reference_cross_check(tmp_path, monkeypatch):
+    """A reference e-text flags verse lines that differ in reading, not in spelling (spaces, nasals)."""
+    from amocr import assemble, reference
+    from amocr.catalog import Work
+
+    monkeypatch.setenv("AMOCR_DATA", str(tmp_path))
+    w = Work(id="B-test000003", title="t", languages=["san", "hin"], sha256="0" * 64)
+    w.workdir.mkdir(parents=True)
+    src = tmp_path / "ref.txt"     # invented verses in GRETIL's plain-text shape
+    src.write_text("13.1ab: rāmo vanaṃ gacchati sītā api gacchati 13.1cd: nadī vahati parvataḥ tiṣṭhati sadā\n", encoding="utf-8")
+    m = reference.add(w, src, "TEST")
+    assert m["segments"] == 2 and m["chapters"] == [13]
+    text = "अथ त्रयोदशोऽधिकारः\nरामो वनं गच्छति सीता अपि गच्छति ।\nनदो वहति पर्वतः तिष्ठति सदा ॥ १ ॥"
+    st = assemble.page_structure(w, 5, text)
+    assert st["reference"] == "TEST" and st["lines"][1]["ref"] == "13.1ab" and st["lines"][2]["ref"] == "13.1cd"
+    ref_w = [x for x in st["warnings"] if x.get("kind") == "reference"]
+    assert len(ref_w) == 1 and ref_w[0]["line"] == 3
+    assert ref_w[0]["diffs"] == [{"ours": "नदो", "ref": "नदी"}]          # the words, in Devanagari
+    assert reference.deva("muhūrtād akhedataḥ") == "मुहूर्ताद् अखेदतः"
+    assert reference.strip_markers("योगी२ तद्गते १षट्बिन्दु क० पु०") == "योगी तद्गते षट्बिन्दु क० पु०"
+    assert reference.norm("vanaṃ gacchati") == reference.norm("vanam gacchati") == reference.norm("vanaṅgacchati")

@@ -88,6 +88,43 @@ doesn't replace reading: the misses are single wrong letters that form valid
 words, and footnote markers. These numbers come from one book; measure again on
 each new one (`amocr suspects <book> --eval`).
 
+## Cheaper Claude models for a second check: tested, not settled
+
+Could Sonnet or Haiku, run as a subagent in the volunteer's own Claude Code session, check
+lines more cheaply than Opus? Same task as review mode (numbered line sheets plus Surya's
+reading), ten Mālinī pages (pp. 1, 8, 10, 11, 15 and 231–235), 284 lines, 2026-11-25:
+
+| | Sonnet | Haiku |
+|---|---|---|
+| Lines Opus corrected on pp. 231–235 (33): same fix | 24 | 7 |
+| Lines Opus left alone (118): changed anyway | 9 | 3 |
+| Tokens per page in this test | ~12k | ~15k |
+
+Agreement with Opus is not accuracy. Against the person-saved pages the models "broke"
+many lines, but most of those were the saved text keeping Surya's ो-for-ी and बा-for-आ
+look-alikes, so those pages (not yet verified) can't settle it. Provisional reading: Haiku
+misses too much; Sonnet finds most of what Opus finds but also normalises spellings
+(मां → माँ), so its output could only ever be suggestions. To be rescored once the pages
+are verified.
+
+## Reference e-texts: another edition as a free cross-check
+
+When another edition of a book's root text exists as an e-text (GRETIL, Muktabodha …),
+`amocr reference <book> add <file> --name GRETIL --url … --licence …` stores it with the book
+(`data/works/<book>/reference/`, never in the repo: these texts have their own licences). From
+then on Proofread compares every verse line with the closest half-verse of the reference,
+letter by letter, ignoring what is only spelling (spaces, sandhi spacing, punctuation, one
+sign for all nasals), and lists the differences with the other warnings. `amocr reference
+<book> check [--pages]` lists them for a range. No Claude, no tokens.
+
+On the Mālinī (GRETIL: Vasudeva's critical edition for chapters 1–4, 7, 11–17, the 1922 Kashmir
+Series edition for the rest), pp. 231–235: of the 12 verse lines Opus corrected, the cross-check
+flagged 11; it also flagged two lines Opus left wrong (इन्द्रनोल for इन्द्रनील, the typeface's
+ो-for-ी). Other flags are real differences between editions (अशुद्धान् / āśugān). A difference
+is a place to look at the print, never a correction: the book is transcribed as printed, and
+where the print itself is probably a misprint (मुहूर्तादित्य for मुहूर्तादेत्य), that goes in
+the page note.
+
 ## Book brief and glossary
 
 `amocr brief <book> --sources --pages …` collects, cheaply, what Claude needs to

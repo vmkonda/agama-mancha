@@ -482,6 +482,41 @@ def cmd_assemble(work: Work, args) -> None:
         cmd_push(work, args)
 
 
+def cmd_reference(work: Work, args) -> None:
+    """A reference e-text for the book's root text: add one, show it, or list the verse lines that differ."""
+    from pathlib import Path
+
+    from . import assemble, reference
+
+    if args.action == "add":
+        if not args.file:
+            raise SystemExit("reference add needs the e-text file")
+        m = reference.add(work, Path(args.file), args.name or Path(args.file).stem, url=args.url or "", licence=args.licence or "")
+        print(f"{work.id}: reference '{m['name']}' with {m['segments']} half-verses in chapters "
+              f"{m['chapters'][0]}-{m['chapters'][-1]} (kept in {reference.ref_dir(work)}, never in the repo)")
+        return
+    m = reference.info(work)
+    if not m:
+        raise SystemExit(f"{work.id} has no reference e-text; add one with `amocr reference {work.id} add <file> --name ...`")
+    if args.action == "show":
+        print(json.dumps(m, ensure_ascii=False, indent=1))
+        return
+    rows = _inventory(work)
+    pages = parse_pages(args.pages, len(rows)) if args.pages else range(1, len(rows) + 1)
+    total = differ = 0
+    for p in pages:
+        got = assemble.page_text(work, p)
+        if not got:
+            continue
+        st = assemble.page_structure(work, p, "\n".join(ln["text"] for ln in got[0]))
+        total += sum(1 for t in st["lines"] if t.get("ref"))
+        for w_ in st["warnings"]:
+            if w_.get("kind") == "reference":
+                differ += 1
+                print(f"p{p} line {w_['line']}: {w_['text']}")
+    print(f"{differ} of {total} verse lines differ from {m['name']}")
+
+
 def cmd_rule(work: Work, args) -> None:
     """Add a rule (Claude or a person generalising a fix), or switch one on or off."""
     from . import patterns as pat
@@ -947,6 +982,13 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--chapter-at", action="append", metavar="PAGE=CHAPTER",
                    help="where a chapter starts when its heading isn't recognised (repeatable, remembered)")
     p.add_argument("--push", action="store_true", help="then upload the book's folder, builds included")
+    p = book_cmd("reference", cmd_reference, pages=True,
+                 help="a reference e-text of the root text (e.g. GRETIL): add, show, or check verse lines against it")
+    p.add_argument("action", choices=["add", "show", "check"])
+    p.add_argument("file", nargs="?", help="add: the e-text file (GRETIL plain text)")
+    p.add_argument("--name", help="add: a short name shown in warnings, e.g. GRETIL")
+    p.add_argument("--url")
+    p.add_argument("--licence")
     p = book_cmd("rule", cmd_rule, help="add a rule, or switch one on/off")
     p.add_argument("action", choices=["add", "on", "off"])
     p.add_argument("id", nargs="?")

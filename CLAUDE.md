@@ -61,6 +61,14 @@ When a person is proofreading in the viewer and asks for help:
 - Never edit page text or ground truth yourself, and never accept suggestions:
   the person decides in the Suggestions tab. Text printed "wrong" stays as printed.
 
+## The Proofread view is one standard
+
+Proofread is the same for every book: same layout, controls, line tags and highlights
+(docs/proofreading-guide.md, "The same view for every book"). Never add book-specific
+branches, buttons or styling to the viewer. A book's specifics come in only as data that
+fills the standard places (brief, glossary, look-alike profile, rules). A change to the
+view changes it for all books, and the guide's section changes with it.
+
 ## Reading rules (these matter more than speed)
 
 - A letter printed in a shape that resembles another letter is still that letter: in
