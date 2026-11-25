@@ -31,6 +31,7 @@ header h1 { font-size: 15px; margin: 0 8px 0 0; font-weight: 600; }
 select, button, input { font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 4px 8px; }
 button { cursor: pointer; } button:hover { border-color: var(--accent); }
 button:disabled { opacity: .6; cursor: default; }
+button.on { background: var(--accent); color: var(--panel); border-color: var(--accent); }
 a { color: var(--accent); }
 .grow { flex: 1; }
 .muted { color: var(--muted); }
@@ -86,6 +87,7 @@ td.act { white-space: nowrap; text-align: right; } td.act button { font-size: 12
     <option value="etexts">E-texts (imported, in the librarian)</option>
   </select>
   <span class="grow"></span>
+  <button id="etx" title="Works imported from published e-texts (GRETIL): no OCR needed; read and study them in the Librarian">E-texts</button>
   <button id="sync" title="Read the board again: who is working on what">Sync board</button>
   <button id="refresh" title="Read the library listing again and update the shared catalog">Refresh</button>
   <button id="theme" title="Toggle theme">◐</button>
@@ -282,7 +284,16 @@ $("sync").onclick = () => job("sync", "");
 let timer;
 $("q").oninput = () => { clearTimeout(timer); timer = setTimeout(() => { store.set("q", $("q").value); render(); }, 120); };
 $("folder").onchange = () => { store.set("folder", $("folder").value); render(); };
-$("show").onchange = () => { store.set("show", $("show").value); render(); };
+$("show").onchange = () => { store.set("show", $("show").value); $("etx").classList.toggle("on", $("show").value === "etexts"); render(); };
+// The imported e-texts, one click away (they aren't PDFs on the drive, so the catalog's own views never list them).
+$("etx").onclick = () => {
+  $("show").value = $("show").value === "etexts" ? (store.get("show_before") || "needs") : (store.set("show_before", $("show").value), "etexts");
+  $("show").onchange();
+};
+fetch("/api/librarian/works").then((r) => r.ok ? r.json() : []).then((ws) => {
+  const n = ws.filter((w) => w.kind === "etext").length;
+  if (n) $("etx").textContent = `E-texts (${n})`; else $("etx").style.display = "none";
+}).catch(() => ($("etx").style.display = "none"));
 $("refresh").onclick = async () => {
   const r = await fetch("/api/catalog/refresh", { method: "POST" }); S.cat.refresh = await r.json(); status(); poll();
 };
