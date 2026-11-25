@@ -64,5 +64,60 @@ def catalog() -> list[dict]:
     counts: dict[str, int] = {}
     for u in by_id.values():
         counts[u["work"]] = counts.get(u["work"], 0) + 1
+    first = {}
+    for u in by_id.values():
+        first.setdefault(u["work"], u["id"])
     return [{"id": w, "title": works.get(w, {}).get("title", w), "author": works.get(w, {}).get("author", ""),
-             "kind": works.get(w, {}).get("kind", ""), "units": n} for w, n in sorted(counts.items())]
+             "kind": works.get(w, {}).get("kind", ""), "units": n, "first": first.get(w),
+             "source": (works.get(w, {}).get("source") or "")[:160], "licence": (works.get(w, {}).get("licence") or "")[:120],
+             "url": source_link(works.get(w, {}))} for w, n in sorted(counts.items())]
+
+
+def _book_of(wid: str) -> str | None:
+    """The local book (B-…) holding a printed work's pages, for links to its scans."""
+    from amocr.catalog import load_works, resolve
+
+    works = load_works()
+    b = resolve(works, wid)
+    if b in works:
+        return b
+    sha = next((w.sha256 for w in load_works(include_merged=True).values() if w.id == wid), None)
+    return next((w.id for w in works.values() if sha and w.sha256 == sha and w.id != wid), None)
+
+
+def source_link(w: dict) -> str | None:
+    """Where an e-text came from, on the web."""
+    if w.get("kind") == "etext" and w.get("file"):
+        return "https://gretil.sub.uni-goettingen.de/gretil/corpustei/" + w["file"]
+    return None
+
+
+def context(uid: str, chapter: str | None = None) -> dict | None:
+    """The whole chapter a unit is in (or another chapter of its work), in reading order, with the
+    commentary where the edition puts it: what a reader needs around a citation."""
+    by_id, order, _, works = _load()
+    u = by_id.get(uid)
+    if not u:
+        return None
+    wid = u["work"]
+    ch = chapter or u.get("chapter")
+    in_work = [x for x in by_id.values() if x["work"] == wid]
+    chapters: list[str] = []
+    for x in in_work:
+        c = str(x.get("chapter"))
+        if c not in chapters:
+            chapters.append(c)
+    units = [cite(x) for x in in_work if str(x.get("chapter")) == str(ch)]
+    w = works.get(wid, {"id": wid, "title": wid})
+    i = chapters.index(str(ch)) if str(ch) in chapters else -1
+    out = {"work": {k: w.get(k) for k in ("id", "title", "author", "kind", "source", "licence")},
+           "source_url": source_link(w), "chapter": str(ch), "chapters": chapters,
+           "prev": chapters[i - 1] if i > 0 else None, "next": chapters[i + 1] if 0 <= i < len(chapters) - 1 else None,
+           "target": uid if str(u.get("chapter")) == str(ch) else None, "units": units}
+    if any(x.get("pages") for x in units):
+        out["book"] = _book_of(wid)
+        for x, raw in zip(units, [y for y in in_work if str(y.get("chapter")) == str(ch)]):
+            if raw.get("lines"):
+                x["lines"] = raw["lines"]
+    return out
+

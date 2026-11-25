@@ -39,6 +39,18 @@ th { color: var(--muted); font-weight: 600; font-family: Raleway, sans-serif; }
 .rank.ok { color: #1d7a34; font-weight: 600; } .rank.miss { color: #a3301b; font-weight: 600; }
 .sum { display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: center; margin-bottom: 12px; font-size: 13px; }
 .err { color: #a3301b; }
+.reader .rhead { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; margin-bottom: 6px; }
+.reader h2 { font-family: Raleway, sans-serif; font-size: 18px; margin: 0; }
+.reader .src { font-size: 12px; color: var(--muted); margin-bottom: 12px; }
+.unit { display: grid; grid-template-columns: 92px 1fr; gap: 10px; padding: 6px 8px; border-radius: 6px; }
+.unit .ref { font-size: 11px; color: var(--muted); padding-top: 6px; font-variant-numeric: tabular-nums; }
+.unit .ref .lay { display: block; }
+.unit.l-com { margin-left: 28px; background: color-mix(in srgb, var(--panel) 70%, var(--bg)); border-left: 3px solid var(--line); }
+.unit.l-com .deva { font-size: 15px; }
+.unit.l-note .deva { font-size: 13px; color: var(--muted); }
+.unit.target { outline: 2px solid var(--accent); background: var(--hl); }
+.unit .acts { font-size: 12px; }
+.unit .acts a { margin-right: 10px; }
 </style>
 <link rel="stylesheet" href="/theme.css">
 </head>
@@ -51,7 +63,7 @@ th { color: var(--muted); font-weight: 600; font-family: Raleway, sans-serif; }
   <nav aria-label="Sections"><a href="/library">Library</a><a href="/">Proofreading</a><a href="/librarian" aria-current="page">Librarian</a></nav>
 </div>
 <header>
-  <div class="tabs"><button id="t-search" class="on">Search</button><button id="t-eval">Evaluation</button></div>
+  <div class="tabs"><button id="t-works">Works</button><button id="t-search" class="on">Search</button><button id="t-eval">Evaluation</button></div>
   <span class="grow"></span>
   <span class="muted" id="hint"></span>
 </header>
@@ -76,6 +88,7 @@ function card(u) {
     ${u.iast && u.lang === "san" ? `<div class="iast">${esc(u.iast)}</div>` : ""}
     <div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap">
       <button data-open="${esc(u.id)}">${u.n_commentary ? `Commentary (${u.n_commentary}) and context` : "Context"}</button>
+      <button data-read="${esc(u.id)}" title="The whole chapter around this passage, with its commentary">Read in context</button>
       <button data-cite="${esc(u.id)}" title="Copy a citation">Copy citation</button>
     </div>
     <div class="more" hidden></div></div>`;
@@ -93,6 +106,7 @@ function wire(root) {
     wire(box);
     box.querySelectorAll("[data-goto]").forEach((a) => (a.onclick = (e) => { e.preventDefault(); $("q").value = ""; showUnit(a.dataset.goto); }));
   }));
+  root.querySelectorAll("[data-read]").forEach((b) => (b.onclick = () => { location.hash = "read=" + encodeURIComponent(b.dataset.read); }));
   root.querySelectorAll("[data-cite]").forEach((b) => (b.onclick = async () => {
     const h = b.closest(".hit"), id = b.dataset.cite;
     const t = h.querySelector(".title").textContent, txt = h.querySelector(".deva").textContent;
@@ -118,7 +132,7 @@ function renderSearch() {
     <div id="results"></div>`;
   $("q").value = store.get("q") || "";
   $("f").onsubmit = async (e) => {
-    e.preventDefault();
+    if (e) e.preventDefault();
     const q = $("q").value.trim(); if (!q) return;
     store.set("q", q);
     $("results").innerHTML = `<p class="muted">Searching…</p>`;
@@ -128,6 +142,7 @@ function renderSearch() {
       wire($("results"));
     } catch (err) { $("results").innerHTML = `<p class="err">${esc(err.message)}</p>`; }
   };
+  if ($("q").value) $("f").onsubmit();       // coming back from the reader: the results are still there
 }
 
 async function renderEval() {
@@ -174,13 +189,74 @@ function qrow(q, E) {
     <td>${r ? r.top.map((t) => `<div><a href="#" data-peek="${esc(t)}"><code>${esc(t)}</code></a>${(q.expected || []).includes(t) ? " ✓" : ` <button data-add="${esc(t)}" style="font-size:11px;padding:0 6px">add</button>`}</div>`).join("") : `<span class="muted">run the evaluation</span>`}</td></tr>`;
 }
 
+// Works: everything in the library, to browse; a work opens in the reader at its first chapter.
+function renderWorks() {
+  $("hint").textContent = "Every work in the library. Open one to read it from the beginning.";
+  const kind = (k) => (k === "etext" ? "e-text" : k === "ocr" ? "the team's printed copy (OCR)" : k || "");
+  $("main").innerHTML = `<table><thead><tr><th>Work</th><th>Id</th><th>Kind</th><th style="text-align:right">Passages</th><th>Source</th><th></th></tr></thead><tbody>
+    ${WORKS.map((w) => `<tr><td><b>${esc(w.title)}</b>${w.author ? `<div class="muted">${esc(w.author)}</div>` : ""}</td>
+      <td><code>${esc(w.id)}</code></td><td>${esc(kind(w.kind))}</td><td style="text-align:right">${w.units.toLocaleString()}</td>
+      <td class="muted" style="font-size:12px">${esc(w.source)}${w.licence ? `<div>${esc(w.licence)}</div>` : ""}${w.url ? `<a href="${esc(w.url)}" target="_blank" rel="noopener">GRETIL file</a>` : ""}</td>
+      <td><button data-read="${esc(w.first)}">Read</button></td></tr>`).join("")}</tbody></table>`;
+  $("main").querySelectorAll("[data-read]").forEach((b) => (b.onclick = () => { location.hash = "read=" + encodeURIComponent(b.dataset.read); }));
+}
+
+// Read in context: the whole chapter around a citation, commentary where the edition puts it,
+// and the way to the source (the scan of the printed page, or the e-text on the web).
+const COMMENTARY = (layer) => layer !== "mula" && !layer.startsWith("footnote");
+function scanLink(book, u) {
+  if (!book || !u.lines || !u.lines.length) return "";
+  const pages = [...new Set(u.lines.map((l) => l.page))];
+  return pages.map((p) => {
+    const bs = u.lines.filter((l) => l.page === p && l.bbox).map((l) => l.bbox);
+    const box = bs.length ? [Math.min(...bs.map((b) => b[0])), Math.min(...bs.map((b) => b[1])), Math.max(...bs.map((b) => b[2])), Math.max(...bs.map((b) => b[3]))] : null;
+    return `<a href="/#${esc(book)}/${p}${box ? "/box=" + box.join(",") : ""}" target="_blank" title="Open the printed page with these lines outlined">scan p. ${p}</a>`;
+  }).join("");
+}
+async function renderReader(id, chapter) {
+  $("hint").textContent = "Read in context: the cited passage is outlined.";
+  $("main").innerHTML = `<p class="muted">Reading…</p>`;
+  const c = await api(`/api/librarian/read?id=${encodeURIComponent(id)}${chapter ? "&chapter=" + encodeURIComponent(chapter) : ""}`);
+  if (c.error) { $("main").innerHTML = `<p class="err">${esc(c.error)}</p>`; return; }
+  const w = c.work;
+  $("main").innerHTML = `<div class="reader">
+    <div class="rhead"><button id="back">◀ Back</button><h2>${esc(w.title || w.id)}</h2>${w.author ? `<span class="muted">${esc(w.author)}</span>` : ""}
+      <span class="grow"></span>
+      <button id="prev" ${c.prev ? "" : "disabled"}>◀ ${esc(c.prev || "")}</button>
+      <select id="ch">${c.chapters.map((x) => `<option ${x === c.chapter ? "selected" : ""}>${esc(x)}</option>`).join("")}</select>
+      <button id="next" ${c.next ? "" : "disabled"}>${esc(c.next || "")} ▶</button></div>
+    <div class="src">${w.kind === "etext" ? `E-text: ${esc(w.source || "")}${w.licence ? " · " + esc(w.licence) : ""}${c.source_url ? ` · <a href="${esc(c.source_url)}" target="_blank" rel="noopener">source file on GRETIL</a>` : ""}`
+      : `The team's printed copy (OCR; <i>draft</i> units are unproofread).${c.book ? ` Each passage links to its page; the scan opens with the lines outlined.` : ""}`}
+      · chapter ${esc(c.chapter)} · ${c.units.length} passages</div>
+    ${c.units.map((u) => `<div class="unit ${COMMENTARY(u.layer) ? "l-com" : u.layer.startsWith("footnote") ? "l-note" : ""}${u.id === c.target ? " target" : ""}" id="u-${esc(u.id)}">
+      <div class="ref"><span>${esc(u.verse)}</span><span class="lay">${esc(u.layer)}</span>${u.status === "draft" ? `<span class="lay">draft</span>` : ""}</div>
+      <div><div class="deva" lang="${esc(u.lang || "sa")}">${esc(u.text)}</div>
+        ${u.iast && u.lang === "san" ? `<div class="iast">${esc(u.iast)}</div>` : ""}
+        <div class="acts muted"><code>${esc(u.id)}</code> ${scanLink(c.book, u)}</div></div></div>`).join("")}</div>`;
+  $("back").onclick = () => history.length > 1 ? history.back() : (location.hash = "");
+  const goCh = (x) => x && renderReader(id, x);
+  $("prev").onclick = () => goCh(c.prev); $("next").onclick = () => goCh(c.next);
+  $("ch").onchange = () => goCh($("ch").value);
+  const t = c.target && document.getElementById("u-" + c.target);
+  if (t) t.scrollIntoView({ block: "center" });
+}
+function route() {
+  const m = location.hash.match(/^#read=(.+)$/);
+  if (m) { ["t-works", "t-search", "t-eval"].forEach((t) => $(t).classList.remove("on")); renderReader(decodeURIComponent(m[1])).catch((e) => ($("main").innerHTML = `<p class="err">${esc(e.message)}</p>`)); return true; }
+  return false;
+}
+window.addEventListener("hashchange", () => { if (!route()) $("t-" + (store.get("tab") || "search")).click(); });
+
 async function init() {
   try { WORKS = await api("/api/librarian/works"); }
   catch (e) { $("main").innerHTML = `<p class="err">${esc(e.message)}</p>`; return; }
   const tab = store.get("tab") || "search";
-  const go = (t) => { store.set("tab", t); $("t-search").classList.toggle("on", t === "search"); $("t-eval").classList.toggle("on", t === "eval"); t === "search" ? renderSearch() : renderEval().catch((e) => ($("main").innerHTML = `<p class="err">${esc(e.message)}</p>`)); };
-  $("t-search").onclick = () => go("search"); $("t-eval").onclick = () => go("eval");
-  go(tab);
+  const go = (t) => { store.set("tab", t); ["works", "search", "eval"].forEach((x) => $("t-" + x).classList.toggle("on", x === t));
+    if (t === "works") renderWorks(); else if (t === "search") renderSearch(); else renderEval().catch((e) => ($("main").innerHTML = `<p class="err">${esc(e.message)}</p>`)); };
+  $("t-works").onclick = () => { if (location.hash) history.replaceState(null, "", location.pathname); go("works"); };
+  $("t-search").onclick = () => { if (location.hash) history.replaceState(null, "", location.pathname); go("search"); };
+  $("t-eval").onclick = () => { if (location.hash) history.replaceState(null, "", location.pathname); go("eval"); };
+  if (!route()) go(tab);
 }
 init();
 </script>

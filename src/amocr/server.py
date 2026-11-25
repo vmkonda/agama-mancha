@@ -463,6 +463,8 @@ def _librarian_get(parts: list[str], q: dict) -> object:
         return out
     if parts == ["unit"]:
         return store.get(one("id"), context=2) or {"error": "no such unit"}
+    if parts == ["read"]:
+        return store.context(one("id"), one("chapter") or None) or {"error": "no such unit"}
     if parts == ["eval"]:
         return {"questions": evals.load(), "types": evals.TYPES, "last_run": evals.last_run()}
     raise LookupError("not found")

@@ -49,12 +49,21 @@ retrieved passages only, with citations.
 ## In the app
 
 The **Librarian** page (next to Library and Proofreading; `amocr serve` started with
-`uv run --extra librarian amocr serve`) has two tabs:
+`uv run --extra librarian amocr serve`) has three tabs. (The **Library** page lists the team's PDFs on
+the drive; the works the librarian can search, e-texts included, are under **Librarian → Works**.)
+
+- **Works** lists every work in the library (e-texts and OCR'd books) with its id, kind, number of
+  passages, source edition and licence; **Read** opens it at the first chapter.
 
 - **Search** reads passages in any language or script, filtered by work or layer, each with its
   work, id, status (`edition` or `draft`), printed pages, and how it was found; *Context* opens the
   commentary on it and its neighbours; *Copy citation* copies the passage with its id. Asking a
   question and getting a cited answer happens in Claude Code, through the MCP tool.
+- **Read in context** (on every passage) opens the whole chapter with the cited passage outlined and
+  the commentary where the edition puts it, with the previous and next chapters. The way back to the
+  source: for the team's printed books, *scan p. N* opens that page in the viewer with the cited lines
+  outlined on the scan; for e-texts, the edition and licence, and a link to the GRETIL file. A reading
+  can be shared as a link: `/librarian#read=<unit id>`.
 - **Evaluation** is the yardstick: 20 questions Claude drafted across the design's types (lookup,
   concept, cross-language, commentary, not in the library), each with the passages it thinks answer
   it. The owner corrects the expected unit ids (or *adds* one from the top results), approves or drops
