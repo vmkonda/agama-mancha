@@ -223,6 +223,13 @@ class Handler(BaseHTTPRequestHandler):
                 work, _ = self._work_page(parts[1:2])
                 return self._json({"messages": chat.load(work)[-200:], "listening": chat.listening(work),
                                    "applied": sorted(chat.applied(work))})
+            if parts[0] == "api" and len(parts) in (3, 4) and parts[2] == "grid":
+                from . import grid
+
+                work, _ = self._work_page(parts[1:2])
+                if len(parts) == 4 and parts[3] == "warnings":
+                    return self._json({str(k): v for k, v in grid.warnings(work).items()})
+                return self._json(grid.pages(work))
             if parts[0] == "api" and len(parts) == 3 and parts[2] == "patterns":
                 from . import patterns as pat
 

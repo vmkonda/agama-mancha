@@ -87,6 +87,22 @@ sup.fn { color: var(--accent); font-weight: 700; font-size: .72em; line-height: 
 .ladder input:disabled + b { opacity: .45; }
 .ladder label b { padding: 0 6px; border-radius: 4px; background: var(--st-bg); color: var(--st-fg); font-weight: 600; }
 .stchip { padding: 1px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; background: var(--st-bg); color: var(--st-fg); }
+.gridhead { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; font-size: 13px; margin-bottom: 8px; }
+.gbar { width: 160px; height: 8px; border-radius: 999px; background: var(--line); overflow: hidden; }
+.gbar > div { height: 100%; background: #3f9a52; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 14px; font-size: 12px; }
+.ggroup { margin-bottom: 14px; }
+.gname { font-family: Raleway, sans-serif; font-weight: 600; font-size: 13px; margin-bottom: 6px; }
+.gname .muted { font-weight: 400; font-family: inherit; }
+.cells { display: flex; flex-wrap: wrap; gap: 4px; }
+.cell { position: relative; width: 42px; height: 30px; padding: 0; font-size: 12px; font-variant-numeric: tabular-nums;
+  background: var(--st-bg); color: var(--st-fg); border: 1px solid var(--line); border-radius: 4px; }
+.cell.st-none { background: var(--panel); color: var(--muted); }
+.cell.here { outline: 2px solid var(--accent); outline-offset: 1px; }
+.cell:hover { border-color: var(--accent); }
+i.wn { position: absolute; top: -6px; right: -6px; min-width: 15px; height: 15px; padding: 0 3px; border-radius: 999px; font-style: normal;
+  font-size: 10px; line-height: 15px; background: var(--accent); color: var(--panel); }
+.legend i.wn { position: static; display: inline-block; margin-right: 2px; }
 .pagebar { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 13px; margin: 0 0 6px; }
 .pagebar b { font-weight: 600; }
 .pwarn { font-size: 13px; margin: 0 0 8px; }
@@ -156,6 +172,7 @@ sup.fn { color: var(--accent); font-weight: 700; font-size: .72em; line-height: 
   <button id="m-diff">Compare</button>
   <button id="m-edit">Proofread</button>
   <button id="m-sugg" title="Fixes learned from corrections, suggested across the book">Suggestions</button>
+  <button id="m-grid" title="Every page of the book, coloured by status">Pages</button>
   <select id="engA" aria-label="Output"></select>
   <span id="vs" class="muted">vs</span>
   <select id="engB" aria-label="Compare against"></select>
@@ -233,11 +250,12 @@ async function loadPage(page) {
   render();
 }
 
-function setMode(m) { S.mode = m; for (const k of ["view", "diff", "edit", "sugg"]) $("m-" + k).classList.toggle("on", k === m); render(); }
+function setMode(m) { S.mode = m; for (const k of ["view", "diff", "edit", "sugg", "grid"]) $("m-" + k).classList.toggle("on", k === m); render(); }
 $("m-view").onclick = () => setMode("view");
 $("m-diff").onclick = () => setMode("diff");
 $("m-edit").onclick = () => setMode("edit");
 $("m-sugg").onclick = () => setMode("sugg");
+$("m-grid").onclick = () => setMode("grid");
 $("engA").onchange = () => { store.set("engA", $("engA").value); render(); };
 $("engB").onchange = render;
 $("work").onchange = () => loadWork(null);
@@ -796,13 +814,64 @@ $("chatsend").onclick = chatSend;
 $("chatin").addEventListener("keydown", (e) => { if ((e.metaKey || e.ctrlKey) && e.key === "Enter") { e.preventDefault(); e.stopPropagation(); chatSend(); } });
 if (store.get("chat")) setTimeout(() => chatToggle(true), 300);
 
+// Pages: every page of the book coloured by its status on the ladder, grouped by chapter. Click to proofread.
+const GRID = { warn: {}, work: null };
+async function renderGrid() {
+  const pane = $("textpane");
+  const g = await api(`/api/${S.work}/grid`);
+  if (GRID.work !== S.work) GRID.warn = {};
+  GRID.work = S.work;
+  const order = ["none", "draft", "proofread", "validated", "problem", "blank"];
+  const me = (S.data.ladder || {}).me;
+  const pct = g.total ? Math.round((100 * g.done) / g.total) : 0;
+  const cell = (r) => {
+    const w = GRID.warn[r.page], nw = w ? w.structure + w.reference : 0;
+    const tip = [`p${r.page}: ${STATUS_LABEL[r.status]}`, r.proofread_by && `proofread by ${r.proofread_by}`,
+      r.validated_by && `validated by ${r.validated_by}`, r.status === "draft" && r.saved_by && `saved by ${r.saved_by}`,
+      w && (w.structure || w.reference) && `${w.structure} structure, ${w.reference} reference warning(s)`,
+      r.note && `note: ${r.note}`].filter(Boolean).join("\n");
+    return `<button class="cell st-${r.status}${r.page === S.page ? " here" : ""}" data-p="${r.page}" title="${esc(tip)}">${r.page}${nw ? `<i class="wn" title="">${nw}</i>` : ""}</button>`;
+  };
+  let h = `<div class="gridhead">
+      <div class="gbar"><div style="width:${pct}%"></div></div>
+      <span><b>${g.done}</b> of ${g.total} pages done (validated or no text) · ${pct}%</span>
+      <span class="grow"></span>
+      <span style="display:flex;gap:6px"><button id="g-next-pr" title="The next page after this one that nobody has finished proofreading">Next to proofread ▶</button>
+      <button id="g-next-va" title="The next proofread page that someone else proofread">Next to validate ▶</button></span>
+    </div>
+    <div class="legend">${order.map((s) => `<span class="stchip st-${s}">${STATUS_LABEL[s]} ${g.counts[s] || 0}</span>`).join("")}
+      <span class="muted" id="g-wstate">counting warnings…</span></div>`;
+  for (const grp of g.groups) {
+    const rows = g.pages.filter((r) => r.page >= grp.from && r.page <= grp.to);
+    const done = rows.filter((r) => r.status === "validated" || r.status === "blank").length;
+    h += `<div class="ggroup"><div class="gname">${esc(grp.name)} <span class="muted">pp. ${grp.from}–${grp.to} · ${done}/${rows.length} done</span></div><div class="cells">${rows.map(cell).join("")}</div></div>`;
+  }
+  pane.innerHTML = h;
+  pane.querySelectorAll(".cell").forEach((b) => (b.onclick = async () => { await loadPage(+b.dataset.p); setMode("edit"); }));
+  const after = (pred) => g.pages.find((r) => r.page > S.page && pred(r)) || g.pages.find(pred);
+  const go = async (r) => { if (r) { await loadPage(r.page); setMode("edit"); } };
+  $("g-next-pr").onclick = () => go(after((r) => r.status === "none" || r.status === "draft"));
+  $("g-next-va").onclick = () => go(after((r) => r.status === "proofread" && r.proofread_by !== me));
+  if (!Object.keys(GRID.warn).length) {
+    try {
+      const w = await api(`/api/${S.work}/grid/warnings`);
+      GRID.warn = Object.fromEntries(Object.entries(w).map(([k, v]) => [+k, v]));
+      if (S.mode === "grid" && GRID.work === S.work) renderGrid();
+    } catch (e) { const el = $("g-wstate"); if (el) el.textContent = "warnings unavailable: " + e.message; }
+  } else {
+    const tot = Object.values(GRID.warn).reduce((a, v) => a + v.structure + v.reference, 0);
+    const el = $("g-wstate"); if (el) el.innerHTML = `<i class="wn">n</i> warnings on the page (${tot} in the book): open it in Proofread to see them`;
+  }
+}
+
 function render() {
   if (!S.data) return;
   S.edit = null;
   const diff = S.mode === "diff";
   $("vs").style.display = $("engB").style.display = diff ? "" : "none";
-  $("engA").style.display = S.mode === "edit" || S.mode === "sugg" ? "none" : "";
+  $("engA").style.display = S.mode === "edit" || S.mode === "sugg" || S.mode === "grid" ? "none" : "";
   if (S.mode === "sugg") return renderSugg().catch((e) => { $("textpane").innerHTML = `<p>Could not load suggestions: ${esc(e.message)}</p>`; });
+  if (S.mode === "grid") return renderGrid().catch((e) => { $("textpane").innerHTML = `<p>Could not load the pages: ${esc(e.message)}</p>`; });
   const nGt = S.pages.filter((p) => p.groundtruth).length;
   $("status").textContent = `${S.pages.length} pages with output · ${nGt} with ground truth`;
   if (S.mode === "view") renderView($("engA").value);
