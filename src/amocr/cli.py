@@ -302,6 +302,66 @@ def cmd_line(work: Work, args) -> None:
                 print(f"  image: {path}")
 
 
+def _chat_remote(args) -> None:
+    """The proofreading chat on a hosted server: wait for your next question (in one book, or `any`),
+    reply with proposed fixes. Every connection goes out from this machine."""
+    import tempfile
+    import time as _time
+
+    from librarian import remote
+
+    srv = remote.server(args.server, hosted=True)
+    if not srv:
+        raise SystemExit("which server? --server, or AGAMA_SERVER in ~/.config/agama-mancha/hosted.env")
+    book = "" if args.work == "any" else args.work
+    if args.action == "wait":
+        end = _time.time() + args.timeout
+        print(f"listening on {srv} for {'all your books' if not book else book} ...", flush=True)
+        while _time.time() < end:
+            r = remote.call(srv, "/api/chat/next", args.token, query={"work": book, "timeout": 25}, timeout=60)
+            m = r.get("message")
+            if not m:
+                continue
+            wid = r["work"]
+            where = (f" (p{m['page']}" + (f" lines {m['n']}-{m['n2']}" if m.get("n2") else f" line {m['n']}" if m.get("n") else "") + ")") if m.get("page") else ""
+            print(f"message {m['id']} in {wid}{where}" + (" CHECK REQUEST" if m.get("kind") == "check" else "") + f" (from {m.get('by', '?')}):")
+            print(f"  {m['text']}")
+            ctx = r.get("context") or {}
+            for x in ctx.get("lines") or ([ctx] if ctx.get("text") else []):
+                print(f"line {x.get('n', m.get('n'))} ({x.get('source')}{', verified' if x.get('verified') else ''}): {x.get('text')}")
+            if ctx.get("error"):
+                print(f"(no line context: {ctx['error']})")
+            if ctx.get("image_url"):
+                img = Path(tempfile.gettempdir()) / f"amocr-{wid}-{Path(ctx['image_url']).name}"
+                img.write_bytes(remote.fetch(srv, ctx["image_url"], args.token))
+                print(f"image of {'these lines' if m.get('kind') == 'check' else 'the line'}: {img}")
+            if r.get("brief_url"):
+                print(f"book brief: {srv}{r['brief_url']} (librarian-style: read it once per session with `curl` or ask)")
+            if m.get("kind") == "check":
+                print("Check each line against the image. Reply with what matches, and a --fix for every line that differs "
+                      "(whole line, as printed; misprints stay). Put anything unsure in the text.")
+            print(f"\nReply with `uv run amocr chat {wid} reply {m['id']} --hosted --text \"...\"`"
+                  " [--fix PAGE:LINE:\"whole new line\"] [--rule RULE_ID], then wait again.")
+            return
+        print("no message before the timeout; wait again")
+        sys.exit(3)
+    if args.action == "reply":
+        if not (args.msg and book):
+            raise SystemExit("reply needs the book and the message id")
+        fixes = []
+        for f in args.fix or []:
+            try:
+                page, n, to = f.split(":", 2)
+            except ValueError:
+                raise SystemExit("--fix is PAGE:LINE:new text") from None
+            fixes.append({"page": int(page), "n": int(n), "to": to})
+        r = remote.call(srv, f"/api/{book}/chat/reply", args.token,
+                        body={"msg": args.msg, "text": args.text or "", "fixes": fixes, "rules": args.rule or []})
+        print(f"replied ({r['id']}) on {srv} with {len(r.get('actions') or [])} action(s); the proofreader applies them in the viewer")
+        return
+    raise SystemExit("chat show isn't available against a server; open the chat panel in the app")
+
+
 def cmd_chat(work: Work, args) -> None:
     """The proofreader's chat panel, from Claude's side: wait for a message, reply, or show history."""
     from . import chat
@@ -1021,6 +1081,10 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--rule", action="append", help="reply: point to a rule to review in Suggestions (repeatable)")
     p.add_argument("--timeout", type=float, default=1800, help="wait: seconds before giving up (default 30 min)")
     p.add_argument("--last", type=int, default=20, help="show: how many messages")
+    p.add_argument("--hosted", action="store_true", help="the hosted server in ~/.config/agama-mancha/hosted.env "
+                   "(book may then be `any`: all your books)")
+    p.add_argument("--server", help="a hosted server's address (instead of the file)")
+    p.add_argument("--token", help="your listener token (instead of the file)")
     p = book_cmd("profile", cmd_profile, help="a book's typeface look-alikes and metre (for `suspects`)")
     p.add_argument("--lookalike", nargs=3, action="append", metavar=("FROM", "TO", "WHY"),
                    help='e.g. --lookalike ो ी "ी printed like ो"; ^भा = at word start; +र् = a dropped reph')
@@ -1095,6 +1159,8 @@ def main(argv: list[str] | None = None) -> None:
     args = ap.parse_args(argv)
     if not args.per_book:
         return args.fn(args)
+    if args.fn is cmd_chat and (args.hosted or args.server):
+        return _chat_remote(args)
     works = load_works()
     wid = resolve(works, args.work)
     if wid not in works:

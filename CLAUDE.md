@@ -53,6 +53,11 @@ When a person is proofreading in the viewer and asks for help:
   `uv run amocr rule <book> add --kind regex --from '<pattern>' --to '<replacement>' --note '<why>'`
   (or `--kind word`). Check the pending count it prints: if it's huge, the rule is
   too broad. Switch bad rules off with `uv run amocr rule <book> off <id>`.
+- **The viewer's chat panel on a hosted server:** when asked to "listen to the viewer chat on the
+  hosted server", first `uv run librarian hosted check`; then `uv run amocr chat any wait --hosted` in
+  the background (your questions in all books; never restricted ones), read the line image it saves,
+  and reply with `uv run amocr chat <book> reply <id> --hosted --text "..." [--fix PAGE:LINE:"..."]`.
+  The same rules as below; the token stays in the person's file, never in the chat.
 - **The viewer's chat panel:** when asked to "listen to the viewer chat", follow the
   ocr-view skill: `amocr chat <book> wait` in the background, answer with
   `amocr chat <book> reply`, wait again. "CHECK REQUEST" messages (the Check with

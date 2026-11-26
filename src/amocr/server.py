@@ -12,6 +12,7 @@ import getpass
 import json
 import os
 import re
+import time
 import urllib.parse
 from pathlib import Path
 import socket
@@ -243,6 +244,42 @@ class Handler(BaseHTTPRequestHandler):
             self.end_headers()
         return False
 
+    def _chat_next(self, q: dict) -> dict:
+        """Wait (up to ~25 s) for this member's next unanswered proofreading question, in one book or any;
+        never from a restricted book. With the line(s) as they stand and an image of them on the scan."""
+        from . import chat
+
+        who = members.who() if self.hosted else None
+        only = (q.get("work") or [""])[0]
+        timeout = min(float((q.get("timeout") or ["25"])[0] or 25), 55)
+        end = time.time() + timeout
+        while True:
+            if who:
+                chat.polled(who)
+            for wid, work in self.works.items():
+                if (only and wid != only) or work.restricted or not chat.path(work).exists():
+                    continue
+                todo = chat.pending(work, who)
+                if not todo:
+                    continue
+                m = todo[0]
+                ctx = None
+                try:
+                    if m.get("kind") == "check" and m.get("page") and m.get("n"):
+                        ctx = chat.range_context(work, m["page"], m["n"], m.get("n2") or m["n"])
+                    elif m.get("page") and m.get("n"):
+                        ctx = chat.line_context(work, m["page"], m["n"])
+                except ValueError as e:
+                    ctx = {"error": str(e)}
+                if ctx and ctx.get("image"):
+                    ctx["image_url"] = f"/api/{wid}/chat/image/{Path(ctx.pop('image')).name}"
+                from . import brief as briefmod
+                return {"work": wid, "message": m, "context": ctx,
+                        "brief_url": f"/brief/{wid}" if briefmod.brief_path(work).exists() else None}
+            if time.time() >= end:
+                return {"message": None}
+            time.sleep(2)
+
     def _role(self) -> str:
         """The member's role; on a local (not hosted) server, the one person there can do everything."""
         return self._member[1] if self._member else ("admin" if not self.hosted else "")
@@ -389,8 +426,19 @@ class Handler(BaseHTTPRequestHandler):
                 from . import chat
 
                 work, _ = self._work_page(parts[1:2])
-                return self._json({"messages": chat.load(work)[-200:], "listening": chat.listening(work),
-                                   "applied": sorted(chat.applied(work))})
+                me = members.who() if self.hosted else None
+                return self._json({"messages": chat.thread(work, me)[-200:], "listening": chat.listening(work, me),
+                                   "applied": sorted(chat.applied(work)), "me": me})
+            if parts[:3] == ["api", "chat", "next"]:   # a member's listener, long-polling for their proofreading questions
+                return self._json(self._chat_next(parse_qs(url.query)))
+            if parts[0] == "api" and len(parts) == 5 and parts[2:4] == ["chat", "image"]:
+                work, _ = self._work_page(parts[1:2])
+                if not re.fullmatch(r"p\d{4}-l\d{2}(-\d{2})?\.png", parts[4]):
+                    raise ValueError("bad image name")
+                img = work.workdir / "claude" / "ask" / parts[4]
+                if not img.exists():
+                    raise LookupError("no such image")
+                return self._send(img.read_bytes(), "image/png")
             if parts[0] == "api" and len(parts) in (3, 4) and parts[2] == "grid":
                 from . import grid
 
@@ -517,8 +565,21 @@ class Handler(BaseHTTPRequestHandler):
 
             page, n, n2 = body.get("page"), body.get("n"), body.get("n2")
             m = chat.post(work, "user", str(body.get("text", "")), page=int(page) if page else None, n=int(n) if n else None,
-                          n2=int(n2) if n2 else None, kind="check" if body.get("kind") == "check" else None)
+                          n2=int(n2) if n2 else None, kind="check" if body.get("kind") == "check" else None,
+                          by=members.who() if Handler.hosted else None)
             return self._json(m)
+        if parts[2:] == ["chat", "reply"]:                 # a listener's answer, with proposed fixes
+            from . import chat
+
+            if work.restricted:
+                raise ValueError(f"{work.id} is restricted: Claude doesn't answer about it")
+            q = next((m for m in chat.load(work) if m["id"] == str(body.get("msg")) and m["role"] == "user"), None)
+            if not q or (Handler.hosted and q.get("by") != members.who()):
+                raise ValueError("no such question of yours")
+            actions = [chat.check_action(work, {"type": "line", "page": f.get("page"), "n": f.get("n"), "to": f.get("to")})
+                       for f in body.get("fixes") or []]
+            actions += [chat.check_action(work, {"type": "rule", "id": r}) for r in body.get("rules") or []]
+            return self._json(chat.post(work, "claude", str(body.get("text", "")), reply_to=q["id"], actions=actions or None))
         if parts[2:] == ["chat", "apply"]:
             from . import chat
 
