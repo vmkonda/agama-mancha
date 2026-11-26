@@ -35,6 +35,18 @@ def _gt_path(work: Work, page: int):
     return work.gt_dir / f"p{page:04d}.txt"
 
 
+def _rev(work: Work, page: int) -> str:
+    """A version stamp of a page's saved text and status: a save must name the version it started from,
+    so nobody overwrites a page someone else saved meanwhile without knowing."""
+    import hashlib
+
+    t = _gt_path(work, page)
+    if not t.exists():
+        return ""
+    m = t.with_suffix(".meta.json")
+    return hashlib.sha256(t.read_bytes() + (m.read_bytes() if m.exists() else b"")).hexdigest()[:16]
+
+
 def _results(work: Work, page: int) -> dict[str, dict]:
     out = {}
     for f in sorted((work.page_dir(page) / "ocr").glob("*.json")):
@@ -491,7 +503,9 @@ class Handler(BaseHTTPRequestHandler):
                 work, _ = self._work_page(parts[1:2])
                 if len(parts) == 4 and parts[3] == "warnings":
                     return self._json({str(k): v for k, v in grid.warnings(work).items()})
-                return self._json(grid.pages(work))
+                from . import presence
+
+                return self._json(grid.pages(work) | {"busy": {str(k): v for k, v in presence.busy(work.id, members.who()).items()}})
             if parts[0] == "api" and len(parts) == 3 and parts[2] == "patterns":
                 from . import patterns as pat
 
@@ -518,11 +532,21 @@ class Handler(BaseHTTPRequestHandler):
                 meta = json.loads(meta_path.read_text(encoding="utf-8")) if meta_path.exists() else None
                 me = members.who()
                 ok, why = ladder.can_validate(meta, me)
-                return self._json({"page": page, "results": res,
+                from . import presence
+
+                presence.touch(work.id, page, me)
+                return self._json({"page": page, "results": res, "rev": _rev(work, page),
+                                   "others": presence.others(work.id, page, me),
                                    "ladder": {"status": ladder.of(meta) if GT in res else "none", "me": me,
                                               "can_validate": ok, "why_not": why,
                                               "proofread_by": (meta or {}).get("proofread_by"),
                                               "validated_by": (meta or {}).get("validated_by")}})
+            if parts[0] == "api" and len(parts) == 4 and parts[3] == "presence":   # the viewer, every 15 s
+                from . import presence
+
+                work, page = self._work_page(parts[1:3])
+                presence.touch(work.id, page, members.who())
+                return self._json({"others": presence.others(work.id, page, members.who()), "rev": _rev(work, page)})
             if parts[0] == "api" and len(parts) in (4, 5) and parts[3] == "history":
                 from . import history
 
@@ -629,7 +653,8 @@ class Handler(BaseHTTPRequestHandler):
         if parts[2:] == ["chat", "apply"]:
             from . import chat
 
-            return self._json(chat.apply(work, str(body.get("msg", "")), int(body.get("index", -1))))
+            return self._json(chat.apply(work, str(body.get("msg", "")), int(body.get("index", -1)),
+                                         who=members.who() if Handler.hosted else None))
         if parts[2:] == ["suggestions", "decide"]:
             items = body.get("items") or []
             if not isinstance(items, list) or not items or len(items) > 500:
@@ -749,6 +774,13 @@ class Handler(BaseHTTPRequestHandler):
             path = _gt_path(work, page)
             meta_path = path.with_suffix(".meta.json")
             old_meta = json.loads(meta_path.read_text(encoding="utf-8")) if meta_path.exists() else {}
+            # Saved by someone else since this person opened the page? Refuse rather than overwrite.
+            if "rev" in body and str(body.get("rev") or "") != _rev(work, page):
+                who_last = old_meta.get("saved_by") or old_meta.get("reviewer") or "someone"
+                when = str(old_meta.get("saved", ""))[11:16]
+                return self._err(f"{who_last} saved this page{(' at ' + when + ' UTC') if when else ''} after you opened it. "
+                                 "Reload the page to see their changes (your edits are kept in this browser), then save again.",
+                                 HTTPStatus.CONFLICT)
             # Check the step first (e.g. validating your own proofreading), so a refusal changes nothing.
             # Keep what's already recorded (the reading it started from, fixes applied).
             meta = ladder.change(old_meta, status, members.who(), str(body.get("note", ""))[:2000])
@@ -758,9 +790,10 @@ class Handler(BaseHTTPRequestHandler):
 
             history.record(work, page, text, meta, "save")       # every version is kept
             path.parent.mkdir(parents=True, exist_ok=True)
+            meta["saved_by"] = members.who()
             path.write_text(text.rstrip("\n") + "\n", encoding="utf-8")
             meta_path.write_text(json.dumps(meta, ensure_ascii=False, indent=1), encoding="utf-8")
-            self._json({"saved": str(path), "status": meta["status"]})
+            self._json({"saved": str(path), "status": meta["status"], "rev": _rev(work, page)})
         except LookupError as e:
             self._err(str(e), HTTPStatus.NOT_FOUND)
         except (ValueError, KeyError, json.JSONDecodeError) as e:

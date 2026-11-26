@@ -204,11 +204,17 @@ def check_action(work: Work, a: dict) -> dict:
     raise ValueError("action type must be line or rule")
 
 
-def apply(work: Work, msg_id: str, index: int) -> dict:
-    """The person pressed Apply on a line fix in a Claude message."""
-    msg = next((m for m in load(work) if m["id"] == msg_id and m["role"] in ("claude", "ai")), None)
+def apply(work: Work, msg_id: str, index: int, who: str | None = None) -> dict:
+    """The person pressed Apply on a line fix in a Claude or local-AI message. On a hosted server (who
+    given) only the person who asked may apply its answer."""
+    msgs = load(work)
+    msg = next((m for m in msgs if m["id"] == msg_id and m["role"] in ("claude", "ai")), None)
     if not msg or not 0 <= index < len(msg.get("actions", [])):
         raise LookupError("no such suggestion")
+    if who is not None:
+        q = next((m for m in msgs if m["id"] == msg.get("reply_to")), None)
+        if not q or q.get("by") != who:
+            raise LookupError("no such suggestion")       # someone else's: as if it weren't there
     if f"{msg_id}:{index}" in applied(work):
         raise ValueError("already applied")
     a = msg["actions"][index]
