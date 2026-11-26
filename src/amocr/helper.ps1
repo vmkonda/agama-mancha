@@ -79,14 +79,20 @@ if (-not $claude) {
 }
 
 function Signed-In {
-    try { return ((& $claude auth status --json 2>$null | Out-String) | ConvertFrom-Json).loggedIn } catch { return $false }
+    # The plain-text status is the one that says "Expired" / "Not logged in" when a login can't be renewed.
+    $t = (& $claude auth status --text 2>&1 | Out-String)
+    return ($t -match "Login:" -or $t -match "Email:") -and ($t -notmatch "Not logged in|Expired|log in again")
 }
-if (-not (Signed-In)) {
-    Say "Next, sign in to Claude with your claude.ai account (a paid plan: Pro or higher)."
-    Say "Your browser will open; sign in there, then come back to this window."
+function Sign-In($why) {
+    Say ""
+    Say $why "Yellow"
+    Say "Your browser will open; sign in with your claude.ai account (a paid plan: Pro or higher), then come back here."
     Read-Host "Press Enter to open the sign-in page" | Out-Null
     & $claude auth login --claudeai
-    if (-not (Signed-In)) { Stop-Helper "You aren't signed in to Claude yet. Double-click the helper again to try once more." }
+    return (Signed-In)
+}
+if (-not (Signed-In)) {
+    if (-not (Sign-In "Next, sign in to Claude.")) { Stop-Helper "You aren't signed in to Claude yet. Double-click the helper again to try once more." }
 }
 
 try { Api GET "/api/helper/next?timeout=1" | Out-Null }   # checks the token (a question stays waiting until answered)
@@ -145,15 +151,23 @@ while ($true) {
     Say ("{0}  Answering your question about {1}..." -f (Get-Date -Format "HH:mm"), $t.summary) "Cyan"
     $body = @{ kind = $t.kind; work = $t.work; id = $t.id }
     try {
-        $a = Ask-Claude $t
+        try { $a = Ask-Claude $t }
+        catch {
+            # A login that expired while the helper was running: sign in again here, then answer the same question.
+            if (Signed-In) { throw }
+            if (-not (Sign-In "Your Claude sign-in has expired. Sign in again and the helper will answer your question.")) { throw }
+            $a = Ask-Claude $t
+        }
         $body.answer = $a.answer
         if ($t.kind -eq "proofread") { $body.fixes = @($a.fixes) } else { $body.cites = @($a.cites) }
         $note = "answered"
     } catch {
-        $msg = "$($_.Exception.Message)"
-        if ($msg -match "log ?in|sign ?in|authenticat") { $msg = "please sign in to Claude again: close this window and double-click the helper" }
-        $body.answer = "The helper couldn't get an answer from Claude ($msg). Ask again in a moment."
-        $note = "couldn't answer: $msg"
+        $msg = ("$($_.Exception.Message)".Trim() -split "`n")[0]
+        if ($msg.Length -gt 300) { $msg = $msg.Substring(0, 300) + "..." }
+        $hint = "Ask again in a moment."
+        if (-not (Signed-In)) { $hint = "Claude isn't signed in on this computer: close the helper window and double-click it again to sign in." }
+        $body.answer = "The helper couldn't get an answer from Claude. Claude said: $msg  $hint"
+        $note = "couldn't answer. Claude said: $msg"
     }
     try { Api POST "/api/helper/answer" $body | Out-Null; Say "        $note; the answer is in your panel." }
     catch { Say "        $note, but couldn't send it ($_)." "Yellow" }

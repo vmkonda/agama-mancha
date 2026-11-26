@@ -7,7 +7,7 @@ $repo = Resolve-Path (Join-Path $PSScriptRoot "..\..")
 Set-Location $repo
 
 $busy = Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue
-if ($busy) { Write-Host "Something is already listening on port $Port (process $($busy[0].OwningProcess)); stop it first."; exit 1 }
+if ($busy) { Write-Host "Something is already listening on port $Port (process $($busy[0].OwningProcess)): an older server? Stop it with  Stop-Process -Id $($busy[0].OwningProcess) -Force  (as administrator if access is denied), or use redeploy.cmd -Force."; exit 1 }
 
 $env:AMOCR_OLLAMA = $Ollama
 New-Item -ItemType Directory -Force -Path data | Out-Null
@@ -23,7 +23,7 @@ for ($i = 0; $i -lt 120; $i++) {
     if (Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue) {
         Write-Host ""
         Write-Host "Agama Mancha is running on port $Port (members only). Log: data\serve.log"
-        Write-Host "It keeps running after you close this window; scripts\windows\redeploy restarts it."
+        Write-Host "It keeps running after you close this window; scripts\windows\redeploy.cmd restarts it."
         exit 0
     }
     if ($i % 5 -eq 4) { Write-Host "." -NoNewline }

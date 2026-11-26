@@ -1150,7 +1150,7 @@ def test_claude_helper_runs_on_windows(tmp_path, monkeypatch):
     fake.mkdir()
     (fake / "claude.cmd").write_text(
         "@echo off\r\n"
-        'if "%1"=="auth" (echo {"loggedIn": true}& exit /b 0)\r\n'
+        'if "%1"=="auth" (echo Login: Claude Pro& echo Email: someone@example.org& exit /b 0)\r\n'
         'more > "%~dp0prompt.txt"\r\n'
         'echo {"type":"result","is_error":false,"result":"","structured_output":'
         '{"answer":"Printed with a danda.","fixes":[{"page":1,"line":1,"to":"rama vanam |"}]}}\r\n', encoding="ascii")
@@ -1175,3 +1175,11 @@ def test_claude_helper_runs_on_windows(tmp_path, monkeypatch):
         p.kill()
         httpd.shutdown()
         server.Handler.hosted = False
+
+
+def test_version_is_public_and_names_the_commit():
+    """Redeploy checks which code the server runs: /api/version is open even on a hosted server."""
+    from amocr import server
+
+    assert "/api/version" in server.Handler.PUBLIC
+    assert server.CODE_VERSION == "" or len(server.CODE_VERSION) == 40
