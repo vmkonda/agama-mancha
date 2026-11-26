@@ -101,6 +101,9 @@ sup.fn { color: var(--accent); font-weight: 700; font-size: .72em; line-height: 
   background: var(--st-bg); color: var(--st-fg); border: 1px solid var(--line); border-radius: 4px; }
 .cell.st-none { background: var(--panel); color: var(--muted); }
 .cell.here { outline: 2px solid var(--accent); outline-offset: 1px; }
+/* OCR queue: a dot in the corner, hollow while waiting, filled while a worker reads it, red when set aside. */
+.cell .oq { position: absolute; left: 3px; top: 3px; width: 7px; height: 7px; border-radius: 50%; border: 1.5px solid var(--accent); }
+.cell .oq.leased { background: var(--accent); } .cell .oq.failed { border-color: #c0392b; background: #c0392b; }
 .cell:hover { border-color: var(--accent); }
 i.wn { position: absolute; top: -6px; right: -6px; min-width: 15px; height: 15px; padding: 0 3px; border-radius: 999px; font-style: normal;
   font-size: 10px; line-height: 15px; background: var(--accent); color: var(--panel); }
@@ -1055,13 +1058,16 @@ async function renderGrid() {
   const order = ["none", "draft", "proofread", "validated", "problem", "blank"];
   const me = (S.data.ladder || {}).me;
   const pct = g.total ? Math.round((100 * g.done) / g.total) : 0;
+  const OQ = { queued: "waiting for", leased: "being read by", failed: "set aside by" }, ENG = { surya: "Surya", tesseract: "Tesseract" };
+  const oq = (p) => Object.entries((g.ocr || {})[p] || {}).filter(([, st]) => st !== "done");
   const cell = (r) => {
-    const w = GRID.warn[r.page], nw = w ? w.structure + w.reference : 0;
+    const w = GRID.warn[r.page], nw = w ? w.structure + w.reference : 0, q = oq(r.page);
+    const qst = q.some(([, s]) => s === "failed") ? "failed" : q.some(([, s]) => s === "leased") ? "leased" : q.length ? "queued" : "";
     const tip = [`p${r.page}: ${STATUS_LABEL[r.status]}`, r.proofread_by && `proofread by ${r.proofread_by}`,
       r.validated_by && `validated by ${r.validated_by}`, r.status === "draft" && r.saved_by && `saved by ${r.saved_by}`,
       w && (w.structure || w.reference) && `${w.structure} structure, ${w.reference} reference warning(s)`,
-      r.note && `note: ${r.note}`].filter(Boolean).join("\n");
-    return `<button class="cell st-${r.status}${r.page === S.page ? " here" : ""}" data-p="${r.page}" title="${esc(tip)}">${r.page}${nw ? `<i class="wn" title="">${nw}</i>` : ""}</button>`;
+      r.note && `note: ${r.note}`, ...q.map(([e, s]) => `OCR: ${OQ[s]} ${ENG[e] || e}`)].filter(Boolean).join("\n");
+    return `<button class="cell st-${r.status}${r.page === S.page ? " here" : ""}" data-p="${r.page}" title="${esc(tip)}">${qst ? `<i class="oq ${qst}"></i>` : ""}${r.page}${nw ? `<i class="wn" title="">${nw}</i>` : ""}</button>`;
   };
   let h = `<div class="gridhead">
       <div class="gbar"><div style="width:${pct}%"></div></div>
@@ -1070,6 +1076,11 @@ async function renderGrid() {
       <span style="display:flex;gap:6px"><button id="g-next-pr" title="The next page after this one that nobody has finished proofreading">Next to proofread ▶</button>
       <button id="g-next-va" title="The next proofread page that someone else proofread">Next to validate ▶</button></span>
     </div>
+    ${(() => { // the book's OCR queue, if any pages are in it
+      const c = { queued: 0, leased: 0, failed: 0 };
+      for (const p of Object.keys(g.ocr || {})) for (const [, st] of oq(p)) c[st]++;
+      return c.queued + c.leased + c.failed ? `<div class="muted" style="font-size:13px;margin:4px 0">OCR queue: ${c.leased} page(s) being read, ${c.queued} waiting${c.failed ? `, ${c.failed} set aside` : ""} (a dot on the page: hollow waiting, filled being read, red set aside). Progress and time left: on the Library page.</div>` : "";
+    })()}
     <div class="legend">${order.map((s) => `<span class="stchip st-${s}">${STATUS_LABEL[s]} ${g.counts[s] || 0}</span>`).join("")}
       <span class="muted" id="g-wstate">counting warnings…</span></div>`;
   for (const grp of g.groups) {

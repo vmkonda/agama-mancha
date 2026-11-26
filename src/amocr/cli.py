@@ -985,9 +985,13 @@ def cmd_queue(args) -> None:
         rows = _inventory(works[wid])
         pages = parse_pages(args.pages, len(rows)) if args.pages else None
         print(f"{wid}: {ocrqueue.add(works[wid], args.engine, pages)} page(s) queued for {args.engine}")
-    st = ocrqueue.status()
-    for b, c in sorted(st["books"].items()):
-        print(f"  {b}: {c['queued']} waiting, {c['leased']} being read, {c['done']} done, {c['failed']} set aside")
+    st = ocrqueue.status(load_works())
+    for r in st["queue"]:
+        eta = f", about {r['eta_minutes']} min left at {r['per_hour']} pages/h" if r["eta_minutes"] is not None else ""
+        print(f"  {r['book']} · {r['engine']}: {r['queued']} waiting, {r['leased']} being read, {r['done']} done, "
+              f"{r['failed']} set aside{eta}")
+        for f in r["failed_pages"][:10]:
+            print(f"      p{f['page']} set aside: {f['error'][:120]}")
     for w, x in st["workers"].items():
         print(f"  worker {w} on {x['host']} ({', '.join(x['engines'])}), seen {x['seconds_ago']}s ago")
 

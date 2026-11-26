@@ -100,7 +100,7 @@ const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const store = { get: (k) => { try { return localStorage.getItem("lib." + k); } catch { return null; } },
                 set: (k, v) => { try { localStorage.setItem("lib." + k, v); } catch {} } };
-const S = { cat: null, sort: store.get("sort") || "path", dir: +(store.get("dir") || 1) };
+const S = { cat: null, sort: store.get("sort") || "path", dir: +(store.get("dir") || 1), q: null };
 
 const theme = store.get("theme"); if (theme) document.documentElement.dataset.theme = theme;
 $("theme").onclick = () => {
@@ -119,6 +119,30 @@ function ago(h) {
   return `${Math.round(h / 24)} days ago`;
 }
 
+// The OCR queue (pages waiting for Surya or Tesseract on members' machines): shown in each book's row
+// and, for the workers, in the status line. Read again every 30 seconds while the page is open.
+const ENGINE = { surya: "Surya", tesseract: "Tesseract" };
+function mins(m) { return m < 60 ? `${m} min` : `${Math.floor(m / 60)} h${m % 60 ? " " + (m % 60) + " min" : ""}`; }
+function ocrLine(r) {
+  const bits = [`${r.done}/${r.total} read`];
+  if (r.leased) bits.push(`${r.leased} being read${r.reading_on.length ? " on " + r.reading_on.join(", ") : ""}`);
+  if (r.queued) bits.push(`${r.queued} waiting`);
+  if (r.left && r.eta_minutes != null) bits.push(`about ${mins(r.eta_minutes)} left`);
+  else if (r.left && !Object.keys((S.q || {}).workers || {}).length) bits.push("no worker online");
+  if (r.failed) bits.push(`<span class="err" title="${esc(r.failed_pages.map((f) => "p" + f.page + ": " + f.error).join("\n"))}">${r.failed} set aside</span>`);
+  return `<div class="prog ocrq" title="OCR queue${r.per_hour ? ": about " + r.per_hour + " pages an hour lately" : ""}">OCR · ${esc(ENGINE[r.engine] || r.engine)}: ${bits.join(" · ")}</div>`;
+}
+async function loadQueue() {
+  try { const r = await fetch("/api/ocr/queue"); if (r.ok) S.q = await r.json(); } catch {}
+}
+function queueStatus() {
+  const q = S.q; if (!q) return "";
+  const ws = Object.entries(q.workers || {}), left = (q.queue || []).reduce((n, r) => n + r.left, 0);
+  if (!ws.length && !left) return "";
+  const who = ws.map(([w, x]) => `${esc(w)} on ${esc(x.host || "?")} (${esc(x.engines.map((e) => ENGINE[e] || e).join(", "))})`).join("; ");
+  return ` · OCR: ${left ? `<b>${left}</b> pages waiting or being read` : "queue empty"} · ${ws.length ? "workers online: " + who : '<span class="err">no OCR worker online</span>'}`;
+}
+
 async function load() {
   const r = await fetch("/api/catalog"); S.cat = await r.json();
   const folders = [...new Set(S.cat.entries.map((e) => e.folder).filter(Boolean))].sort();
@@ -128,8 +152,10 @@ async function load() {
   if (folders.includes(keep)) $("folder").value = keep;
   $("show").value = store.get("show") ?? "needs";
   $("q").value = store.get("q") || "";
+  await loadQueue();
   status(); render();
   if (S.cat.refresh.running || S.cat.job.running) poll();
+  setInterval(async () => { await loadQueue(); status(); if ($("show").value !== "etexts") render(); }, 30000);
 }
 
 function status() {
@@ -153,6 +179,7 @@ function status() {
   else if (jb.error) html += ` · <span class="err">${esc(jobText(jb.what))} failed: ${esc(jb.error)}</span>`;
   else if (jb.result && jb.result.ok === false) html += ` · <span class="err">${esc(jb.result.why)}</span>`;
   if (rf.error) html += ` · <span class="err">Refresh failed: ${esc(rf.error)}</span>`;
+  html += queueStatus();
   $("status").innerHTML = html;
   $("refresh").disabled = rf.running;
   $("sync").disabled = jb.running;
@@ -221,10 +248,11 @@ function render() {
   };
   const stage = (e) => {
     const b = e.board;
-    if (!b) return "";
+    const ocr = e.book && S.q ? (S.q.queue || []).filter((r) => r.book === e.book).map(ocrLine).join("") : "";
+    if (!b) return ocr;
     const p = b.progress || {};
     const prog = p.pages ? `${p.read || 0}/${p.pages} read · ${p.proofread || 0} saved · ${p.checked ?? p.verified ?? 0} proofread · ${p.validated || 0} validated` : "";
-    return `<div class="stage">${esc(b.stage_label)}</div>${prog ? `<div class="prog" title="reported by ${esc(b.by)}">${prog}</div>` : ""}`;
+    return `<div class="stage">${esc(b.stage_label)}</div>${prog ? `<div class="prog" title="reported by ${esc(b.by)}">${prog}</div>` : ""}${ocr}`;
   };
   const inv = (e) => {
     const v = e.inv;
