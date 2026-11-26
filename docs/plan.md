@@ -238,8 +238,56 @@ results arrive as they do now; the server hosts, searches and coordinates, so it
 (a member signs the Proton CLI in on the server once) or pushed by volunteers as today.
 
 **Order of work:** (H1) the private server for the team: gate, accounts, database, the pages as
-they are, route 1 listeners; (H2) route 2, per-person API keys; (H3) the connector for claude.ai and,
-if decided, access for scholars.
+they are, route 1 listeners; OCR still pushed from volunteers' Macs as today; (H2) OCR workers, and
+route 2 (per-person API keys); (H3) the connector for claude.ai and, if decided, access for scholars.
+
+### Who can work from a browser alone
+
+| Work | Browser only | Needs a Claude route (listener or own key) | Needs a worker (below) |
+|---|---|---|---|
+| Library: catalog, claims, board, inventory | yes | | |
+| Proofreading: Proofread, ladder, page grid, history, Suggestions, structure warnings, GRETIL cross-check | yes | | |
+| Validating another person's pages | yes | | |
+| Librarian: works, search, read in context with scans, import e-texts, evaluation review | yes | | |
+| Coordinating: members, stale claims, assembling a book | yes | | |
+| Study with Claude, *Check with Claude*, the proofreading chat | | yes | |
+| Claude reviewing pages | | yes (as a worker job) | |
+| OCR of new books (Tesseract, Surya) | | | yes |
+
+So readers, proofreaders, validators and coordinators do all their work in the browser from day
+one; only producing new OCR needs a machine that can run the engines.
+
+### OCR workers: members' own machines do the reading
+
+The server has no GPU, and Surya is slow on an ordinary CPU. Instead of renting GPUs, members'
+machines do the OCR, the same way the Claude Code listener answers questions: a **worker** on a
+member's machine pulls work from the server over HTTPS, runs its own engines, and sends the
+readings back. The server never connects to anyone's network.
+
+1. **The member starts a worker** with their personal token (`amocr worker --server … --token …`).
+   It reports what it can run, with exact versions: Tesseract with the pinned Sanskrit and Hindi
+   models, Surya, a local vision model, Claude Code (for review).
+2. **It asks for work:** a batch of pages of a book someone has claimed, for an engine it has.
+3. **The server leases it a batch** (say 20 pages). If the worker disappears, the lease expires and
+   the batch goes to another worker: no page lost, none done twice.
+4. **The worker fetches the page images, runs the engine, uploads the readings**, each labelled
+   with engine, version and worker, exactly like page readings today, then deletes its copies.
+5. **The book's page grid fills in** as batches return from whoever has capacity.
+
+**Engines:**
+
+- **Tesseract and Surya:** the measured engines. Surya runs well on Apple Silicon and on PCs with a
+  GPU; Tesseract anywhere.
+- **Local vision models** (e.g. Qwen through Ollama): allowed only as an extra reading for
+  comparison, never as the draft, until one proves itself on the evaluation (in our test Qwen broke
+  39 of 118 correct lines and garbled Sanskrit; docs/engines.md).
+- **Claude Code:** the "review" job, i.e. the listener as part of the same worker; never given
+  restricted books.
+
+**Why this way:** free, and it grows with the team (each member's Mac adds capacity); no Proton setup
+needed by anyone; results comparable because engine and model versions are pinned and recorded;
+scans go only to members' machines, over HTTPS, and aren't kept. The fallback, if members' machines
+aren't enough, is a GPU machine rented by the hour that runs the same worker.
 
 ### What changes in the code (when it's decided)
 
@@ -253,6 +301,8 @@ if decided, access for scholars.
 5. Route 3: a connector tool that saves an answer to the person's study thread.
 6. Sync of the library and the material folder to the server; backups.
 7. A production web server (ASGI) in place of Python's built-in one; a container image built by CI.
+8. The worker: a job queue with leases on the server; `amocr worker` (engines reported with versions,
+   batches fetched and returned, Claude Code review as a job type, restricted books never to Claude).
 
 ### Open decisions
 
@@ -263,3 +313,5 @@ if decided, access for scholars.
 5. **Proton's role**: remains the store of originals with the server syncing from it, or the
    server becomes the store and Proton the backup.
 6. **When**: after Mālinī is finished end to end, or alongside it.
+7. **Workers:** any member may run one, or only those the coordinator approves (readings are drafts
+   until proofread and validated, so the risk is low; approval at first is the cautious start).
