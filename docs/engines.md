@@ -88,6 +88,17 @@ doesn't replace reading: the misses are single wrong letters that form valid
 words, and footnote markers. These numbers come from one book; measure again on
 each new one (`amocr suspects <book> --eval`).
 
+On 10 corrected pages (283 lines, 47 corrections), 2026-11-26: score ≥ 2 flagged 177
+lines and caught 42 of the 47; the five misses were valid-looking words (सौफ for सौंफ,
+सांचा for साँचा, कलाशों for कलाओं, बाब for आज, योगमागियों for योगमार्गियों).
+
+**In Proofread** the same scores are shown as you type (the `structure` call scores the
+text being edited): lines scoring 2 or more are orange, darker at 4 and 6, with the score
+beside the line's tag, the suspect words underlined and the reasons for the current line
+under the text. The book's word counts are reused for five minutes, so a page scores in
+milliseconds. Tesseract's reading is compared only while the page's lines still match the
+engine's line for line.
+
 ## Cheaper Claude models for a second check: tested, not settled
 
 Could Sonnet or Haiku, run as a subagent in the volunteer's own Claude Code session, check
