@@ -227,7 +227,8 @@ own Claude Code session. Start it once: in your Claude Code session, say
   it's one conversation either way, each answer labelled with who gave it. With **Local AI** you
   describe a change so you don't have to retype the line: select the line(s) in the text, type
   what to change (“the marker after योगी is २”, “षण्माससभ्यसेद् should be षण्मासमभ्यसेद्”, “remove the
-  quotes”) and press **Make the change**. The status line shows whether the one you picked is
+  quotes”) and press **Send**. Sending never changes the draft: the answer is a proposal you can
+  check, ask again about, or apply. The status line shows whether the one you picked is
   ready; *Check with Claude* always goes to Claude. A local model on the team's machine (free, shared by everyone) returns the edited
   line(s) with **Apply to the draft**, marked *Local AI*. It doesn't look at the scan or decide
   what's right; it only carries out your words, so check the old and new text before applying.
