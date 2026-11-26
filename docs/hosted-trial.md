@@ -76,20 +76,53 @@ the real deployment this becomes a container image built on every merge (docs/pl
 
 ## On the Mac (a member's machine with Claude Code)
 
-In a terminal in the project folder, or ask Claude Code to do it:
+**1. Your server and token, in a private file.** The token is your key to the server: keep it in
+this file only, never in the repository, a chat or a message. In your own terminal:
 
 ```sh
-export AGAMA_SERVER=http://192.168.1.20:8770     # the Windows machine's address
-export AGAMA_TOKEN=am_…                          # your member token from step 4
-uv run librarian study wait                      # waits for your questions on the Windows server
+mkdir -p ~/.config/agama-mancha
+nano ~/.config/agama-mancha/hosted.env
 ```
 
-In Claude Code, say: *"listen to the study chat on the hosted server"*. Claude runs the wait in the
-background, reads passages with `librarian get` / `librarian search` (which go to the server, because
-`AGAMA_SERVER` is set), answers with `librarian study reply <id> --text … --cite …`, and waits again.
+with these two lines (the **server's** address, from `ipconfig` on the Windows machine, IPv4 Address;
+not the Mac's own), then save (Ctrl-O, Enter) and exit (Ctrl-X):
+
+```
+AGAMA_SERVER=http://192.168.1.20:8770
+AGAMA_TOKEN=am_…
+```
+
+```sh
+chmod 600 ~/.config/agama-mancha/hosted.env     # readable by you only
+```
+
+**2. Check the connection** (it never prints the token):
+
+```sh
+uv run librarian hosted check
+```
+
+| It says | Meaning |
+|---|---|
+| `connected to … as <your name>` | ready |
+| `… is this machine's own address` | you put the Mac's address in the file; use the Windows machine's |
+| `can't reach …` | the server isn't running, the machines aren't on the same network, or the Windows firewall blocks port 8770 (allow it on private networks) |
+| `reached …, but it refused: members only…` | the token is wrong or was re-issued; `amocr member add` again on the server and update the file |
+
+**3. Listen.** In Claude Code in the project folder, say *"listen to the study chat on the hosted
+server"*. Claude runs `librarian --hosted study wait` in the background, reads passages with
+`librarian --hosted get` / `search`, answers with `librarian --hosted study reply …`, and waits again.
+`--hosted` takes the server and token from the file; without it the commands use this Mac's own
+library, as before.
 
 Then, in the browser on Windows: Librarian → a work → *Read* → *Study with Claude*, and ask. The panel
 shows *Claude is listening* while the Mac's listener is polling; your answer arrives in the panel.
+
+**On a Mac, about "No route to host":** recent macOS blocks programs it hasn't approved (Python among
+them) from reaching other machines on the home network, while its own tools such as `curl` are
+allowed. The listener notices and makes its calls through `curl` (the token passes on curl's standard
+input, never the command line), so nothing needs changing in System Settings. Allowing your terminal app
+under System Settings → Privacy & Security → Local Network also works.
 
 ## What this shows
 

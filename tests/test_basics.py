@@ -890,3 +890,24 @@ def test_home_is_the_library():
     for name in ("library.html", "viewer.html", "librarian.html"):
         src = files("amocr").joinpath(name).read_text(encoding="utf-8")
         assert 'href="/"' not in src and 'href="/#' not in src and '<a href="/proofread' in src
+
+
+def test_hosted_config_file(tmp_path, monkeypatch):
+    """The private file supplies server and token only with --hosted; the env and flags win; own address caught."""
+    import pytest
+
+    pytest.importorskip("lancedb")
+    from librarian import remote
+
+    monkeypatch.delenv("AGAMA_SERVER", raising=False)
+    monkeypatch.delenv("AGAMA_TOKEN", raising=False)
+    cfg = tmp_path / "hosted.env"
+    cfg.write_text('AGAMA_SERVER=http://10.0.0.5:8770/\nAGAMA_TOKEN="am_secret"\n# comment\nOTHER=x\n', encoding="utf-8")
+    monkeypatch.setattr(remote, "CONFIG", cfg)
+    assert remote.server() is None                                  # local by default
+    assert remote.server(hosted=True) == "http://10.0.0.5:8770"
+    assert remote._token() == "am_secret"
+    assert remote.server("http://other:1", hosted=True) == "http://other:1"
+    monkeypatch.setenv("AGAMA_SERVER", "http://env:2")
+    assert remote.server(hosted=True) == "http://env:2"
+    assert "own address" in remote.check("http://127.0.0.1:8770")

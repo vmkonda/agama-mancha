@@ -11,6 +11,8 @@ def main(argv=None) -> None:
     ap = argparse.ArgumentParser(prog="librarian", description="The Agama Mancha librarian: library, index, MCP tool.")
     ap.add_argument("--server", help="a hosted Agama Mancha (or AGAMA_SERVER): search, get and study go to it")
     ap.add_argument("--token", help="your member token for the hosted server (or AGAMA_TOKEN)")
+    ap.add_argument("--hosted", action="store_true",
+                    help="use the hosted server and token from ~/.config/agama-mancha/hosted.env")
     sub = ap.add_subparsers(dest="cmd", required=True)
     p = sub.add_parser("ingest", help="GRETIL TEI files → library works (ET- ids) with units")
     p.add_argument("files", nargs="+")
@@ -26,6 +28,8 @@ def main(argv=None) -> None:
     p = sub.add_parser("eval", help="run the evaluation questions against the current index")
     p.add_argument("--approved", action="store_true", help="only the questions the owner approved")
     sub.add_parser("mcp", help="run the MCP tool (stdio), for Claude Code")
+    p = sub.add_parser("hosted", help="a hosted server: check that this machine can reach it with your token")
+    p.add_argument("action", choices=["check"])
     p = sub.add_parser("gretil", help="GRETIL's catalogue: search it, or import a text into the library")
     p.add_argument("action", choices=["search", "import"])
     p.add_argument("what", help="search: words of the title; import: the TEI path (gretil/corpustei/sa_….xml)")
@@ -38,7 +42,10 @@ def main(argv=None) -> None:
     a = ap.parse_args(argv)
     from . import remote
 
-    srv = remote.server(a.server)
+    srv = remote.server(a.server, hosted=a.hosted or a.cmd == "hosted")
+    if a.cmd == "hosted":
+        print(remote.check(srv, a.token))
+        return
     if srv and a.cmd in ("search", "get", "study"):
         return _remote(a, srv)
 
