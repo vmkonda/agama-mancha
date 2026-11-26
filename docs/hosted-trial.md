@@ -59,8 +59,9 @@ powershell -ExecutionPolicy Bypass -File scripts\windows\redeploy.ps1          #
 powershell -ExecutionPolicy Bypass -File scripts\windows\redeploy.ps1 -Force   # restart anyway
 ```
 
-**Automatically**: a scheduled task checks GitHub every 15 minutes and redeploys when `main` has
-changed (log: `data\redeploy.log`):
+**Automatically**: a scheduled task checks GitHub every 15 minutes, redeploys when `main` has
+changed, and starts the server if it isn't running (after the machine restarts, say). Log:
+`data\redeploy.log`:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts\windows\auto-redeploy.ps1

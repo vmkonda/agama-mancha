@@ -13,7 +13,14 @@ $stamp = Get-Date -Format "yyyy-MM-dd HH:mm"
 git fetch --quiet origin main
 $here = (git rev-parse HEAD).Trim()
 $there = (git rev-parse origin/main).Trim()
-if ($here -eq $there -and -not $Force) { Write-Host "$stamp  up to date ($($here.Substring(0,7)))"; exit 0 }
+$running = Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue
+if ($here -eq $there -and -not $Force) {
+    if ($running) { Write-Host "$stamp  up to date ($($here.Substring(0,7))), running"; exit 0 }
+    # Up to date but not running (after a restart of the machine, say): just start it.
+    Write-Host "$stamp  up to date ($($here.Substring(0,7))), not running: starting it"
+    & (Join-Path $PSScriptRoot "serve.ps1") -Port $Port
+    exit $LASTEXITCODE
+}
 
 # Local edits to tracked files would block the update: refuse rather than overwrite them.
 if (git status --porcelain --untracked-files=no) { Write-Host "$stamp  local changes to the code; not updating:"; git status --short; exit 1 }
