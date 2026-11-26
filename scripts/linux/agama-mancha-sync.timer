@@ -1,0 +1,12 @@
+# Every 30 minutes: pull new readings from Proton, push the server's proofreading (amocr sync).
+# systemctl --user enable --now agama-mancha-sync.timer ; journalctl --user -u agama-mancha-sync
+[Unit]
+Description=Agama Mancha: sync with Proton Drive every 30 minutes
+
+[Timer]
+OnCalendar=*:0/30
+Persistent=true
+RandomizedDelaySec=60
+
+[Install]
+WantedBy=timers.target

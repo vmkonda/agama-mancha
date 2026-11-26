@@ -340,9 +340,12 @@ class Handler(BaseHTTPRequestHandler):
         self._err("not found", HTTPStatus.NOT_FOUND)
 
     def _session_cookie(self, sid: str | None) -> str:
+        # Behind an HTTPS proxy (the VPS), the browser must never send the session over plain HTTP.
+        https = (self.headers.get("X-Forwarded-Proto") or "").split(",")[0].strip().lower() == "https"
+        flags = "HttpOnly; SameSite=Strict; Path=/" + ("; Secure" if https else "")
         if not sid:
-            return "am_session=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0"
-        return f"am_session={sid}; HttpOnly; SameSite=Strict; Path=/; Max-Age={members.SESSION_DAYS * 86400}"
+            return f"am_session=; {flags}; Max-Age=0"
+        return f"am_session={sid}; {flags}; Max-Age={members.SESSION_DAYS * 86400}"
 
     def _auth_post(self, parts: list[str]) -> None:
         """Sign in, set a password from an invite, sign out, change password, issue a listener token."""

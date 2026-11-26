@@ -109,3 +109,13 @@ def test_hook_blocks_scripts_that_would_delete():
     assert hook(ev) == 2
     ok = {"tool_name": "Write", "tool_input": {"file_path": "/tmp/notes.md", "content": "never run proton-drive delete"}}
     assert hook(ok) == 0
+
+
+def test_session_cookie_is_secure_behind_https():
+    from amocr.server import Handler
+
+    h = Handler.__new__(Handler)
+    h.headers = {"X-Forwarded-Proto": "https"}
+    assert "; Secure" in h._session_cookie("abc") and "; Secure" in h._session_cookie(None)
+    h.headers = {}
+    assert "Secure" not in h._session_cookie("abc")  # plain HTTP at home: a Secure cookie would never come back

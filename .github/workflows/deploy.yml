@@ -1,0 +1,66 @@
+name: deploy
+
+# Every merge to main updates the VPS: the tests run first, then the server pulls main and restarts
+# (scripts/linux/deploy.sh). To roll back, revert the pull request (that deploys too), or in an
+# emergency: Actions -> deploy -> Run workflow, with an earlier commit of main.
+# Setup, secrets and the server side: docs/deploy-vps.md.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      commit:
+        description: "Deploy this earlier commit of main instead of the latest (to roll back). Empty: latest main."
+        required: false
+        default: ""
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false   # never cut a deploy off halfway; the next one waits
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync
+      - run: uv run pytest -q
+
+  deploy:
+    needs: test
+    # Off until the VPS is set up: Settings -> Secrets and variables -> Actions -> Variables ->
+    # VPS_DEPLOY = on (docs/deploy-vps.md). Until then merges only run the tests.
+    if: vars.VPS_DEPLOY == 'on'
+    runs-on: ubuntu-latest
+    environment: production     # its secrets, and (optionally) required reviewers, live here
+    steps:
+      - name: Update the server
+        env:
+          SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
+          HOST: ${{ secrets.VPS_HOST }}
+          USER: ${{ secrets.VPS_USER }}
+          PORT: ${{ secrets.VPS_PORT || '22' }}
+          COMMIT: ${{ github.event.inputs.commit || '' }}
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key && chmod 600 ~/.ssh/deploy_key
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts      # the server's host key, pinned
+          # The key on the server is restricted to scripts/linux/deploy.sh (a forced command): it reads
+          # this only as "deploy" or "deploy <commit of main>", and refuses anything else.
+          if [ -n "$COMMIT" ]; then
+            [[ "$COMMIT" =~ ^[0-9a-f]{7,40}$ ]] || { echo "commit must be a hex commit id"; exit 1; }
+            request="deploy $COMMIT"
+          else
+            request="deploy"
+          fi
+          ssh -i ~/.ssh/deploy_key -p "$PORT" -o StrictHostKeyChecking=yes -o BatchMode=yes \
+              "$USER@$HOST" "$request"
+      - name: Forget the key
+        if: always()
+        run: rm -f ~/.ssh/deploy_key

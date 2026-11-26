@@ -90,8 +90,8 @@ scripts\windows\auto-redeploy.cmd
 Unregister-ScheduledTask -TaskName "Agama Mancha redeploy" -Confirm:$false   # to remove it
 ```
 
-A change that needs more than a restart (a new index format, say) says so in its pull request; on
-the real deployment this becomes a container image built on every merge (docs/plan.md).
+A change that needs more than a restart (a new index format, say) says so in its pull request.
+The VPS deployment (GitHub Actions, on every merge to `main`) is in docs/deploy-vps.md.
 
 ### Keeping the server in step with Proton Drive
 
