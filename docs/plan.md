@@ -289,6 +289,14 @@ needed by anyone; results comparable because engine and model versions are pinne
 scans go only to members' machines, over HTTPS, and aren't kept. The fallback, if members' machines
 aren't enough, is a GPU machine rented by the hour that runs the same worker.
 
+### Trial at home (being built, 2026-11-26)
+
+`amocr serve --hosted` (members only: personal tokens, a sign-in link that sets a cookie, bearer
+tokens for listeners; refuses to listen beyond this machine without it), `amocr member add|list|remove`,
+per-member study threads, and the listener side (`librarian --server … study wait|reply`, `get`,
+`search`; or `AGAMA_SERVER` / `AGAMA_TOKEN`). Windows as the server, the Mac as a member's machine:
+docs/hosted-trial.md (PR #25).
+
 ### What changes in the code (when it's decided)
 
 1. Accounts and roles from the gate's verified identity (no passwords of our own); the operator
@@ -313,5 +321,9 @@ aren't enough, is a GPU machine rented by the hour that runs the same worker.
 5. **Proton's role**: remains the store of originals with the server syncing from it, or the
    server becomes the store and Proton the backup.
 6. **When**: after Mālinī is finished end to end, or alongside it.
+Decided (2026-11-26): **Claude listeners are personal**: a member's Claude answers only that
+member's questions, never shared. **Local AI may be shared**: a member can run a worker with local
+engines (Surya, Tesseract, local models) that serves everyone's jobs.
+
 7. **Workers:** any member may run one, or only those the coordinator approves (readings are drafts
    until proofread and validated, so the risk is low; approval at first is the cautious start).
