@@ -195,6 +195,10 @@ In Claude Code on the Mac, say *"listen to the viewer chat on the hosted server"
 uv run amocr chat any wait --hosted          # your next question, in any book (or name one book)
 ```
 
+(Or say *"listen to the chats on the hosted server"*: `uv run amocr listen --hosted` waits for your
+next question from the proofreading chat **and** the study chat at once, and prints whichever comes
+first. Waiting takes nothing off the server, so a question not printed yet is there next time.)
+
 which prints the line(s) as they stand and saves an image of them from the scan on your Mac, then
 answers with `uv run amocr chat <book> reply <id> --hosted --text "…" --fix PAGE:LINE:"…"`. Proposed
 fixes are checked on the server (pages you've proofread or validated stay locked), and you apply them in
@@ -238,9 +242,14 @@ uv run amocr queue                                           # what's waiting, b
 study listener:
 
 ```sh
-uv run --extra surya amocr worker --engines surya            # keeps going, waits when the queue is empty
+uv run --extra surya amocr helpers --engines surya           # the OCR worker and the local AI together
+uv run --extra surya amocr worker --engines surya            # or only the OCR worker; keeps going
 uv run --extra surya amocr worker --engines surya --once     # stops when the queue is empty
 ```
+
+`amocr helpers` runs what this machine can: the OCR worker if it has an engine, the local AI if
+Ollama answers with the model (`--no-ocr` / `--no-local-ai` to leave one out). Ctrl-C stops both;
+the page being read finishes, and pages still leased go back to the queue.
 
 A lease lasts 15 minutes; if the worker stops (Ctrl-C, sleep), its pages go back to the queue. A page
 that fails three times is set aside. A reading is saved exactly like `amocr ocr` saves it, never over an

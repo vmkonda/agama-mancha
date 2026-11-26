@@ -58,6 +58,10 @@ When a person is proofreading in the viewer and asks for help:
   the background (your questions in all books; never restricted ones), read the line image it saves,
   and reply with `uv run amocr chat <book> reply <id> --hosted --text "..." [--fix PAGE:LINE:"..."]`.
   The same rules as below; the token stays in the person's file, never in the chat.
+- **Both chats on a hosted server at once** ("listen to the chats on the hosted server"): after the
+  check, `uv run amocr listen --hosted` in the background waits for the person's next question from
+  either chat and prints it as the two waits above would, headed PROOFREADING or STUDY. Answer it with
+  that chat's reply command, under that chat's rules, then listen again (also after a timeout, exit 3).
 - **The viewer's chat panel:** when asked to "listen to the viewer chat", follow the
   ocr-view skill: `amocr chat <book> wait` in the background, answer with
   `amocr chat <book> reply`, wait again. "CHECK REQUEST" messages (the Check with

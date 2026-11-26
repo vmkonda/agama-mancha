@@ -310,10 +310,37 @@ def cmd_line(work: Work, args) -> None:
                 print(f"  image: {path}")
 
 
+def print_chat_question(srv: str, token: str | None, r: dict) -> None:
+    """Print a proofreading question from a hosted server (`chat … wait`, `listen`), with its lines and image."""
+    import tempfile
+
+    from librarian import remote
+
+    m, wid = r["message"], r["work"]
+    where = (f" (p{m['page']}" + (f" lines {m['n']}-{m['n2']}" if m.get("n2") else f" line {m['n']}" if m.get("n") else "") + ")") if m.get("page") else ""
+    print(f"message {m['id']} in {wid}{where}" + (" CHECK REQUEST" if m.get("kind") == "check" else "") + f" (from {m.get('by', '?')}):")
+    print(f"  {m['text']}")
+    ctx = r.get("context") or {}
+    for x in ctx.get("lines") or ([ctx] if ctx.get("text") else []):
+        print(f"line {x.get('n', m.get('n'))} ({x.get('source')}{', verified' if x.get('verified') else ''}): {x.get('text')}")
+    if ctx.get("error"):
+        print(f"(no line context: {ctx['error']})")
+    if ctx.get("image_url"):
+        img = Path(tempfile.gettempdir()) / f"amocr-{wid}-{Path(ctx['image_url']).name}"
+        img.write_bytes(remote.fetch(srv, ctx["image_url"], token))
+        print(f"image of {'these lines' if m.get('kind') == 'check' else 'the line'}: {img}")
+    if r.get("brief_url"):
+        print(f"book brief: {srv}{r['brief_url']} (librarian-style: read it once per session with `curl` or ask)")
+    if m.get("kind") == "check":
+        print("Check each line against the image. Reply with what matches, and a --fix for every line that differs "
+              "(whole line, as printed; misprints stay). Put anything unsure in the text.")
+    print(f"\nReply with `uv run amocr chat {wid} reply {m['id']} --hosted --text \"...\"`"
+          " [--fix PAGE:LINE:\"whole new line\"] [--rule RULE_ID], then wait again.")
+
+
 def _chat_remote(args) -> None:
     """The proofreading chat on a hosted server: wait for your next question (in one book, or `any`),
     reply with proposed fixes. Every connection goes out from this machine."""
-    import tempfile
     import time as _time
 
     from librarian import remote
@@ -327,30 +354,9 @@ def _chat_remote(args) -> None:
         print(f"listening on {srv} for {'all your books' if not book else book} ...", flush=True)
         while _time.time() < end:
             r = remote.call_waiting(srv, "/api/chat/next", args.token, query={"work": book, "timeout": 25}, timeout=60)
-            m = r.get("message")
-            if not m:
+            if not r.get("message"):
                 continue
-            wid = r["work"]
-            where = (f" (p{m['page']}" + (f" lines {m['n']}-{m['n2']}" if m.get("n2") else f" line {m['n']}" if m.get("n") else "") + ")") if m.get("page") else ""
-            print(f"message {m['id']} in {wid}{where}" + (" CHECK REQUEST" if m.get("kind") == "check" else "") + f" (from {m.get('by', '?')}):")
-            print(f"  {m['text']}")
-            ctx = r.get("context") or {}
-            for x in ctx.get("lines") or ([ctx] if ctx.get("text") else []):
-                print(f"line {x.get('n', m.get('n'))} ({x.get('source')}{', verified' if x.get('verified') else ''}): {x.get('text')}")
-            if ctx.get("error"):
-                print(f"(no line context: {ctx['error']})")
-            if ctx.get("image_url"):
-                img = Path(tempfile.gettempdir()) / f"amocr-{wid}-{Path(ctx['image_url']).name}"
-                img.write_bytes(remote.fetch(srv, ctx["image_url"], args.token))
-                print(f"image of {'these lines' if m.get('kind') == 'check' else 'the line'}: {img}")
-            if r.get("brief_url"):
-                print(f"book brief: {srv}{r['brief_url']} (librarian-style: read it once per session with `curl` or ask)")
-            if m.get("kind") == "check":
-                print("Check each line against the image. Reply with what matches, and a --fix for every line that differs "
-                      "(whole line, as printed; misprints stay). Put anything unsure in the text.")
-            print(f"\nReply with `uv run amocr chat {wid} reply {m['id']} --hosted --text \"...\"`"
-                  " [--fix PAGE:LINE:\"whole new line\"] [--rule RULE_ID], then wait again.")
-            return
+            return print_chat_question(srv, args.token, r)
         print("no message before the timeout; wait again")
         sys.exit(3)
     if args.action == "reply":
@@ -1023,6 +1029,97 @@ def cmd_fix_worker(args) -> None:
               log=lambda m: print(m, flush=True))
 
 
+def cmd_helpers(args) -> None:
+    """One command for a machine that helps the team: the OCR worker and the local AI together, whichever
+    this machine can run. Both connect out to the hosted server; Ctrl-C stops both."""
+    import threading
+    import urllib.request
+
+    from librarian import remote
+    from librarian.index import OLLAMA
+
+    from . import fixer, worker
+
+    srv = remote.server(args.server, hosted=True)
+    if not srv:
+        raise SystemExit("which server? --server, or AGAMA_SERVER in ~/.config/agama-mancha/hosted.env")
+    say = lambda tag: (lambda m: print(f"[{tag}] {m}", flush=True))
+    jobs = []
+    if not args.no_ocr:
+        wanted = [e.strip() for e in args.engines.split(",")] if args.engines else None
+        if worker.available(wanted):
+            jobs.append(("ocr", lambda stop: worker.run(srv, args.token, wanted, args.batch, log=say("ocr"), stop=stop)))
+        else:
+            print("[ocr] no OCR engine here (Tesseract: amocr setup-models; Surya: uv sync --extra surya): not offered")
+    if not args.no_local_ai:
+        model = args.model or fixer.MODEL
+        try:
+            tags = json.load(urllib.request.urlopen(f"{OLLAMA.rstrip('/')}/api/tags", timeout=5))
+            have = {m["name"] for m in tags.get("models", [])}
+        except OSError as e:
+            have = None
+            print(f"[local AI] Ollama isn't answering at {OLLAMA} ({e}): not offered")
+        if have is not None and model not in have:
+            print(f"[local AI] the model {model} isn't in Ollama (ollama pull {model}): not offered")
+        elif have is not None:
+            jobs.append(("local AI", lambda stop: fixer.run(srv, args.token, model, log=say("local AI"), stop=stop)))
+    if not jobs:
+        raise SystemExit("nothing to offer on this machine")
+    stop = threading.Event()
+    threads = [threading.Thread(target=fn, args=(stop,), name=tag, daemon=True) for tag, fn in jobs]
+    for t in threads:
+        t.start()
+    print(f"helping {srv} with: {', '.join(tag for tag, _ in jobs)}. Ctrl-C stops.", flush=True)
+    try:
+        while any(t.is_alive() for t in threads):
+            for t in threads:
+                t.join(timeout=1)
+    except KeyboardInterrupt:
+        print("stopping: the current page finishes; pages still leased go back to the queue", flush=True)
+        stop.set()
+        for t in threads:
+            t.join(timeout=90)   # a long poll can take up to a minute to come back
+
+
+def cmd_listen(args) -> None:
+    """Wait for your next question, from either chat: the proofreading chat (Check with Claude, the
+    viewer's panel) or the study chat in the Librarian. Prints the first one, as `amocr chat … wait`
+    or `librarian study wait` would, and exits; answer it, then listen again. Exits 3 on timeout.
+    Waiting takes nothing off the server: a question not printed now is still there next time."""
+    import queue
+    import threading
+
+    from librarian import remote
+    from librarian.cli import print_study_question
+
+    srv = remote.server(args.server, hosted=True)
+    if not srv:
+        raise SystemExit("which server? --server, or AGAMA_SERVER in ~/.config/agama-mancha/hosted.env")
+    got: queue.Queue = queue.Queue()
+
+    def poll(kind: str, path: str, query: dict) -> None:
+        while True:
+            r = remote.call_waiting(srv, path, args.token, query=query, timeout=60)
+            if r.get("message"):
+                got.put((kind, r))
+                return
+
+    for kind, path, q in (("chat", "/api/chat/next", {"work": "", "timeout": 25}),
+                          ("study", "/api/librarian/study/next", {"timeout": 25})):
+        threading.Thread(target=poll, args=(kind, path, q), daemon=True).start()
+    print(f"listening on {srv} for your questions: proofreading chat and study chat ...", flush=True)
+    try:
+        kind, r = got.get(timeout=args.timeout)
+    except queue.Empty:
+        print("no question before the timeout; listen again")
+        sys.exit(3)
+    print(f"--- {'PROOFREADING' if kind == 'chat' else 'STUDY'} question ---")
+    if kind == "chat":
+        print_chat_question(srv, args.token, r)
+    else:
+        print_study_question(srv, r)
+
+
 def cmd_queue(args) -> None:
     """On the server: queue a book's pages for an engine, or show the queue."""
     from . import ocrqueue
@@ -1231,6 +1328,19 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--token", help="your listener token (default: AGAMA_TOKEN in that file)")
     p.add_argument("--model", default=None, help="the Ollama model (default: qwen3.8:27b-mlx, or AMOCR_FIX_MODEL)")
     p.add_argument("--once", action="store_true", help="stop when nothing is waiting")
+    p = plain_cmd("helpers", cmd_helpers, "on a helping machine: the OCR worker and the local AI together, whichever it can run")
+    p.add_argument("--server", help="the hosted server (default: AGAMA_SERVER in ~/.config/agama-mancha/hosted.env)")
+    p.add_argument("--token", help="your listener token (default: AGAMA_TOKEN in that file)")
+    p.add_argument("--engines", help="OCR engines to offer, e.g. surya (default: all installed)")
+    p.add_argument("--batch", type=int, default=10, help="pages leased at a time")
+    p.add_argument("--model", default=None, help="the local AI's Ollama model (default: qwen3.8:27b-mlx, or AMOCR_FIX_MODEL)")
+    p.add_argument("--no-ocr", action="store_true", help="only the local AI")
+    p.add_argument("--no-local-ai", action="store_true", help="only the OCR worker")
+    p = plain_cmd("listen", cmd_listen, "for Claude: wait for your next question from either chat (proofreading or study)")
+    p.add_argument("--hosted", action="store_true", help="the hosted server in ~/.config/agama-mancha/hosted.env (the default)")
+    p.add_argument("--server", help="the hosted server (default: AGAMA_SERVER in ~/.config/agama-mancha/hosted.env)")
+    p.add_argument("--token", help="your listener token (default: AGAMA_TOKEN in that file)")
+    p.add_argument("--timeout", type=float, default=1800, help="seconds before giving up (exit 3)")
     p = plain_cmd("queue", cmd_queue, "on the server: queue a book for OCR workers, or show the queue")
     p.add_argument("book", nargs="?", help="the book to queue (omit to just show the queue)")
     p.add_argument("--engine", default="surya", choices=["tesseract", "surya"])
