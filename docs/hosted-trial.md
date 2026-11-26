@@ -247,6 +247,10 @@ that fails three times is set aside. A reading is saved exactly like `amocr ocr`
 existing one, and credited to the member whose worker read it. Rehearsed on the Mac with real Surya: three
 pages leased over HTTP, read at about 12 s a page, and the readings were byte for byte the ones made locally.
 
+**Languages.** Each queued page carries its book's Tesseract models (`amocr languages <book>`;
+docs/engines.md), so a worker reads an English book with `eng` and a Devanagari one with `san+hin`.
+Workers need those models installed (`uv run amocr setup-models` installs san, hin and eng).
+
 ## What this shows
 
 - **Members only:** every page, scan and API call needs a signed-in session (name and password) or,

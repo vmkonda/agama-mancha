@@ -151,6 +151,28 @@ whole book) and writes `data/works/<book>/brief.md` and `glossary.json`.
 
 Both files quote the book, so they live in `data/` and are never committed.
 
+## A book's languages: which Tesseract models read it
+
+Each book records its languages, and every Tesseract reading of it uses those models: `amocr
+ocr`, `amocr claude-next`, and OCR workers taking its pages from a server's queue (each job carries
+them). Surya reads any script by itself, but it places its lines with Tesseract's boxes, read with the
+same models. The models are in the reading's label (`tesseract-san+hin+eng-psm3-…`).
+
+| Book | Languages | Tesseract |
+|---|---|---|
+| Devanagari only (the default) | `san hin` | `-l san+hin` |
+| English, or Sanskrit in IAST | `eng` | `-l eng` |
+| Devanagari with English commentary or translation | `san hin eng` | `-l san+hin+eng` |
+
+A fetched book gets them from the scripts its inventory saw on sample pages, and from "English" or
+"translation" in its title. Check or change them with `uv run amocr languages <book>` /
+`uv run amocr languages <book> san hin eng`; on a server, queue the book again for new readings.
+
+Why not always all three: measured 2026-11-26 on the pilot book's 7 proofread pages (Devanagari
+only), `san+hin+eng` read worse than `san+hin` (mean CER 0.145 against 0.125) and took half as long
+again (1.5 s a page against 1.0). On an English line, `san+hin` read nothing right (CER 1.00), while
+`eng` and `san+hin+eng` read it perfectly. So English is added only where the book has it.
+
 ## Surya
 
 ### Install (optional)

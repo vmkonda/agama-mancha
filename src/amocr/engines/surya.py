@@ -239,7 +239,7 @@ def classify(label: str, lines: list[str]) -> list[dict]:
 class Surya(Engine):
     name = "surya"
 
-    def __init__(self, split_with_tesseract: bool = True):
+    def __init__(self, split_with_tesseract: bool = True, tesseract_langs: str = "san+hin"):
         try:
             import surya  # noqa: F401
         except ImportError:
@@ -252,7 +252,8 @@ class Surya(Engine):
             import shutil
 
             from .tesseract import Tesseract
-            self._tess = Tesseract() if shutil.which("tesseract") else None
+            # the book's languages (amocr.languages): its lines are placed with Tesseract's boxes
+            self._tess = Tesseract(langs=tesseract_langs) if shutil.which("tesseract") else None
 
     @cache
     def version(self) -> str:
