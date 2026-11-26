@@ -9,6 +9,8 @@ from pathlib import Path
 
 def main(argv=None) -> None:
     ap = argparse.ArgumentParser(prog="librarian", description="The Agama Mancha librarian: library, index, MCP tool.")
+    ap.add_argument("--server", help="a hosted Agama Mancha (or AGAMA_SERVER): search, get and study go to it")
+    ap.add_argument("--token", help="your member token for the hosted server (or AGAMA_TOKEN)")
     sub = ap.add_subparsers(dest="cmd", required=True)
     p = sub.add_parser("ingest", help="GRETIL TEI files → library works (ET- ids) with units")
     p.add_argument("files", nargs="+")
@@ -34,6 +36,11 @@ def main(argv=None) -> None:
     p.add_argument("--cite", action="append", help="reply: a unit id the answer relies on (repeatable)")
     p.add_argument("--timeout", type=float, default=1800)
     a = ap.parse_args(argv)
+    from . import remote
+
+    srv = remote.server(a.server)
+    if srv and a.cmd in ("search", "get", "study"):
+        return _remote(a, srv)
 
     if a.cmd == "ingest":
         from . import etext
@@ -126,3 +133,47 @@ def main(argv=None) -> None:
         from .mcp_server import main as run
 
         run()
+
+
+def _remote(a, srv: str) -> None:
+    """The same commands against a hosted server: every request goes out from this machine."""
+    import time
+
+    from . import remote
+
+    if a.cmd == "search":
+        q = {"q": a.query, "k": a.k, "work": a.work or "", "layer": a.layer or ""}
+        for u in remote.call(srv, "/api/librarian/search", a.token, query=q):
+            how = ", ".join(f"{x} #{v}" for x, v in (u.get("found_by") or {}).items())
+            print(f"{u['id']}  [{u['title']}, {u['status']}; {how}]\n   {u['text'][:160]}\n   {(u.get('iast') or '')[:160]}")
+    elif a.cmd == "get":
+        print(json.dumps(remote.call(srv, "/api/librarian/unit", a.token, query={"id": a.id}), ensure_ascii=False, indent=1))
+    elif a.action == "wait":
+        end = time.time() + a.timeout
+        while time.time() < end:
+            r = remote.call(srv, "/api/librarian/study/next", a.token, query={"timeout": 25}, timeout=60)
+            m = r.get("message")
+            if not m:
+                continue
+            print(f"question {m['id']}{' about ' + m['unit'] if m.get('unit') else ''} (from {m.get('by', '?')} on {srv}):\n  {m['text']}\n")
+            if m.get("quote"):
+                print(f"the words they selected (the question is about these):\n  «{m['quote']}»\n")
+            u = r.get("context")
+            if u:
+                print(f"the passage: {u['id']} ({u['title']}, {u['status']})\n  {u['text']}\n  {u.get('iast') or ''}")
+                for c in u.get("commentary", [])[:4]:
+                    print(f"  commentary {c['id']}: {c['text'][:300]}")
+                print(f"  neighbours: {', '.join(u.get('neighbours', []))}")
+            print("\nAnswer only from the library (librarian --server … get/search), quote the original with a translation, "
+                  f"and cite every passage:\n  uv run librarian study reply {m['id']} --text \"...\" --cite <unit id> …\nthen wait again.")
+            return
+        print("no question yet (timed out); wait again")
+        raise SystemExit(3)
+    elif a.action == "reply":
+        if not (a.msg and a.text):
+            raise SystemExit("reply needs the message id and --text")
+        r = remote.call(srv, "/api/librarian/study/reply", a.token, body={"reply_to": a.msg, "text": a.text, "cites": a.cite or []})
+        print(f"replied ({r['id']}) to {srv}, citing {len(r.get('cites', []))} passage(s)")
+    else:
+        raise SystemExit("study show isn't available against a server; open the panel in the app")
+

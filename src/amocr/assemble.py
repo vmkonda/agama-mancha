@@ -23,6 +23,7 @@ from pathlib import Path
 
 from . import __version__
 from . import config as cfgmod
+from . import members
 from .catalog import Work, load_works
 from .patterns import DRAFT_ORDER, gt_paths
 from .book import now
@@ -397,7 +398,7 @@ def assemble(work: Work, pages: list[int] | None = None, commentary_layer: str |
     for u in units:
         kind = "footnote" if u["layer"].startswith("footnote-") else u["layer"]
         counts[kind] = counts.get(kind, 0) + 1
-    build = {"build": out.name, "date": now(), "by": cfgmod.load().operator, "amocr_version": __version__,
+    build = {"build": out.name, "date": now(), "by": members.who(), "amocr_version": __version__,
              "pages": [pages[0], pages[-1]] if pages else [], "units": counts,
              "validated_units": sum(u["status"] == "validated" for u in units),
              "proofread_units": sum(u["status"] == "proofread" for u in units), "layers": layers} | report

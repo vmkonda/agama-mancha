@@ -1,6 +1,8 @@
-"""Local side-by-side viewer: page image next to OCR output, diff, and ground-truth editing.
+"""The Agama Mancha app: library, proofreading viewer, librarian.
 
-Binds to 127.0.0.1 only. The scans and text are copyrighted; this never publishes them.
+By default it binds to 127.0.0.1 only: the scans and text are copyrighted and for Vimarsha's internal
+use. Hosted mode (`--hosted`) serves members only: every request must carry a member's token (a
+sign-in cookie or `Authorization: Bearer`), see members.py; it refuses to start without members.
 """
 
 from __future__ import annotations
@@ -19,6 +21,7 @@ from importlib.resources import files
 from urllib.parse import parse_qs, urlparse
 
 from . import config as cfgmod
+from . import members
 from .catalog import Work, load_works
 from .metrics import cer, normalize
 from .pages import native_dpi, read_jsonl, render
@@ -92,7 +95,7 @@ def _library(works: dict[str, Work]) -> dict:
     facts = inventory.merged()
     root = cat.get("root", "").rstrip("/")
     here = {w.remote: w.id for w in works.values() if w.remote}
-    me = cfgmod.load().operator
+    me = members.who()
     b = board.merge(board.load_all())
     entries = []
     for e in cat.get("entries", []):
@@ -201,7 +204,62 @@ class Handler(BaseHTTPRequestHandler):
         page = int(parts[1]) if len(parts) > 1 and re.fullmatch(r"\d{1,5}", parts[1]) else None
         return work, page
 
+    hosted = False
+
+    def _token(self) -> str | None:
+        auth = self.headers.get("Authorization", "")
+        if auth.startswith("Bearer "):
+            return auth[7:].strip()
+        for part in (self.headers.get("Cookie") or "").split(";"):
+            k, _, v = part.strip().partition("=")
+            if k == "am_token":
+                return v
+        return None
+
+    def _gate(self) -> bool:
+        """Hosted mode: admit members only, and remember who this request is for. True = go ahead."""
+        if not self.hosted:
+            return True
+        url = urlparse(self.path)
+        if url.path == "/login":                       # the sign-in link: set the cookie, then the app
+            tok = (parse_qs(url.query).get("token") or [""])[0]
+            if members.check(tok):
+                self.send_response(HTTPStatus.SEE_OTHER)
+                self.send_header("Set-Cookie", f"am_token={tok}; HttpOnly; SameSite=Strict; Path=/; Max-Age=31536000")
+                self.send_header("Location", "/library")
+                self.end_headers()
+                return False
+        who = members.check(self._token())
+        if not who:
+            if url.path.startswith("/api/"):
+                self._err("members only: sign in with your link, or send your token", HTTPStatus.UNAUTHORIZED)
+            else:
+                self._send(b"<!doctype html><meta charset=utf-8><title>Agama Mancha</title><body style='font:16px sans-serif;margin:3em'>"
+                           b"<h1>Agama Mancha</h1><p>Members of Vimarsha only. Open the sign-in link you were given.</p>",
+                           "text/html; charset=utf-8", HTTPStatus.UNAUTHORIZED)
+            return False
+        self._member = who
+        return True
+
     def do_GET(self):
+        if not self._gate():
+            return
+        tok = members.set_current(getattr(self, "_member", (None,))[0])
+        try:
+            self._do_get()
+        finally:
+            members.reset_current(tok)
+
+    def do_POST(self):
+        if not self._gate():
+            return
+        tok = members.set_current(getattr(self, "_member", (None,))[0])
+        try:
+            self._do_post()
+        finally:
+            members.reset_current(tok)
+
+    def _do_get(self):
         url = urlparse(self.path)
         parts = [p for p in url.path.split("/") if p]
         try:
@@ -259,7 +317,7 @@ class Handler(BaseHTTPRequestHandler):
 
                 meta_path = _gt_path(work, page).with_suffix(".meta.json")
                 meta = json.loads(meta_path.read_text(encoding="utf-8")) if meta_path.exists() else None
-                me = cfgmod.load().operator
+                me = members.who()
                 ok, why = ladder.can_validate(meta, me)
                 return self._json({"page": page, "results": res,
                                    "ladder": {"status": ladder.of(meta) if GT in res else "none", "me": me,
@@ -368,7 +426,7 @@ class Handler(BaseHTTPRequestHandler):
             return self._json({"done": len(done)})
         raise LookupError("not found")
 
-    def do_POST(self):
+    def _do_post(self):
         parts = [p for p in urlparse(self.path).path.split("/") if p]
         if parts == ["api", "librarian", "import"]:
             try:
@@ -388,6 +446,18 @@ class Handler(BaseHTTPRequestHandler):
                 raise ValueError("say what to import: a GRETIL file or an uploaded TEI file")
             except (ValueError, RuntimeError, json.JSONDecodeError) as e:
                 return self._err(str(e))
+        if parts == ["api", "librarian", "study", "reply"]:     # a listener's answer
+            try:
+                from librarian import study
+
+                b = self._body()
+                q = next((m for m in study.load() if m["id"] == str(b.get("reply_to"))), None)
+                if not q or (Handler.hosted and q.get("by") != members.who()):
+                    raise ValueError("no such question of yours")
+                return self._json(study.post("claude", str(b.get("text", "")), reply_to=q["id"],
+                                             cites=[str(c) for c in b.get("cites") or []], by="claude"))
+            except (ValueError, RuntimeError, json.JSONDecodeError) as e:
+                return self._err(str(e))
         if parts == ["api", "librarian", "study"]:
             try:
                 _librarian()
@@ -395,7 +465,7 @@ class Handler(BaseHTTPRequestHandler):
 
                 b = self._body()
                 return self._json(study.post("user", str(b.get("text", "")), unit=str(b.get("unit") or "") or None,
-                                             quote=str(b.get("quote") or "") or None, by=cfgmod.load().operator or ""))
+                                             quote=str(b.get("quote") or "") or None, by=members.who() or ""))
             except (ValueError, RuntimeError, json.JSONDecodeError) as e:
                 return self._err(str(e))
         if parts[:3] == ["api", "librarian", "eval"]:
@@ -447,7 +517,7 @@ class Handler(BaseHTTPRequestHandler):
             old_meta = json.loads(meta_path.read_text(encoding="utf-8")) if meta_path.exists() else {}
             # Check the step first (e.g. validating your own proofreading), so a refusal changes nothing.
             # Keep what's already recorded (the reading it started from, fixes applied).
-            meta = ladder.change(old_meta, status, cfgmod.load().operator, str(body.get("note", ""))[:2000])
+            meta = ladder.change(old_meta, status, members.who(), str(body.get("note", ""))[:2000])
             if body.get("base") and not meta.get("base"):      # the reading the page started from
                 meta["base"] = str(body["base"])[:200]
             from . import history
@@ -506,7 +576,13 @@ def _librarian_get(parts: list[str], q: dict) -> object:
     if parts == ["study"]:
         from librarian import study
 
-        return {"messages": study.load()[-120:], "listening": study.listening()}
+        me = members.who() if Handler.hosted else None
+        return {"messages": study.thread(me)[-120:], "listening": study.listening(me), "me": me}
+    if parts == ["study", "next"]:                     # a member's listener, long-polling for their questions
+        from librarian import study
+
+        m = study.wait(timeout=min(float(one("timeout", "25") or 25), 55), who=members.who() if Handler.hosted else None)
+        return {"message": m, "context": store.get(m["unit"], context=2) if m and m.get("unit") else None}
     if parts == ["read"]:
         return store.context(one("id"), one("chapter") or None) or {"error": "no such unit"}
     if parts == ["eval"]:
@@ -519,22 +595,34 @@ def _librarian_eval_post(parts: list[str], body: dict) -> object:
     if parts == ["run"]:
         return evals.run(only_approved=bool(body.get("only_approved")))
     if len(parts) == 1:
-        return evals.update(parts[0], body, cfgmod.load().operator or "unknown")
+        return evals.update(parts[0], body, members.who() or "unknown")
     raise LookupError("not found")
 
 
-def serve(port: int = 8791, open_browser: bool = True, page: str | None = None) -> None:
+def serve(port: int = 8791, open_browser: bool = True, page: str | None = None,
+          host: str = "127.0.0.1", hosted: bool = False) -> None:
     Handler.works = load_works()
+    Handler.hosted = hosted
+    if host not in ("127.0.0.1", "localhost", "::1") and not hosted:
+        raise SystemExit("refusing to serve beyond this machine without --hosted (members only): "
+                         "the scans and text are for Vimarsha's internal use")
+    if hosted and not members.load()["members"]:
+        raise SystemExit('hosted mode needs members first: amocr member add "<name>" --role admin')
     # macOS lets us bind 127.0.0.1:port even when another process holds *:port,
     # and requests may then reach that other process. Refuse instead.
     with socket.socket() as probe:
         probe.settimeout(0.5)
         if probe.connect_ex(("127.0.0.1", port)) == 0:
             raise SystemExit(f"port {port} is already in use by another process; pass --port")
-    httpd = ThreadingHTTPServer(("127.0.0.1", port), Handler)
-    url = f"http://127.0.0.1:{port}/" + (f"#{page}" if page else "")
+    httpd = ThreadingHTTPServer((host, port), Handler)
+    url = f"http://{'127.0.0.1' if host in ('0.0.0.0', '::') else host}:{port}/" + (f"#{page}" if page else "")
     print(f"amocr viewer at {url}  (Ctrl-C to stop)", flush=True)
-    if os.environ.get("SSH_CONNECTION"):
+    if hosted:
+        print(f"HOSTED, members only, listening on {host}:{port}. {len(members.load()['members'])} member(s). "
+              "Plain HTTP: fine for a trial on a home network; a real deployment puts it behind HTTPS and a gate "
+              "(docs/plan.md).", flush=True)
+        open_browser = False
+    elif os.environ.get("SSH_CONNECTION"):
         # Running over SSH: the browser is on the other machine. Never bind wider; tunnel instead.
         print(
             "SSH session detected. On the machine you're browsing from, run\n"

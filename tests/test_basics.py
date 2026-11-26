@@ -797,3 +797,63 @@ def test_gretil_catalogue_and_upload_checks():
         gretil.download("https://example.org/evil.xml")
     with pytest.raises(ValueError, match="TEI XML"):
         importer.from_upload("notes.txt", "just some text")
+
+
+def test_hosted_members_only(tmp_path, monkeypatch):
+    """Hosted mode: no token, no access; the sign-in link sets a cookie; a bearer token works; the server
+    refuses the network without --hosted; each member sees only their own study thread."""
+    import json
+    import socket
+    import threading
+    import urllib.error
+    import urllib.request
+    from http.server import ThreadingHTTPServer
+
+    import pytest
+
+    from amocr import members, server
+
+    monkeypatch.setenv("AMOCR_DATA", str(tmp_path))
+    with pytest.raises(SystemExit, match="without --hosted"):
+        server.serve(port=1, open_browser=False, host="0.0.0.0", hosted=False)
+    with pytest.raises(SystemExit, match="needs members"):
+        server.serve(port=1, open_browser=False, host="0.0.0.0", hosted=True)
+    anna, bala = members.add("Anna", "proofreader"), members.add("Bala", "reader")
+    assert members.check(anna) == ("Anna", "proofreader") and members.check("am_wrong") is None
+    assert anna not in json.dumps(members.load())                    # only a hash is stored
+
+    server.Handler.hosted, server.Handler.works = True, {}
+    with socket.socket() as s_:
+        s_.bind(("127.0.0.1", 0)); port = s_.getsockname()[1]
+    httpd = ThreadingHTTPServer(("127.0.0.1", port), server.Handler)
+    threading.Thread(target=httpd.serve_forever, daemon=True).start()
+    base = f"http://127.0.0.1:{port}"
+
+    class NoRedirect(urllib.request.HTTPRedirectHandler):
+        def redirect_request(self, *a, **k):
+            return None
+    opener = urllib.request.build_opener(NoRedirect)
+
+    def get(path, token=None):
+        req = urllib.request.Request(base + path, headers={"Authorization": f"Bearer {token}"} if token else {})
+        try:
+            r = opener.open(req, timeout=5)
+            return r.status, r.headers, r.read()
+        except urllib.error.HTTPError as e:
+            return e.code, e.headers, e.read()
+    try:
+        assert get("/library")[0] == 401 and get("/api/works")[0] == 401 and get("/theme.css")[0] == 401
+        assert get("/api/works", "am_wrong")[0] == 401
+        code, headers, _ = get(f"/login?token={anna}")
+        assert code == 303 and "am_token=" in headers["Set-Cookie"] and "HttpOnly" in headers["Set-Cookie"]
+        assert get("/api/works", anna)[0] == 200
+    finally:
+        httpd.shutdown()
+        server.Handler.hosted = False
+
+    pytest.importorskip("lancedb")
+    from librarian import study
+    study.post("user", "Anna's question", by="Anna")
+    study.post("user", "Bala's question", by="Bala")
+    assert [m["text"] for m in study.thread("Anna")] == ["Anna's question"]
+    assert [m["text"] for m in study.pending("Bala")] == ["Bala's question"] and len(study.thread(None)) == 2
