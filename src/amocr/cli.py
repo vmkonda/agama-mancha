@@ -956,7 +956,8 @@ def cmd_fix_worker(args) -> None:
     if not srv:
         raise SystemExit("which server? --server, --local, or AGAMA_SERVER in ~/.config/agama-mancha/hosted.env")
     # A local viewer has no members: any token will do (and the hosted one stays out of local requests).
-    fixer.run(srv, (args.token or "local") if args.local else args.token, args.model or fixer.MODEL, args.once)
+    fixer.run(srv, (args.token or "local") if args.local else args.token, args.model or fixer.MODEL, args.once,
+              log=lambda m: print(m, flush=True))
 
 
 def cmd_queue(args) -> None:
