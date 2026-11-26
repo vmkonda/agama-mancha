@@ -328,6 +328,16 @@ each person's own Claude answers, through the **Claude helper**, a `.cmd` file m
 Account page (server and a helper token inside) that installs and signs in to Claude Code on first run
 and answers their panel questions inline; OCR runs on a managed pool of machines (the Mac for now).
 
+**Local AI: the person judges, the local model edits** (measured 2026-11-26 on p. 231, the proofread
+page). As a *checker* of lines against the scan, qwen3-vl:32b was not usable: of 26 correct lines it
+"fixed" 7 (false alarms, e.g. चूँ-चूँ → चं-चं, कृष्ण → कृण); of Surya's 5 real mistakes it fixed none (3 wrong
+fixes, 2 missed, among them the footnote marker read as '); it caught 5 of 7 planted errors only where
+the planted word was a non-word (its language sense, not its reading); ~80 s a line. So local models
+don't read the scan for anyone. Instead **Fix with local AI**: the proofreader selects lines and says
+what to change; qwen3.8:27b on the Mac Studio returns the edited lines as proposals (7 of 7 instructions
+exactly right, Hindi instructions included, nothing else touched; 2–8 s), shared by all members through
+`amocr fix-worker`; Claude never receives these requests.
+
 ### What changes in the code (when it's decided)
 
 1. Accounts and roles from the gate's verified identity (no passwords of our own); the operator

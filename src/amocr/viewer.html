@@ -138,6 +138,8 @@ i.wn { position: absolute; top: -6px; right: -6px; min-width: 15px; height: 15px
 .msg { margin: 6px 0; max-width: 92%; padding: 6px 9px; border-radius: 8px; white-space: pre-wrap; font-size: 14px; }
 .msg.user { margin-left: auto; background: var(--hl); }
 .msg.claude { background: var(--bg); border: 1px solid var(--line); }
+.msg.ai { background: var(--bg); border: 1px dashed var(--line); }
+.msg .who { display: block; font-size: 11px; color: var(--muted); margin-bottom: 2px; }
 .msg.system { color: var(--muted); font-size: 12px; padding: 0 4px; }
 .msg .where { display: block; font-size: 11px; color: var(--muted); margin-bottom: 2px; }
 .msg .act { margin-top: 6px; padding-top: 6px; border-top: 1px dashed var(--line); }
@@ -193,7 +195,7 @@ i.wn { position: absolute; top: -6px; right: -6px; min-width: 15px; height: 15px
   <div class="foot">
     <label class="muted" style="font-size:12px"><input type="checkbox" id="chatctx" checked> about <span id="chatwhere"></span></label>
     <textarea id="chatin" class="deva" placeholder="Ask Claude about this line, or describe a fix you keep making. ⌘/Ctrl ↵ sends."></textarea>
-    <div style="display:flex;gap:8px;align-items:center"><button id="chatsend">Send</button><span id="chatnote" class="muted" style="font-size:12px"></span></div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><button id="chatsend">Send</button><button id="chatfix" title="Select the line(s) in the text, type what to change, and the local AI makes the edit for you to apply. It doesn't read the scan or decide what's right: you do.">Fix with local AI</button><span id="chatnote" class="muted" style="font-size:12px"></span></div>
   </div>
 </div>
 <main>
@@ -614,7 +616,7 @@ function renderEdit() {
     } catch (e) { $("saved").textContent = "Not sent: " + e.message; }
   }
   $("checkline").onclick = check;
-  S.edit = { save, jump, curN, dirty, saveQuiet, check };
+  S.edit = { save, jump, curN, dirty, saveQuiet, check, lines: selectedLines };
   paint(false);
 }
 
@@ -755,7 +757,8 @@ async function chatLoad() {
   const atEnd = log.scrollTop + log.clientHeight >= log.scrollHeight - 20;
   log.innerHTML = d.messages.length ? d.messages.map((m) => {
     if (m.role === "system") return `<div class="msg system">${esc(m.text)}</div>`;
-    const where = m.page ? `<span class="where">${m.kind === "check" ? "Check · " : ""}p${m.page}${m.n2 ? " · lines " + m.n + "–" + m.n2 : m.n ? " · line " + m.n : ""}</span>` : "";
+    const who = m.role === "ai" ? `<span class="who">Local AI${m.model ? " · " + esc(m.model) : ""}</span>` : "";
+    const where = m.page ? `<span class="where">${m.kind === "check" ? "Check · " : m.kind === "fix" ? "Fix · " : ""}p${m.page}${m.n2 ? " · lines " + m.n + "–" + m.n2 : m.n ? " · line " + m.n : ""}</span>` : "";
     const open = pendingLines(m, applied);
     const acts = (m.actions || []).map((a, i) => {
       if (a.type === "line") {
@@ -766,7 +769,7 @@ async function chatLoad() {
       return `<div class="act">Rule <code>${esc(a.id)}</code> <button data-rule="${esc(a.id)}">Review its matches in Suggestions</button></div>`;
     }).join("");
     const all = open.length > 1 ? `<div class="act"><button data-applyall="${esc(m.id)}">Apply all ${open.length}</button></div>` : "";
-    return `<div class="msg ${m.role}">${where}<span class="deva">${esc(m.text)}</span>${acts}${all}</div>`;
+    return `<div class="msg ${m.role}">${who}${where}<span class="deva">${esc(m.text)}</span>${acts}${all}</div>`;
   }).join("") : `<p class="muted" style="font-size:13px">Ask about a line you can't read, or describe a fix you keep making. Claude answers here, and proposes changes for you to apply; it never edits the text itself.</p>`;
   if (atEnd) log.scrollTop = log.scrollHeight;
   log.querySelectorAll("button[data-apply]").forEach((b) => (b.onclick = () => { const [msg, i] = b.dataset.apply.split(":"); chatApply([[msg, +i]]); }));
@@ -814,7 +817,7 @@ document.addEventListener("keydown", async (e) => {
   e.preventDefault();
   if (!CH.data) { try { CH.data = await api(`/api/${S.work}/chat`); } catch { return; } }
   const applied = new Set(CH.data.applied);
-  const m = [...CH.data.messages].reverse().find((x) => x.role === "claude" && pendingLines(x, applied).length);
+  const m = [...CH.data.messages].reverse().find((x) => (x.role === "claude" || x.role === "ai") && pendingLines(x, applied).length);
   if (!m) { $("chatnote").textContent = "No pending proposals from Claude."; if (!CH.open) chatToggle(true); return; }
   chatApply(pendingLines(m, applied).map((i) => [m.id, i]));
 });
@@ -826,6 +829,24 @@ async function chatSend() {
   try {
     await api(`/api/${S.work}/chat`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text, page: c.page || null, n: c.n || null }) });
     $("chatin").value = ""; $("chatnote").textContent = "";
+  } catch (e) { $("chatnote").textContent = "Not sent: " + e.message; }
+  CH.last = ""; chatLoad();
+}
+
+// Fix with local AI: the person's instruction for the selected lines; the local AI makes the edit.
+async function chatFix() {
+  const text = $("chatin").value.trim();
+  const r = S.mode === "edit" && S.edit ? S.edit.lines() : null;
+  if (!r) { $("chatnote").textContent = "Select the line(s) to change in the text first (Proofread view)."; return; }
+  if (!text) { $("chatnote").textContent = "Type what to change, e.g. “the marker after योगी is २” or “remove the quotes”."; $("chatin").focus(); return; }
+  try {
+    if (S.edit.dirty()) await S.edit.saveQuiet();
+    await api(`/api/${S.work}/chat`, { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text, page: S.page, n: r[0], n2: r[1], kind: "fix" }) });
+    $("chatin").value = "";
+    $("chatnote").textContent = (CH.data && CH.data.fixer === false)
+      ? "Sent, but no local AI is running right now; it will be done when one starts."
+      : `Sent to the local AI: ${r[0] === r[1] ? "line " + r[0] : "lines " + r[0] + "–" + r[1]}.`;
   } catch (e) { $("chatnote").textContent = "Not sent: " + e.message; }
   CH.last = ""; chatLoad();
 }
@@ -849,6 +870,7 @@ placeChat();
 $("chatbtn").onclick = () => chatToggle();
 $("chatx").onclick = () => chatToggle(false);
 $("chatsend").onclick = chatSend;
+$("chatfix").onclick = chatFix;
 $("chatin").addEventListener("keydown", (e) => { if ((e.metaKey || e.ctrlKey) && e.key === "Enter") { e.preventDefault(); e.stopPropagation(); chatSend(); } });
 if (store.get("chat")) setTimeout(() => chatToggle(true), 300);
 
