@@ -778,7 +778,6 @@ function chatMode(mode) {
   $("chatin").placeholder = mode === "local"
     ? "Select the line(s) in the text, then say what to change: “the marker after योगी is २”, “remove the quotes”. ⌘/Ctrl ↵ sends."
     : "Ask Claude about this line, or describe a fix you keep making. ⌘/Ctrl ↵ sends.";
-  $("chatsend").textContent = mode === "local" ? "Make the change" : "Send";
   $("chatnote").textContent = "";
   CH.last = ""; CH.listening = null; chatLoad();
 }
