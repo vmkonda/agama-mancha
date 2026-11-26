@@ -326,7 +326,10 @@ server, `amocr worker` on a member's machine (leases, 15-minute expiry, three tr
 local ones and credited to the member); readers can't run workers. Volunteers are browser-only (decided 2026-11-26): no API key, so
 each person's own Claude answers, through the **Claude helper**, a `.cmd` file made for them on their
 Account page (server and a helper token inside) that installs and signs in to Claude Code on first run
-and answers their panel questions inline; OCR runs on a managed pool of machines (the Mac for now).
+and answers their panel questions inline; OCR runs on a managed pool of machines (the Mac for now). Sync with
+Proton (2026-11-26): `amocr sync` on the server pulls what volunteers and workers pushed (never
+overwriting the server's saves) and pushes the server's proofreading back when it changed, on a
+schedule (docs/hosted-trial.md); Proton stays the team's store, the server's copy is its working copy.
 
 **Local AI: the person judges, the local model edits** (measured 2026-11-26 on p. 231, the proofread
 page). As a *checker* of lines against the scan, qwen3-vl:32b was not usable: of 26 correct lines it

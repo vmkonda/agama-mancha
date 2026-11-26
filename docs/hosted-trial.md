@@ -93,6 +93,47 @@ Unregister-ScheduledTask -TaskName "Agama Mancha redeploy" -Confirm:$false   # t
 A change that needs more than a restart (a new index format, say) says so in its pull request; on
 the real deployment this becomes a container image built on every merge (docs/plan.md).
 
+### Keeping the server in step with Proton Drive
+
+The server works on its own copy of each book (`data\works\`): the viewer reads and saves there.
+Proton stays the team's store. **`amocr sync`** brings the two together, for every book that has a
+Proton path:
+
+1. **Pull:** new readings and saved pages that volunteers and OCR workers pushed. It never
+   overwrites the server's files: a page saved on the server stays as saved, and a different copy on
+   Proton is reported ("N files differ on Proton, the server's kept").
+2. **Push:** the book's readings, saved text, history and status, but only when something changed
+   since the last push, so an unchanged 460-page book isn't uploaded again.
+
+What never goes to Proton: members, passwords, sessions and tokens (`data\hosted\`) and the server's
+settings. Back those up privately.
+
+**Once, on the server:** install the Proton tool and sign in (in your own browser; never share the
+password), then tell amocr where the team folder and the material folder are, and the name to
+credit on what the server pushes:
+
+```powershell
+uv run amocr setup-proton
+proton-drive auth login
+uv run amocr init --operator "Agama Mancha server" --proton-root "/shared-with-me/<team folder>" --material "/shared-with-me/[OCR Mirror]/Agama Mancha"
+uv run amocr doctor          # the Proton lines should say ok
+```
+
+If the Proton tool isn't found, use the full path that `setup-proton` printed (as in the volunteer
+guide, "Proton Drive on Windows"), and give it to init with `--proton-bin`.
+
+**Then:**
+
+```powershell
+scripts\windows\sync.cmd               # once, now (or: uv run amocr sync <book>)
+scripts\windows\auto-sync.cmd          # every 30 minutes from now on (-Minutes 60 for hourly)
+Unregister-ScheduledTask -TaskName "Agama Mancha sync" -Confirm:$false   # to remove it
+```
+
+Each run adds a line per book to `data\sync.log`. One sync runs at a time; a book that fails (Proton
+signed out, say) doesn't stop the others, and the run says which. On Linux (the VPS), the same with
+cron: `*/30 * * * * cd /srv/agama-mancha && uv run --extra librarian amocr sync >> data/sync-task.log 2>&1`.
+
 ## On the Mac (a member's machine with Claude Code)
 
 **1. Your server and token, in a private file.** The token is your key to the server: keep it in

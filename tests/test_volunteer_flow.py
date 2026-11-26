@@ -195,3 +195,64 @@ def test_board_merge_earliest_claim_wins():
     assert m["holder"] == "A" and m["stage"] == "read"
     assert board.stage_of({"pages": 2, "read": 2, "claude": 0, "proofread": 1, "verified": 0}) == "proofreading"
     assert "/" not in board.file_name("Ā b/../c") and board.file_name("vmkonda") == "vmkonda.json"
+
+
+def test_server_sync_pulls_new_readings_and_pushes_only_changes(tmp_path, monkeypatch, drive, capsys):
+    root, fake = drive
+    from amocr.catalog import load_works
+
+    shared = root / "shared-with-me/Team/OCR Mirror/Tantra/Test Book.amocr"
+    # The server has the book, and a page proofread in the viewer.
+    volunteer(tmp_path, monkeypatch, "Server", fake)
+    main(["fetch", f"{TEAM}/Tantra/Test Book.pdf"])
+    (wid,) = [w for w in load_works() if w.startswith("B-")]
+    server = load_works()[wid]
+    server.gt_dir.mkdir(parents=True, exist_ok=True)
+    (server.gt_dir / "p0001.txt").write_text("पृष्ठ १ (शुद्ध)\n", encoding="utf-8")
+    (server.gt_dir / "p0001.meta.json").write_text(json.dumps({"status": "proofread"}), encoding="utf-8")
+
+    # A volunteer pushes a new reading of page 3, and their own copy of page 1.
+    volunteer(tmp_path, monkeypatch, "Anna", fake)
+    main(["fetch", f"{TEAM}/Tantra/Test Book.pdf"])
+    anna = load_works()[wid]
+    ocr = anna.page_dir(3) / "ocr"
+    ocr.mkdir(parents=True)
+    (ocr / "surya-2.5-0.24.0.json").write_text(json.dumps({"text": "पृष्ठ ३\n", "operator": "Anna"}), encoding="utf-8")
+    (ocr / "surya-2.5-0.24.0.txt").write_text("पृष्ठ ३\n", encoding="utf-8")
+    anna.gt_dir.mkdir(parents=True, exist_ok=True)
+    (anna.gt_dir / "p0001.txt").write_text("पृष्ठ १ (अन्य)\n", encoding="utf-8")
+    main(["push", wid])
+
+    # The server syncs: it gets page 3, keeps its own page 1, and pushes it.
+    monkeypatch.setenv("AMOCR_DATA", str(tmp_path / "Server"))
+    capsys.readouterr()
+    main(["sync"])
+    out = capsys.readouterr().out
+    assert "1 readings" in out and "the server's kept" in out and "pushed to" in out
+    assert (server.page_dir(3) / "ocr/surya-2.5-0.24.0.json").exists()
+    assert (server.gt_dir / "p0001.txt").read_text(encoding="utf-8") == "पृष्ठ १ (शुद्ध)\n"
+    assert (shared / "groundtruth/p0001.txt").read_text(encoding="utf-8") == "पृष्ठ १ (शुद्ध)\n"
+    assert json.loads((shared / "book.json").read_text(encoding="utf-8"))["updated_by"] == "Server"
+
+    # Nothing changed since: nothing is uploaded.
+    stamp = (shared / "book.json").stat().st_mtime_ns
+    main(["sync"])
+    assert "nothing new to push" in capsys.readouterr().out
+    assert (shared / "book.json").stat().st_mtime_ns == stamp
+
+    # A save on the server: the next sync pushes it.
+    (server.gt_dir / "p0002.txt").write_text("पृष्ठ २\n", encoding="utf-8")
+    main(["sync"])
+    assert "pushed to" in capsys.readouterr().out
+    assert (shared / "groundtruth/p0002.txt").exists()
+    log = [json.loads(x) for x in (tmp_path / "Server/sync.log").read_text(encoding="utf-8").splitlines()]
+    assert len(log) == 3 and log[1]["pushed"] == "unchanged"
+
+
+def test_sync_one_at_a_time(tmp_path, monkeypatch):
+    from amocr import sync
+
+    monkeypatch.setenv("AMOCR_DATA", str(tmp_path))
+    (tmp_path / "sync.lock").write_text("123\n")
+    with pytest.raises(sync.Locked):
+        sync.sync([])
