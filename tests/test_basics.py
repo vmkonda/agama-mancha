@@ -1278,3 +1278,22 @@ def test_no_crosstalk_between_members(tmp_path, monkeypatch):
     finally:
         httpd.shutdown()
         server.Handler.hosted = False
+
+
+def test_windows_scripts_parse():
+    """The Windows server scripts and the helper are valid PowerShell (checked on the Windows CI machine)."""
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    import pytest
+
+    if sys.platform != "win32":
+        pytest.skip("PowerShell's parser is checked on Windows")
+    root = Path(__file__).resolve().parents[1]
+    files = sorted(root.glob("scripts/windows/*.ps1")) + [root / "src/amocr/helper.ps1"]
+    for f in files:
+        cmd = ("$e = $null; [System.Management.Automation.Language.Parser]::ParseFile('%s', [ref]$null, [ref]$e) | Out-Null; "
+               "if ($e) { $e | ForEach-Object { $_.ToString() }; exit 1 }") % str(f).replace("'", "''")
+        r = subprocess.run(["powershell", "-NoProfile", "-Command", cmd], capture_output=True, text=True)
+        assert r.returncode == 0, f"{f.name}: {r.stdout}{r.stderr}"
