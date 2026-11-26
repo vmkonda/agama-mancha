@@ -64,7 +64,7 @@ When a person is proofreading in the viewer and asks for help:
   Claude button) ask you to compare lines with their image and propose a `--fix`
   for each line that differs.
 - Never edit page text or ground truth yourself, and never accept suggestions:
-  the person decides in the Suggestions tab. Text printed "wrong" stays as printed.
+  the person applies or rejects them in Proofread. Text printed "wrong" stays as printed.
 
 ## Studying with the librarian (the reader's study chat)
 

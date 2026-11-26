@@ -272,6 +272,33 @@ def suggest(work: Work, rule_id: str | None = None, limit: int = 500) -> list[di
     return out
 
 
+def page_fixes(work: Work, page: int, text: str) -> list[dict]:
+    """The book's enabled rules matched against the text of a page being proofread (not yet saved,
+    perhaps): one entry per place, with what's needed to apply it in the editor or to reject it
+    (`decide` with accept false). Places already decided are left out, as in `suggest`."""
+    data = load(work)
+    rules = [r for r in data["rules"] if r["enabled"]]
+    # A decision is about a place (this line, this spot, this change), whichever rule suggested it.
+    decided = {(oid.split(":", 1)[1], d.get("to")) for oid, d in data["decisions"].items() if ":" in oid}
+    out, k, seen = [], -1, set()
+    for line_no, line in enumerate(text.split("\n")):
+        if not line.strip():
+            continue
+        k += 1
+        for r in rules:
+            for start, end, rep in _matches(r, line):
+                if line[start:end] == rep:
+                    continue
+                oid = _occ_id(r["id"], page, line_no, start, line)
+                if (oid.split(":", 1)[1], rep) in decided or (line_no, start, end, rep) in seen:  # two rules, one fix: show it once
+                    continue
+                seen.add((line_no, start, end, rep))
+                out.append({"id": oid, "rule": r["id"], "page": page, "line_no": line_no, "n": k + 1, "start": start, "end": end,
+                            "line": line, "from": line[start:end], "to": rep, "note": r.get("note") or "",
+                            "evidence": len(r.get("pages") or []) or r.get("count") or 0, "source": r.get("source") or ""})
+    return out
+
+
 def counts(work: Work) -> dict[str, int]:
     c = Counter(s["rule"] for s in suggest(work, limit=100_000))
     return dict(c)

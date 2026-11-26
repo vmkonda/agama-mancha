@@ -8,21 +8,21 @@
 <style>
 :root {
   --bg: #f7f6f3; --panel: #ffffff; --text: #1d1d1b; --muted: #6b6a66; --line: #e3e1dc;
-  --accent: #2f6fd6; --sus: #d9772b; --low: #fff1c7; --low-text: #6a4b00; --hl: rgba(47,111,214,.18); --hl-border: #2f6fd6;
+  --accent: #2f6fd6; --sus: #d9772b; --fix: #2e8b57; --low: #fff1c7; --low-text: #6a4b00; --hl: rgba(47,111,214,.18); --hl-border: #2f6fd6;
   --del: #fbd9d6; --del-text: #8a1c12; --ins: #d4f0dc; --ins-text: #12602d;
   --header: #ece9f7; --verse: #e3eefc; --commentary: transparent; --footnote: #f1f0ea; --signature: #f1f0ea; --other: #f1f0ea;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     --bg: #161615; --panel: #1f1f1d; --text: #e8e6e1; --muted: #9a9890; --line: #33322f;
-    --accent: #7aa7f0; --sus: #f0a060; --low: #4a3a0c; --low-text: #f3d68a; --hl: rgba(122,167,240,.22); --hl-border: #7aa7f0;
+    --accent: #7aa7f0; --sus: #f0a060; --fix: #5cc38a; --low: #4a3a0c; --low-text: #f3d68a; --hl: rgba(122,167,240,.22); --hl-border: #7aa7f0;
     --del: #5a1f1a; --del-text: #ffb4ab; --ins: #173f25; --ins-text: #a6e5b8;
     --header: #2c2840; --verse: #1d2b40; --footnote: #2a2926; --signature: #2a2926; --other: #2a2926;
   }
 }
 :root[data-theme="dark"] {
   --bg: #161615; --panel: #1f1f1d; --text: #e8e6e1; --muted: #9a9890; --line: #33322f;
-  --accent: #7aa7f0; --sus: #f0a060; --low: #4a3a0c; --low-text: #f3d68a; --hl: rgba(122,167,240,.22); --hl-border: #7aa7f0;
+  --accent: #7aa7f0; --sus: #f0a060; --fix: #5cc38a; --low: #4a3a0c; --low-text: #f3d68a; --hl: rgba(122,167,240,.22); --hl-border: #7aa7f0;
   --del: #5a1f1a; --del-text: #ffb4ab; --ins: #173f25; --ins-text: #a6e5b8;
   --header: #2c2840; --verse: #1d2b40; --footnote: #2a2926; --signature: #2a2926; --other: #2a2926;
 }
@@ -32,10 +32,8 @@ body { background: var(--bg); color: var(--text); font: 14px/1.45 -apple-system,
 .deva { font-family: "Kohinoor Devanagari", "Devanagari Sangam MN", "Nirmala UI", "Mangal", "Noto Sans Devanagari", "Lohit Devanagari", sans-serif; font-size: 17px; line-height: 1.8; }
 header { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; padding: 8px 16px; border-bottom: 1px solid var(--line); background: var(--panel); }
 header h1 { font-size: 15px; margin: 0 8px 0 0; font-weight: 600; }
-/* The simple view (proofreaders and validators, unless they ask for more tools): only what proofreading needs. */
-body.simple #m-view, body.simple #m-diff, body.simple #m-sugg, body.simple #engA, body.simple #vs, body.simple #engB,
+/* The simple view (proofreaders, validators and readers on a hosted server): plain names, no engine details. */
 body.simple #status, body.simple .expert { display: none !important; }
-#moretools { font-size: 12px; }
 select, button, input { font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 4px 8px; }
 button { cursor: pointer; }
 button:hover { border-color: var(--accent); }
@@ -126,6 +124,14 @@ i.wn { position: absolute; top: -6px; right: -6px; min-width: 15px; height: 15px
 #gut .sc { float: right; min-width: 14px; text-align: center; border-radius: 7px; padding: 0 3px; margin-top: 7px; line-height: 14px; font-size: 10px; font-weight: 600; color: #fff; background: var(--sus); }
 #gut .sc.s1 { opacity: .55; } #gut .sc.s2 { opacity: .8; }
 .sushint { font-size: 13px; margin: 4px 0 0; min-height: 1.4em; }
+.sushint button, .pfix button { font-size: 12px; padding: 0 7px; margin-left: 4px; }
+#hl .fixw { box-shadow: inset 0 -3px 0 color-mix(in srgb, var(--fix) 75%, transparent); }
+#gut .fx { float: right; margin: 7px 3px 0 0; line-height: 14px; font-size: 10px; font-weight: 600; padding: 0 3px; border-radius: 7px; color: #fff; background: var(--fix); }
+.pfix { margin: 6px 0; font-size: 13px; }
+.pfix .fxrow { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 6px; padding: 2px 0; }
+.pfix .fxrow .go { background: none; border: 0; padding: 0; color: var(--text); cursor: pointer; }
+.pfix .fxrow .go:hover { text-decoration: underline; }
+.pfix .why { font-size: 12px; }
 .sushint b { color: var(--sus); }
 #hl .cur { box-shadow: inset 3px 0 0 var(--accent); }
 #hl .cur:not(.lowl):not(.s1):not(.s2):not(.s3) { background: var(--hl); }
@@ -199,10 +205,8 @@ i.wn { position: absolute; top: -6px; right: -6px; min-width: 15px; height: 15px
 <header>
   <button id="m-edit" class="on">Proofread</button>
   <button id="m-grid" title="Every page of the book, coloured by status">Pages</button>
-  <button id="moretools" aria-expanded="false" title="Show the expert tools too (View, Compare, Suggestions, engine details)">More tools ▸</button>
-  <button id="m-view">View</button>
-  <button id="m-diff">Compare</button>
-  <button id="m-sugg" title="Fixes learned from corrections, suggested across the book">Suggestions</button>
+  <button id="m-view" title="One reading of the page: Claude's, Surya's, Tesseract's or the saved text">View</button>
+  <button id="m-diff" title="Two readings side by side, with the differences marked">Compare</button>
   <select id="engA" aria-label="Output"></select>
   <span id="vs" class="muted">vs</span>
   <select id="engB" aria-label="Compare against"></select>
@@ -249,13 +253,11 @@ $("zoom").oninput = applyZoom; applyZoom();
 
 async function init() {
   const works = await api("/api/works");
-  // Simple for proofreaders and validators on a hosted server; everyone can switch with More tools.
+  // Plain names for proofreaders, validators and readers on a hosted server (no engine details).
   let me = {};
   try { me = await api("/api/me"); } catch {}
-  const pref = store.get("moretools");
-  S.simple = pref ? pref === "simple" : !!me.hosted && ["proofreader", "validator", "reader"].includes(me.role);
-  applySimple();
-  $("moretools").onclick = () => { S.simple = !S.simple; store.set("moretools", S.simple ? "simple" : "more"); applySimple(); if (S.pages.length) { pageOptions(); render(); } };
+  S.simple = !!me.hosted && ["proofreader", "validator", "reader"].includes(me.role);
+  document.body.classList.toggle("simple", S.simple);
   $("work").innerHTML = works.map((w) => `<option value="${esc(w.id)}" title="${esc(w.id)}">${esc(S.simple ? w.title : w.id + " · " + w.title)}</option>`).join("");
   const [hw, hp, hbox] = location.hash.slice(1).split("/");
   // A citation link can name lines to outline on the scan: #book/page/box=x0,y0,x1,y1
@@ -310,18 +312,10 @@ function pageOptions() {
     : `p${p.page} · ${p.engines.length} output${p.engines.length === 1 ? "" : "s"}${p.groundtruth ? " · GT" : ""}`}</option>`).join("");
   if (S.page) $("page").value = S.page;
 }
-function applySimple() {
-  document.body.classList.toggle("simple", S.simple);
-  $("moretools").textContent = S.simple ? "More tools ▸" : "Fewer tools ◂";
-  $("moretools").setAttribute("aria-expanded", String(!S.simple));
-  $("moretools").title = S.simple ? "Show the expert tools too (View, Compare, Suggestions, engine details)" : "Only what proofreading needs";
-  if (S.simple && !["edit", "grid"].includes(S.mode)) setMode("edit");
-}
-function setMode(m) { S.mode = m; for (const k of ["view", "diff", "edit", "sugg", "grid"]) $("m-" + k).classList.toggle("on", k === m); render(); }
+function setMode(m) { S.mode = m; for (const k of ["view", "diff", "edit", "grid"]) $("m-" + k).classList.toggle("on", k === m); render(); }
 $("m-view").onclick = () => setMode("view");
 $("m-diff").onclick = () => setMode("diff");
 $("m-edit").onclick = () => setMode("edit");
-$("m-sugg").onclick = () => setMode("sugg");
 $("m-grid").onclick = () => setMode("grid");
 $("engA").onchange = () => { store.set("engA", $("engA").value); render(); };
 $("engB").onchange = render;
@@ -506,10 +500,10 @@ function renderEdit() {
     ${restored ? `<div class="draftnote">Restored your unsaved edits from ${esc(new Date(draft.at).toLocaleString())}. <button id="discard">Discard them</button></div>` : ""}
     <div class="pal" id="pal">${PALETTE.map((c) => `<button class="deva" data-c="${c}" title="insert ${c}">${c}</button>`).join("")}</div>
     <div class="rom"><input id="rom" placeholder="romanised (IAST kṛṣṇa or Harvard-Kyoto kRSNa), Enter inserts" autocomplete="off" spellcheck="false"><span id="romout" class="deva"></span></div>
-    <div class="pagebar" id="pagebar"></div><div class="pwarn" id="pwarn"></div>
+    <div class="pagebar" id="pagebar"></div><div class="pwarn" id="pwarn"></div><div class="pfix" id="pfix"></div>
     <div class="ed withgut"><div id="gut" aria-hidden="true"></div><div id="hl" class="deva" aria-hidden="true"></div><textarea id="gt" class="deva" spellcheck="false" wrap="off"></textarea></div>
     <p class="sushint muted" id="sushint" role="status"></p>
-    <p class="keys muted"><span class="ln low" style="padding:0 4px">yellow</span> Tesseract was unsure · <span class="ln" style="padding:0 4px;background:color-mix(in srgb, var(--sus) 30%, transparent)">orange</span> worth a second look (the number beside the tag: darker and higher, more likely misread) · <kbd>F2</kbd> or <kbd>Alt ↓</kbd> next unsure or orange line, with <kbd>Shift</kbd> / <kbd>Alt ↑</kbd> previous · <kbd>⌘/Ctrl S</kbd> save · <kbd>⌘/Ctrl ↵</kbd> save and next page · <kbd>⌘/Ctrl K</kbd> Claude checks the line(s) · <kbd>⌘/Ctrl ⇧ ↵</kbd> apply Claude's latest fix · edits are kept in this browser until saved</p>
+    <p class="keys muted"><span class="ln low" style="padding:0 4px">yellow</span> Tesseract was unsure · <span class="ln" style="padding:0 4px;background:color-mix(in srgb, var(--sus) 30%, transparent)">orange</span> worth a second look (the number beside the tag: darker and higher, more likely misread) · <span style="box-shadow:inset 0 -3px 0 var(--fix);padding:0 2px">green</span> a suggested fix (Apply or Reject it below the page bar) · <kbd>F2</kbd> or <kbd>Alt ↓</kbd> next unsure or orange line, with <kbd>Shift</kbd> / <kbd>Alt ↑</kbd> previous · <kbd>⌘/Ctrl S</kbd> save · <kbd>⌘/Ctrl ↵</kbd> save and next page · <kbd>⌘/Ctrl K</kbd> Claude checks the line(s) · <kbd>⌘/Ctrl ⇧ ↵</kbd> apply Claude's latest fix · edits are kept in this browser until saved</p>
     <div style="display:flex;flex-wrap:wrap;gap:8px 14px;margin-top:8px;align-items:center">
       <input id="note" placeholder="note for the next reviewer (a problem page must say what)" style="flex:1;min-width:200px">
     </div>
@@ -542,9 +536,12 @@ function renderEdit() {
   // Lines worth a second look (scored from the text alone, as the proofreader types; see amocr suspects).
   const susAt = (n) => (ST && ST.suspects || []).find((x) => x.line === n);
   const susLevel = (x) => (x.score >= 6 ? "s3" : x.score >= 4 ? "s2" : "s1");
+  // The book's suggested fixes (rules learned from corrections, or added by Claude) on this page.
+  const fixesAt = (n) => (ST && ST.fixes || []).filter((f) => f.n === n);
   const DEVA_L = "\u0900-\u0963\u0971-\u097F";
-  const susWords = (html, x) => !x || !x.words.length ? html : [...new Set(x.words)].sort((a, b) => b.length - a.length)
-    .reduce((h, w) => h.replace(new RegExp(`(?<![${DEVA_L}])${w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?![${DEVA_L}])`, "g"), `<span class="susw">${w}</span>`), html);
+  const markWords = (html, words, cls) => !words.length ? html : [...new Set(words)].filter((w) => !/[<>&"]/.test(w)).sort((a, b) => b.length - a.length)
+    .reduce((h, w) => h.replace(new RegExp(`(?<![${DEVA_L}])${w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?![${DEVA_L}])`, "g"), `<span class="${cls}">${w}</span>`), html);
+  const susWords = (html, x) => !x ? html : markWords(html, x.words, "susw");
   const TAG = (t) => !t ? "" : t.type === "verse" ? (t.verse ? `verse · ${t.verse}` : "verse")
     : t.type === "commentary" ? (t.explains ? `comm. → ${t.explains}` : "comm.")
     : t.type === "footnote" ? `footnote${t.note ? " " + t.note : ""}`
@@ -556,7 +553,8 @@ function renderEdit() {
       if (r.k == null) return "<div></div>";
       const t = ST.lines[r.k];
       const su = susAt(r.k + 1);
-      return `<div class="t-${esc(t ? t.type : "")}${warnAt.has(r.k + 1) ? " warn" : ""}" title="${esc(TAG(t))}${su ? " · worth a second look (" + su.score + "): " + esc(su.notes.join("; ")) : ""}">${su ? `<span class="sc ${susLevel(su)}">${su.score}</span>` : ""}${esc(TAG(t))}</div>`;
+      const fx = fixesAt(r.k + 1);
+      return `<div class="t-${esc(t ? t.type : "")}${warnAt.has(r.k + 1) ? " warn" : ""}" title="${esc(TAG(t))}${su ? " · worth a second look (" + su.score + "): " + esc(su.notes.join("; ")) : ""}${fx.length ? " · suggested: " + esc(fx.map((f) => f.from + " → " + f.to).join(", ")) : ""}">${su ? `<span class="sc ${susLevel(su)}">${su.score}</span>` : ""}${fx.length ? `<span class="fx">fix</span>` : ""}${esc(TAG(t))}</div>`;
     }).join("");
     sync();
     const span = (a) => a.length ? (a.length === 1 ? a[0] : `${a[0].split("-")[0]}–${a[a.length - 1].split("-").pop()}`) : "none";
@@ -579,13 +577,58 @@ function renderEdit() {
       paint();
     });
   }
+  function drawFixes() {
+    const fx = (ST && ST.fixes) || [];
+    if (!fx.length) { $("pfix").innerHTML = ""; return; }
+    $("pfix").innerHTML = `<div class="fxrow"><b>${fx.length} suggested fix${fx.length === 1 ? "" : "es"} on this page</b>
+        <span class="muted why">learned from corrections in this book: check each against the scan</span>
+        ${fx.length > 1 ? `<button data-fxall="1" title="Apply every fix listed here to the text (then check and save)">Apply all ${fx.length}</button>` : ""}</div>` +
+      fx.map((f, i) => `<div class="fxrow"><button class="go deva" data-go="${f.n}" title="go to line ${f.n}">line ${f.n}: <del>${esc(f.from)}</del> → <ins>${esc(f.to)}</ins></button>
+        <span class="muted why">${f.evidence ? `corrected on ${f.evidence} page${f.evidence === 1 ? "" : "s"}` : f.source === "scorer" ? "the book's usual spelling" : "added from the chat"}${f.note ? " · " + esc(f.note) : ""}</span>
+        <button data-fx="${i}" data-a="apply">Apply</button><button data-fx="${i}" data-a="reject" title="Not here: the print has it this way">Reject</button><button data-fx="${i}" data-a="off" title="Stop suggesting ${esc(f.from)} → ${esc(f.to)} anywhere in the book">Never</button></div>`).join("");
+    $("pfix").querySelectorAll("button[data-go]").forEach((b) => (b.onclick = () => goLine(+b.dataset.go)));
+    $("pfix").querySelectorAll("button[data-fx]").forEach((b) => (b.onclick = () => fixAction(fx[+b.dataset.fx], b.dataset.a)));
+    const all = $("pfix").querySelector("button[data-fxall]");
+    if (all) all.onclick = () => applyFixes(fx);
+  }
+  function goLine(want) {
+    const rs = rows(), i = rs.findIndex((r) => r.k === want - 1);
+    if (i < 0) return;
+    const start = rs.slice(0, i).reduce((n, r) => n + r.t.length + 1, 0);
+    ta.focus(); ta.setSelectionRange(start, start + rs[i].t.length);
+    ta.scrollTop = Math.max(0, i * parseFloat(getComputedStyle(ta).lineHeight) - ta.clientHeight / 3);
+    paint();
+  }
+  // Apply = edit the text here, like typing it (nothing is saved until you save). A line that
+  // changed since the fix was found is skipped, never guessed.
+  function applyFixes(list) {
+    const lines = ta.value.split("\n");
+    let done = 0;
+    for (const f of [...list].sort((a, b) => b.line_no - a.line_no || b.start - a.start)) {
+      const ln = lines[f.line_no];
+      if (ln !== undefined && ln.slice(f.start, f.end) === f.from) { lines[f.line_no] = ln.slice(0, f.start) + f.to + ln.slice(f.end); done++; }
+    }
+    ta.value = lines.join("\n"); onInput();
+    $("saved").textContent = `Applied ${done} fix${done === 1 ? "" : "es"} to the text: check them against the scan, then save.`;
+  }
+  async function fixAction(f, a) {
+    try {
+      if (a === "apply") return applyFixes([f]);
+      if (a === "reject") await api(`/api/${S.work}/suggestions/decide`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ items: [f], accept: false }) });
+      if (a === "off") {
+        if (!confirm(`Stop suggesting ${f.from} → ${f.to} on every page of this book?`)) return;
+        await api(`/api/${S.work}/patterns/${encodeURIComponent(f.rule)}/enabled`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ enabled: false }) });
+      }
+      structure();
+    } catch (e) { $("saved").textContent = "Not done: " + e.message; }
+  }
   function structure() {
     clearTimeout(stTimer);
     stTimer = setTimeout(async () => {
       try {
         ST = await api(`/api/${encodeURIComponent(S.work)}/structure`, { method: "POST", headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ page: S.page, text: ta.value }) });
-        drawStructure(); paint(false);
+        drawStructure(); drawFixes(); paint(false);
       } catch (e) { $("pagebar").innerHTML = `<span class="muted">structure unavailable: ${esc(e.message)}</span>`; }
     }, 300);
   }
@@ -596,11 +639,15 @@ function renderEdit() {
     const marks = (t) => esc(t).replace(FNM_AFTER, '$1<span class="fnm">$2</span>').replace(FNM_BEFORE, '$1<span class="fnm">$2</span>');
     hl.innerHTML = rs.map((r, i) => {
       const su = r.k != null ? susAt(r.k + 1) : null;
-      return `<div class="${[su ? susLevel(su) : isLow(r) ? "lowl" : "", i === c ? "cur" : ""].join(" ").trim()}">${susWords(marks(r.t), su) || " "}</div>`;
+      const fw = r.k != null ? fixesAt(r.k + 1).map((f) => f.from) : [];
+      return `<div class="${[su ? susLevel(su) : isLow(r) ? "lowl" : "", i === c ? "cur" : ""].join(" ").trim()}">${markWords(susWords(marks(r.t), su), fw, "fixw") || " "}</div>`;
     }).join("");
     sync();
     const cs = rs[c] && rs[c].k != null ? susAt(rs[c].k + 1) : null;
-    $("sushint").innerHTML = cs ? `<b>Line ${cs.line}, worth a second look (${cs.score}):</b> <span class="deva">${esc(cs.notes.join(" · "))}</span>` : "";
+    const cf = rs[c] && rs[c].k != null ? fixesAt(rs[c].k + 1) : [];
+    $("sushint").innerHTML = (cs ? `<b>Line ${cs.line}, worth a second look (${cs.score}):</b> <span class="deva">${esc(cs.notes.join(" · "))}</span> ` : "") +
+      cf.map((f) => `<span class="deva">Suggested: <del>${esc(f.from)}</del> → <ins>${esc(f.to)}</ins></span><button data-hfx="${esc(f.id)}">Apply</button> `).join("");
+    $("sushint").querySelectorAll("button[data-hfx]").forEach((b) => (b.onclick = () => applyFixes(cf.filter((f) => f.id === b.dataset.hfx))));
     if (!follow) return;
     const x = tl(rs[c]);
     if (x) { showBox(x.bbox); scrollToBox(x.bbox); } else $("box").style.display = "none";
@@ -846,7 +893,7 @@ async function chatLoad() {
         return `<div class="act"><span class="where">p${a.page} · line ${a.n}</span><div class="deva"><del>${deva(a.from)}</del><br><ins>${deva(a.to)}</ins></div>
           <button data-apply="${esc(m.id)}:${i}" ${done ? "disabled" : ""}>${done ? "Applied" : "Apply to the draft"}</button></div>`;
       }
-      return `<div class="act">Rule <code>${esc(a.id)}</code> <button data-rule="${esc(a.id)}">Review its matches in Suggestions</button></div>`;
+      return `<div class="act">Rule <code>${esc(a.id)}</code> <button data-rule="${esc(a.id)}">Open a page where it suggests a fix</button></div>`;
     }).join("");
     const all = open.length > 1 ? `<div class="act"><button data-applyall="${esc(m.id)}">Apply all ${open.length}</button></div>` : "";
     return `<div class="msg ${m.role}">${who}${where}<span class="deva">${esc(m.text)}</span>${acts}${all}</div>`;
@@ -859,7 +906,13 @@ async function chatLoad() {
     const m = CH.data.messages.find((x) => x.id === b.dataset.applyall);
     chatApply(pendingLines(m, new Set(CH.data.applied)).map((i) => [m.id, i]));
   }));
-  log.querySelectorAll("button[data-rule]").forEach((b) => (b.onclick = () => { SG.rule = b.dataset.rule; SG.i = 0; setMode("sugg"); }));
+  log.querySelectorAll("button[data-rule]").forEach((b) => (b.onclick = async () => {
+    // A rule's fixes are shown on their pages in Proofread: open the first page where it has one.
+    const items = await api(`/api/${S.work}/suggestions?rule=${encodeURIComponent(b.dataset.rule)}`).catch(() => []);
+    if (!items.length) { b.textContent = "No pages left with this fix"; b.disabled = true; return; }
+    S.mode = "edit"; for (const k of ["view", "diff", "edit", "grid"]) $("m-" + k).classList.toggle("on", k === "edit");
+    $("page").value = items[0].page; await loadPage(items[0].page);
+  }));
 }
 
 function pendingLines(m, applied) {

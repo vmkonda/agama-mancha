@@ -631,6 +631,10 @@ class Handler(BaseHTTPRequestHandler):
                 st["suspects"] = suspects.page_suspects(work, page, text, [ln.get("type") or "other" for ln in st.get("lines") or []])
             except Exception as e:  # never let the scorer break Proofread
                 st["suspects"], st["suspects_error"] = [], str(e)[:200]
+            try:  # the book's suggested fixes, on the page they belong to
+                st["fixes"] = pat.page_fixes(work, page, text) if page else []
+            except Exception as e:
+                st["fixes"], st["fixes_error"] = [], str(e)[:200]
             return self._json(st)
         if parts[2:] == ["patterns", "mine"]:
             data = pat.merge_mined(work, include_claude=bool(body.get("include_claude")))
@@ -801,6 +805,12 @@ class Handler(BaseHTTPRequestHandler):
             meta["saved_by"] = members.who()
             path.write_text(text.rstrip("\n") + "\n", encoding="utf-8")
             meta_path.write_text(json.dumps(meta, ensure_ascii=False, indent=1), encoding="utf-8")
+            try:  # learn from this correction straight away: its fixes are suggested on the other pages
+                from . import patterns as pat
+
+                pat.merge_mined(work)
+            except Exception:
+                pass
             self._json({"saved": str(path), "status": meta["status"], "rev": _rev(work, page)})
         except LookupError as e:
             self._err(str(e), HTTPStatus.NOT_FOUND)

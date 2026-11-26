@@ -585,7 +585,7 @@ def cmd_rule(work: Work, args) -> None:
         if not (args.frm and args.to is not None):
             raise SystemExit("rule add needs --from and --to")
         r = pat.add_rule(work, args.kind, args.frm, args.to, note=args.note or "", source=args.source)
-        print(f"added {r['id']}: {r['kind']} {r['from']} → {r['to']}; {pat.counts(work).get(r['id'], 0)} places to review in Suggestions")
+        print(f"added {r['id']}: {r['kind']} {r['from']} → {r['to']}; {pat.counts(work).get(r['id'], 0)} places to review in Proofread")
     else:
         if not args.id:
             raise SystemExit(f"rule {args.action} needs a rule id (see `amocr patterns {work.id}`)")
@@ -1092,7 +1092,7 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("msg", nargs="?", help="reply: the message id that `chat wait` printed")
     p.add_argument("--text")
     p.add_argument("--fix", action="append", help='reply: propose a line, PAGE:LINE:"whole new line" (repeatable)')
-    p.add_argument("--rule", action="append", help="reply: point to a rule to review in Suggestions (repeatable)")
+    p.add_argument("--rule", action="append", help="reply: point to a rule whose fixes show in Proofread (repeatable)")
     p.add_argument("--timeout", type=float, default=1800, help="wait: seconds before giving up (default 30 min)")
     p.add_argument("--last", type=int, default=20, help="show: how many messages")
     p.add_argument("--hosted", action="store_true", help="the hosted server in ~/.config/agama-mancha/hosted.env "
