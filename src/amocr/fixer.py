@@ -124,13 +124,13 @@ def edit(task: dict, model: str = MODEL, ollama: str | None = None) -> dict:
     return json.loads(r["message"]["content"])
 
 
-def run(server: str, token: str | None = None, model: str = MODEL, once: bool = False, log=print) -> int:
-    """Answer instructions until stopped (or, with once, until none is waiting)."""
+def run(server: str, token: str | None = None, model: str = MODEL, once: bool = False, log=print, stop=None) -> int:
+    """Answer instructions until stopped (Ctrl-C, or `stop` set by `amocr helpers`; with once, until none is waiting)."""
     from librarian import remote
 
     log(f"local AI fixes for {server} with {model}")
     done = 0
-    while True:
+    while not (stop and stop.is_set()):
         t = remote.call_waiting(server, "/api/fix/next", token, log=log, query={"timeout": 2 if once else 25}, timeout=60).get("task")
         if not t:
             if once:
@@ -149,3 +149,4 @@ def run(server: str, token: str | None = None, model: str = MODEL, once: bool = 
             log(f"  {t['work']} p{t['page']}: {len(r.get('actions') or [])} line(s) proposed in {time.time() - start:.0f}s")
         except SystemExit as e:
             log(f"  {t['work']} p{t['page']}: not accepted ({e})")
+    return done

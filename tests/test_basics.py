@@ -1433,3 +1433,60 @@ def test_ocr_queue_report(tmp_path, monkeypatch):
     assert a["per_hour"] and a["eta_minutes"] is not None
     assert b["eta_minutes"] > a["eta_minutes"]      # B waits for A's pages first
     assert ocrqueue.book_pages("B-a")[5] == {"surya": "queued"} and ocrqueue.book_pages("B-a")[6] == {"surya": "failed"}
+
+
+def test_listen_returns_the_first_question_from_either_chat(monkeypatch, capsys):
+    """`amocr listen`: one wait for both chats; whichever question comes first is printed."""
+    import threading
+
+    import pytest
+    from librarian import remote
+
+    from amocr.cli import main
+
+    never = threading.Event()
+
+    def call_waiting(srv, path, token, query=None, timeout=60, **kw):
+        if path == "/api/librarian/study/next":
+            return {"message": {"id": "s1", "text": "What is spanda here?", "by": "Vijay", "unit": "u1"},
+                    "context": {"id": "u1", "title": "Spandakārikā", "status": "edition", "text": "…", "neighbours": []}}
+        never.wait(5)                       # the proofreading chat has nothing
+        return {}
+
+    monkeypatch.setattr(remote, "server", lambda s=None, hosted=False: "http://srv")
+    monkeypatch.setattr(remote, "call_waiting", call_waiting)
+    main(["listen", "--hosted", "--timeout", "3"])
+    out = capsys.readouterr().out
+    assert "STUDY question" in out and "question s1" in out and "librarian --hosted study reply s1" in out
+
+    monkeypatch.setattr(remote, "call_waiting", lambda *a, **k: (never.wait(5), {})[1])
+    with pytest.raises(SystemExit) as e:
+        main(["listen", "--timeout", "0.5"])
+    assert e.value.code == 3
+
+
+def test_helpers_offers_what_this_machine_can_run(monkeypatch, capsys):
+    """`amocr helpers`: the OCR worker and the local AI in one process, only what's available here."""
+    import io
+    import json as _json
+    import urllib.request
+
+    from librarian import remote
+
+    from amocr import fixer, worker
+    from amocr.cli import main
+
+    ran = []
+    monkeypatch.setattr(remote, "server", lambda s=None, hosted=False: "http://srv")
+    monkeypatch.setattr(worker, "available", lambda wanted=None: {"surya": object()})
+    monkeypatch.setattr(worker, "run", lambda *a, stop=None, **k: ran.append("ocr"))
+    monkeypatch.setattr(fixer, "run", lambda *a, stop=None, **k: ran.append("local AI"))
+    tags = {"models": [{"name": fixer.MODEL}]}
+    monkeypatch.setattr(urllib.request, "urlopen", lambda *a, **k: io.BytesIO(_json.dumps(tags).encode()))
+    main(["helpers"])
+    assert sorted(ran) == ["local AI", "ocr"] and "helping http://srv with: ocr, local AI" in capsys.readouterr().out
+
+    ran.clear()
+    tags = {"models": []}                                 # the model isn't pulled: only OCR
+    main(["helpers"])
+    assert ran == ["ocr"] and "isn't in Ollama" in capsys.readouterr().out

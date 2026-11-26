@@ -52,7 +52,8 @@ def _for_book(engs: dict, job: dict):
 
 
 def run(server: str, token: str | None = None, engines: list[str] | None = None, batch: int = 10,
-        once: bool = False, idle: float = 30, log=print) -> int:
+        once: bool = False, idle: float = 30, log=print, stop=None) -> int:
+    """Read queued pages until stopped (Ctrl-C, or `stop` set by `amocr helpers`), or with once until none."""
     from librarian import remote
 
     from . import __version__
@@ -64,14 +65,16 @@ def run(server: str, token: str | None = None, engines: list[str] | None = None,
     log(f"worker on {host} for {server}: " + ", ".join(f"{n} {e.version()}" for n, e in engs.items()))
     done = 0
     try:
-        while True:
+        while not (stop and stop.is_set()):
             jobs = remote.call_waiting(server, "/api/ocr/lease", token, log=log, body={"engines": list(engs), "n": batch, "host": host}).get("jobs", [])
             if not jobs:
                 if once:
                     break
-                time.sleep(idle)
+                (stop.wait(idle) if stop else time.sleep(idle))
                 continue
             for j in jobs:
+                if stop and stop.is_set():   # the rest of the batch goes back to the queue when its lease expires
+                    break
                 eng = _for_book(engs, j)
                 with tempfile.TemporaryDirectory() as td:
                     img = Path(td) / "page.png"

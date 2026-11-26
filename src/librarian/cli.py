@@ -142,6 +142,22 @@ def main(argv=None) -> None:
         run()
 
 
+def print_study_question(srv: str, r: dict) -> None:
+    """Print a reader's study question from a hosted server (`study wait`, `amocr listen`), with its passage."""
+    m = r["message"]
+    print(f"question {m['id']}{' about ' + m['unit'] if m.get('unit') else ''} (from {m.get('by', '?')} on {srv}):\n  {m['text']}\n")
+    if m.get("quote"):
+        print(f"the words they selected (the question is about these):\n  «{m['quote']}»\n")
+    u = r.get("context")
+    if u:
+        print(f"the passage: {u['id']} ({u['title']}, {u['status']})\n  {u['text']}\n  {u.get('iast') or ''}")
+        for c in u.get("commentary", [])[:4]:
+            print(f"  commentary {c['id']}: {c['text'][:300]}")
+        print(f"  neighbours: {', '.join(u.get('neighbours', []))}")
+    print("\nAnswer only from the library (librarian --server … get/search), quote the original with a translation, "
+          f"and cite every passage:\n  uv run librarian --hosted study reply {m['id']} --text \"...\" --cite <unit id> …\nthen wait again.")
+
+
 def _remote(a, srv: str) -> None:
     """The same commands against a hosted server: every request goes out from this machine."""
     import time
@@ -159,21 +175,9 @@ def _remote(a, srv: str) -> None:
         end = time.time() + a.timeout
         while time.time() < end:
             r = remote.call_waiting(srv, "/api/librarian/study/next", a.token, query={"timeout": 25}, timeout=60)
-            m = r.get("message")
-            if not m:
+            if not r.get("message"):
                 continue
-            print(f"question {m['id']}{' about ' + m['unit'] if m.get('unit') else ''} (from {m.get('by', '?')} on {srv}):\n  {m['text']}\n")
-            if m.get("quote"):
-                print(f"the words they selected (the question is about these):\n  «{m['quote']}»\n")
-            u = r.get("context")
-            if u:
-                print(f"the passage: {u['id']} ({u['title']}, {u['status']})\n  {u['text']}\n  {u.get('iast') or ''}")
-                for c in u.get("commentary", [])[:4]:
-                    print(f"  commentary {c['id']}: {c['text'][:300]}")
-                print(f"  neighbours: {', '.join(u.get('neighbours', []))}")
-            print("\nAnswer only from the library (librarian --server … get/search), quote the original with a translation, "
-                  f"and cite every passage:\n  uv run librarian study reply {m['id']} --text \"...\" --cite <unit id> …\nthen wait again.")
-            return
+            return print_study_question(srv, r)
         print("no question yet (timed out); wait again")
         raise SystemExit(3)
     elif a.action == "reply":

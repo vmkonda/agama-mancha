@@ -13,8 +13,8 @@ What runs where:
 
 | On the VPS | On members' machines (the Mac Studio for now) |
 |---|---|
-| the app (`amocr serve --hosted`), members only, on 127.0.0.1:8770 | Surya and Tesseract (`amocr worker`) |
-| HTTPS, by the existing Caddy or nginx | the local AI (`amocr fix-worker`, Ollama with qwen) |
+| the app (`amocr serve --hosted`), members only, on 127.0.0.1:8770 | Surya and Tesseract, and the local AI (Ollama with qwen): `amocr helpers` |
+| HTTPS, by the existing Caddy or nginx | |
 | Ollama with `bge-m3`, for the library's search (CPU is fine) | each member's Claude (the chat and study listeners) |
 | `amocr sync` with Proton Drive every 30 minutes | |
 
@@ -135,7 +135,7 @@ isn't restored automatically: run the workflow with the last good commit.
 3. On each member's machine, set `AGAMA_SERVER=https://agama.<your domain>` in
    `~/.config/agama-mancha/hosted.env` (the token stays the same: it's in `data/hosted/`), then
    `uv run librarian hosted check`.
-4. Restart the Mac's workers and listeners (`amocr worker`, `amocr fix-worker`, the chat listeners)
+4. Restart the Mac's helpers and listener (`amocr helpers`, `amocr listen --hosted`)
    so they use the new address.
 
 ## Day to day
