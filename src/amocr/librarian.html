@@ -78,7 +78,7 @@ body.study-open main { margin-right: 444px; max-width: none; }
     <span class="name">Agama Mancha</span><span class="deva" lang="sa">आगम मञ्च</span>
   </a>
   <span class="by">Vimarsha Foundation · for internal use</span>
-  <nav aria-label="Sections"><a href="/library">Library</a><a href="/">Proofreading</a><a href="/librarian" aria-current="page">Librarian</a></nav>
+  <nav aria-label="Sections"><a href="/library">Library</a><a href="/proofread">Proofreading</a><a href="/librarian" aria-current="page">Librarian</a></nav>
 </div>
 <header>
   <div class="tabs"><button id="t-works">Works</button><button id="t-search" class="on">Search</button><button id="t-eval">Evaluation</button></div>
@@ -314,7 +314,7 @@ function scanLink(book, u) {
   return pages.map((p) => {
     const bs = u.lines.filter((l) => l.page === p && l.bbox).map((l) => l.bbox);
     const box = bs.length ? [Math.min(...bs.map((b) => b[0])), Math.min(...bs.map((b) => b[1])), Math.max(...bs.map((b) => b[2])), Math.max(...bs.map((b) => b[3]))] : null;
-    return `<a href="/#${esc(book)}/${p}${box ? "/box=" + box.join(",") : ""}" target="_blank" title="Open the printed page with these lines outlined">scan p. ${p}</a>`;
+    return `<a href="/proofread#${esc(book)}/${p}${box ? "/box=" + box.join(",") : ""}" target="_blank" title="Open the printed page with these lines outlined">scan p. ${p}</a>`;
   }).join("");
 }
 async function renderReader(id, chapter) {

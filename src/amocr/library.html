@@ -67,7 +67,7 @@ td.act { white-space: nowrap; text-align: right; } td.act button { font-size: 12
     <span class="name">Agama Mancha</span><span class="deva" lang="sa">आगम मञ्च</span>
   </a>
   <span class="by">Vimarsha Foundation · for internal use</span>
-  <nav aria-label="Sections"><a href="/library" aria-current="page">Library</a><a href="/">Proofreading</a><a href="/librarian">Librarian</a></nav>
+  <nav aria-label="Sections"><a href="/library" aria-current="page">Library</a><a href="/proofread">Proofreading</a><a href="/librarian">Librarian</a></nav>
 </div>
 <header>
   <input id="q" type="search" placeholder="Search title or path" aria-label="Search">
@@ -208,7 +208,7 @@ function render() {
   const es = rows();
   const arrow = (k) => S.sort === k ? (S.dir > 0 ? " ▲" : " ▼") : "";
   const chips = (e) => [
-    e.book ? `<a class="chip c-here" href="/#${encodeURIComponent(e.book)}" title="Open in the viewer">on this machine · open</a>` : "",
+    e.book ? `<a class="chip c-here" href="/proofread#${encodeURIComponent(e.book)}" title="Open in the viewer">on this machine · open</a>` : "",
     ["new", "changed", "moved", "gone"].includes(e.state) ? `<span class="chip c-${e.state}" title="${esc(e.state === "moved" ? "was at " + (e.moved_from || []).slice(-1)[0] : e.state === "gone" ? "not in the library since " + day(e.gone_since) : "")}">${e.state}</span>` : "",
   ].join("");
   const who = (e) => {

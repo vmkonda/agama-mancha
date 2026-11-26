@@ -875,3 +875,14 @@ def test_windows_scripts_parse():
                "if ($e) { $e | ForEach-Object { $_.ToString() }; exit 1 }" % str(f).replace("'", "''"))
         r = subprocess.run([ps, "-NoProfile", "-Command", cmd], capture_output=True, text=True)
         assert r.returncode == 0, f"{f.name}: {r.stdout}{r.stderr}"
+
+
+def test_home_is_the_library():
+    """/ opens the Library; old /#book/page links still reach the viewer, now at /proofread."""
+    from amocr import server
+
+    assert b"location.hash ? '/proofread' + location.hash : '/library'" in server.HOME
+    from importlib.resources import files
+    for name in ("library.html", "viewer.html", "librarian.html"):
+        src = files("amocr").joinpath(name).read_text(encoding="utf-8")
+        assert 'href="/"' not in src and 'href="/#' not in src and '<a href="/proofread' in src
