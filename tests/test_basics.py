@@ -1150,7 +1150,7 @@ def test_claude_helper_runs_on_windows(tmp_path, monkeypatch):
     fake.mkdir()
     (fake / "claude.cmd").write_text(
         "@echo off\r\n"
-        'if "%1"=="auth" (echo {"loggedIn": true}& exit /b 0)\r\n'
+        'if "%1"=="auth" (echo Login: Claude Pro& echo Email: someone@example.org& exit /b 0)\r\n'
         'more > "%~dp0prompt.txt"\r\n'
         'echo {"type":"result","is_error":false,"result":"","structured_output":'
         '{"answer":"Printed with a danda.","fixes":[{"page":1,"line":1,"to":"rama vanam |"}]}}\r\n', encoding="ascii")
