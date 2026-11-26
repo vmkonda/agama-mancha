@@ -61,13 +61,15 @@ token still work; run `amocr member invite "Vijay"` and open the link to choose 
 
 ### Running it in the background, and redeploying when the code changes
 
-(`serve`, `redeploy` and `auto-redeploy` are small `.cmd` wrappers that run the `.ps1` scripts with a
-one-off bypass of Windows' script policy, so they work without changing it.)
+(`serve.cmd`, `redeploy.cmd` and `auto-redeploy.cmd` are small wrappers that run the `.ps1` scripts
+with a one-off bypass of Windows' script policy, so they work without changing it. **Type the `.cmd`**:
+in PowerShell, `scripts\windows\redeploy` without it picks the `.ps1`, which the policy blocks with
+"running scripts is disabled".)
 
 Instead of keeping step 5's window open, start it in the background (it logs to `data\serve.log`):
 
 ```powershell
-scripts\windows\serve
+scripts\windows\serve.cmd
 ```
 
 **Redeploy** after a change is merged on GitHub: it stops the server, pulls `main`, updates the
@@ -75,8 +77,8 @@ dependencies and starts it again. `data\` (library, index, members, proofreading
 is never touched; local edits to the code make it stop rather than overwrite them.
 
 ```powershell
-scripts\windows\redeploy          # only if main changed
-scripts\windows\redeploy -Force   # restart anyway
+scripts\windows\redeploy.cmd          # only if main changed
+scripts\windows\redeploy.cmd -Force   # restart anyway
 ```
 
 **Automatically**: a scheduled task checks GitHub every 15 minutes, redeploys when `main` has
@@ -84,7 +86,7 @@ changed, and starts the server if it isn't running (after the machine restarts, 
 `data\redeploy.log`:
 
 ```powershell
-scripts\windows\auto-redeploy
+scripts\windows\auto-redeploy.cmd
 Unregister-ScheduledTask -TaskName "Agama Mancha redeploy" -Confirm:$false   # to remove it
 ```
 

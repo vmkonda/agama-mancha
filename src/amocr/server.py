@@ -51,6 +51,20 @@ def _results(work: Work, page: int) -> dict[str, dict]:
     return out
 
 
+def _code_version() -> str:
+    """The git commit this server was started from (the code on disk may be newer until a restart)."""
+    import subprocess
+
+    try:
+        return subprocess.run(["git", "rev-parse", "HEAD"], cwd=Path(__file__).resolve().parent, capture_output=True,
+                              text=True, timeout=5).stdout.strip()
+    except (OSError, subprocess.SubprocessError):
+        return ""
+
+
+CODE_VERSION = _code_version()
+
+
 def _pages(work: Work) -> list[dict]:
     inv = work.workdir / "inventory.jsonl"
     n = len(read_jsonl(inv)) if inv.exists() else 0
@@ -208,7 +222,7 @@ class Handler(BaseHTTPRequestHandler):
 
     hosted = False
 
-    PUBLIC = {"/login", "/invite", "/theme.css", "/api/auth/login", "/api/auth/invite"}
+    PUBLIC = {"/login", "/invite", "/theme.css", "/api/auth/login", "/api/auth/invite", "/api/version"}
 
     def _cookie(self, name: str) -> str | None:
         for part in (self.headers.get("Cookie") or "").split(";"):
@@ -414,6 +428,8 @@ class Handler(BaseHTTPRequestHandler):
                 from . import ocrqueue
 
                 return self._json(ocrqueue.status())
+            if parts == ["api", "version"]:              # which code this server is running (redeploy checks it)
+                return self._json({"code": CODE_VERSION})
             if parts == ["api", "me"]:
                 m = self._member
                 return self._json({"hosted": self.hosted, "name": m[0] if m else None, "role": m[1] if m else None})
