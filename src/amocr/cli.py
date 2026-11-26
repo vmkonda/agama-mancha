@@ -655,6 +655,19 @@ def _inventory_quietly(w: Work) -> None:
         print(f"inventory not shared: {e}")
 
 
+def cmd_sync(args) -> None:
+    """On a server: bring the books in step with the material folder on Proton (pull, then push
+    what changed). Meant to run on a schedule (scripts/windows/auto-sync.cmd, or cron)."""
+    from . import sync
+
+    try:
+        failed = sync.sync(args.books or None, push_unchanged=args.push_all)
+    except sync.Locked as e:
+        raise SystemExit(str(e)) from None
+    if failed:
+        raise SystemExit(f"{failed} book(s) failed; see above (and data/sync.log)")
+
+
 def _board_quietly() -> None:
     """Share this person's progress on the board; never fail the command over it."""
     from . import board
@@ -1141,6 +1154,9 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--mode", choices=["auto", "review", "screen", "bands"], default="auto", help=mode_help)
     book_cmd("push", cmd_push, help="upload results to the material folder")
     book_cmd("pull", cmd_pull, help="download results others pushed")
+    p = plain_cmd("sync", cmd_sync, help="on a server: pull from and push to the material folder, every book")
+    p.add_argument("books", nargs="*", metavar="book", help="only these books (default: every book with a Proton path)")
+    p.add_argument("--push-all", action="store_true", help="push even books that haven't changed since their last push")
     book_cmd("eval", cmd_eval, help="CER of every result vs ground truth")
     book_cmd("inventory", cmd_inventory)
     book_cmd("render", cmd_render, pages=True)
