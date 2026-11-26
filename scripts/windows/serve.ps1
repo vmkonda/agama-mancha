@@ -3,11 +3,14 @@
 param([int]$Port = 8770, [string]$Ollama = "http://127.0.0.1:11434")
 
 $ErrorActionPreference = "Stop"
+function Port-Answers([int]$p) {     # is a server really answering on this port? (the port list can show ghosts)
+    $c = New-Object System.Net.Sockets.TcpClient
+    try { $c.ConnectAsync("127.0.0.1", $p).Wait(1500) -and $c.Connected } catch { $false } finally { $c.Close() }
+}
 $repo = Resolve-Path (Join-Path $PSScriptRoot "..\..")
 Set-Location $repo
 
-$busy = Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue
-if ($busy) { Write-Host "Something is already listening on port $Port (process $($busy[0].OwningProcess)): an older server? Stop it with  Stop-Process -Id $($busy[0].OwningProcess) -Force  (as administrator if access is denied), or use redeploy.cmd -Force."; exit 1 }
+if (Port-Answers $Port) { Write-Host "Something is already answering on port $Port (an older server?). Use  scripts\windows\redeploy.cmd -Force  to replace it."; exit 1 }
 
 $env:AMOCR_OLLAMA = $Ollama
 New-Item -ItemType Directory -Force -Path data | Out-Null
@@ -20,7 +23,7 @@ Write-Host "Starting Agama Mancha on port $Port " -NoNewline
 # Wait until it answers (up to two minutes: the first start after an update can take a while).
 for ($i = 0; $i -lt 120; $i++) {
     Start-Sleep -Seconds 1
-    if (Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue) {
+    if (Port-Answers $Port) {
         Write-Host ""
         Write-Host "Agama Mancha is running on port $Port (members only). Log: data\serve.log"
         Write-Host "It keeps running after you close this window; scripts\windows\redeploy.cmd restarts it."
