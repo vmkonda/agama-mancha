@@ -867,6 +867,10 @@ def test_windows_scripts_parse():
 
     import pytest
 
+    here = Path(__file__).parent.parent / "scripts" / "windows"
+    for c in sorted(here.glob("*.cmd")):                # each wrapper runs its own script, with a one-off bypass
+        body = c.read_text(encoding="utf-8")
+        assert f'"%~dp0{c.stem}.ps1"' in body and "-ExecutionPolicy Bypass" in body and (here / f"{c.stem}.ps1").exists()
     ps = shutil.which("powershell") or shutil.which("pwsh")
     if not ps:
         pytest.skip("no PowerShell here (the Windows CI runner has it)")

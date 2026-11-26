@@ -11,18 +11,24 @@ if ($busy) { Write-Host "Something is already listening on port $Port (process $
 
 $env:AMOCR_OLLAMA = $Ollama
 New-Item -ItemType Directory -Force -Path data | Out-Null
-$p = Start-Process -FilePath "uv" -ArgumentList @("run", "--extra", "librarian", "amocr", "serve", "--hosted", "--host", "0.0.0.0", "--port", "$Port", "--no-browser") `
-    -RedirectStandardOutput "data\serve.log" -RedirectStandardError "data\serve.err.log" -WindowStyle Hidden -PassThru
+# Start it fully detached from this window: cmd writes the log itself, so nothing ties the server's
+# output to this console and the prompt comes back as soon as it's up.
+$cmdline = "uv run --extra librarian amocr serve --hosted --host 0.0.0.0 --port $Port --no-browser > data\serve.log 2>&1"
+Start-Process -FilePath "cmd.exe" -ArgumentList "/c", $cmdline -WorkingDirectory $repo -WindowStyle Hidden | Out-Null
+Write-Host "Starting Agama Mancha on port $Port " -NoNewline
 
-# Wait until it answers (up to a minute).
-for ($i = 0; $i -lt 60; $i++) {
+# Wait until it answers (up to two minutes: the first start after an update can take a while).
+for ($i = 0; $i -lt 120; $i++) {
     Start-Sleep -Seconds 1
     if (Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue) {
+        Write-Host ""
         Write-Host "Agama Mancha is running on port $Port (members only). Log: data\serve.log"
+        Write-Host "It keeps running after you close this window; scripts\windows\redeploy restarts it."
         exit 0
     }
-    if ($p.HasExited) { break }
+    if ($i % 5 -eq 4) { Write-Host "." -NoNewline }
 }
-Write-Host "It didn't start. The last lines of the logs:"
-Get-Content data\serve.log, data\serve.err.log -Tail 15 -ErrorAction SilentlyContinue
+Write-Host ""
+Write-Host "It didn't start within two minutes. The last lines of the log:"
+Get-Content data\serve.log -Tail 20 -ErrorAction SilentlyContinue
 exit 1
