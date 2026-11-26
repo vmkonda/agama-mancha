@@ -1227,3 +1227,54 @@ def test_version_is_public_and_names_the_commit():
 
     assert "/api/version" in server.Handler.PUBLIC
     assert server.CODE_VERSION == "" or len(server.CODE_VERSION) == 40
+
+
+def test_no_crosstalk_between_members(tmp_path, monkeypatch):
+    """Two members on one page: each sees the other; a save from an outdated version is refused with the
+    other's name; only the person who asked can apply an answer's fix."""
+    import json
+    import socket
+    import threading
+    from http.server import ThreadingHTTPServer
+
+    import pytest
+
+    from amocr import chat, members, server
+    from amocr.catalog import load_works
+    from librarian import remote
+
+    monkeypatch.setenv("AMOCR_DATA", str(tmp_path))
+    w = _queue_book(tmp_path)
+    (w.page_dir(1) / "ocr").mkdir(parents=True, exist_ok=True)
+    (w.page_dir(1) / "ocr" / "surya-2.5-0.24.0.json").write_text(json.dumps(
+        {"text": "रामो वनं\n", "lines": [{"text": "रामो वनं", "bbox": [2, 2, 30, 15]}]}), encoding="utf-8")
+    members.add("Anna", "proofreader"); members.add("Bala", "proofreader")
+    anna, bala = members.issue_token("Anna"), members.issue_token("Bala")
+    server.Handler.hosted, server.Handler.works = True, load_works()
+    with socket.socket() as s_:
+        s_.bind(("127.0.0.1", 0)); port = s_.getsockname()[1]
+    httpd = ThreadingHTTPServer(("127.0.0.1", port), server.Handler)
+    threading.Thread(target=httpd.serve_forever, daemon=True).start()
+    base = f"http://127.0.0.1:{port}"
+    try:
+        a = remote.call(base, f"/api/{w.id}/1", anna)
+        b = remote.call(base, f"/api/{w.id}/1", bala)
+        assert a["rev"] == b["rev"] == "" and b["others"] == ["Anna"]
+        assert remote.call(base, f"/api/{w.id}/1/presence", anna)["others"] == ["Bala"]
+        assert remote.call(base, f"/api/{w.id}/grid", anna)["busy"] == {"1": ["Bala"]}
+        r = remote.call(base, f"/api/{w.id}/1/groundtruth", anna, body={"text": "रामः वनं", "status": "draft", "rev": a["rev"]})
+        assert r["rev"]
+        with pytest.raises(SystemExit, match="Anna saved this page"):           # Bala's version is out of date
+            remote.call(base, f"/api/{w.id}/1/groundtruth", bala, body={"text": "रामो वनम्", "status": "draft", "rev": b["rev"]})
+        assert (w.gt_dir / "p0001.txt").read_text(encoding="utf-8") == "रामः वनं\n"
+        b = remote.call(base, f"/api/{w.id}/1", bala)                              # reload, then save
+        remote.call(base, f"/api/{w.id}/1/groundtruth", bala, body={"text": "रामः वनम्", "status": "draft", "rev": b["rev"]})
+        q = chat.post(w, "user", "check", page=1, n=1, by="Anna")
+        ans = chat.post(w, "claude", "fix", reply_to=q["id"],
+                        actions=[chat.check_action(w, {"type": "line", "page": 1, "n": 1, "to": "रामः वनम्।"})])
+        with pytest.raises(SystemExit, match="no such suggestion"):               # not Bala's question
+            remote.call(base, f"/api/{w.id}/chat/apply", bala, body={"msg": ans["id"], "index": 0})
+        assert remote.call(base, f"/api/{w.id}/chat/apply", anna, body={"msg": ans["id"], "index": 0})["n"] == 1
+    finally:
+        httpd.shutdown()
+        server.Handler.hosted = False

@@ -59,12 +59,28 @@ enlarge the scan.
    damaged in this copy", "check against the Kashmir edition").
 5. Press **Save**. Your name and the date are recorded with the page.
 
+### Working alongside others
+
+On the shared server several people proofread the same book. Three things keep you from undoing each
+other's work:
+
+- **Someone else on the page:** the line at the top says *"Anna is also on this page"*.
+  **Next to proofread** skips pages someone else has open, so it rarely happens.
+- **No silent overwrites:** if someone saved the page after you opened it, your save is refused with
+  their name and the time. Your edits stay in the box (and in this browser); reload the page to see
+  their changes, then put yours back and save. The top line also warns you as soon as it happens.
+- **Your answers are yours:** what Claude or the local AI proposes for your question appears only in
+  your chat panel, and only you can apply it.
+
+Every save is kept in **History**, so even a mistake can be undone.
+
 ### The same view for every book
 
 Proofread looks and works the same in every book, so nothing has to be
 relearned from one book to the next. From top to bottom:
 
-1. **Where the text came from** (saved text, or the reading it starts from).
+1. **Where the text came from** (saved text, or the reading it starts from), and, in red, **who else
+   is on this page** and whether someone saved it after you opened it.
 2. **The button row** of hard characters and the **romanised typing** box.
 3. **The page bar:** chapter, printed page number, the verses on the page, the
    commentary that closes on it.

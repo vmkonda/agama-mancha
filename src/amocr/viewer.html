@@ -138,6 +138,7 @@ i.wn { position: absolute; top: -6px; right: -6px; min-width: 15px; height: 15px
 .msg { margin: 6px 0; max-width: 92%; padding: 6px 9px; border-radius: 8px; white-space: pre-wrap; font-size: 14px; }
 .msg.user { margin-left: auto; background: var(--hl); }
 .msg.claude { background: var(--bg); border: 1px solid var(--line); }
+.others { color: #a3301b; font-size: 13px; }
 .msg.ai { background: var(--bg); border: 1px dashed var(--line); }
 .msg .who { display: block; font-size: 11px; color: var(--muted); margin-bottom: 2px; }
 .msg.system { color: var(--muted); font-size: 12px; padding: 0 4px; }
@@ -450,7 +451,7 @@ function renderEdit() {
   const rv = (res.groundtruth && res.groundtruth.review) || {};
   const restored = draft && draft.text !== res[src].text;
   $("textpane").innerHTML = `
-    <div class="meta"><span class="stchip st-${esc(L.status)}">${esc(STATUS_LABEL[L.status] || L.status)}</span><span>${res.groundtruth ? "Editing the saved text" : `No saved text yet; starting from <b>${esc(src)}</b>`}</span>${L.proofread_by ? `<span class="muted">proofread by ${esc(L.proofread_by)}</span>` : ""}${L.validated_by ? `<span class="muted">validated by ${esc(L.validated_by)}</span>` : ""}</div>
+    <div class="meta"><span class="stchip st-${esc(L.status)}">${esc(STATUS_LABEL[L.status] || L.status)}</span><span>${res.groundtruth ? "Editing the saved text" : `No saved text yet; starting from <b>${esc(src)}</b>`}</span>${L.proofread_by ? `<span class="muted">proofread by ${esc(L.proofread_by)}</span>` : ""}${L.validated_by ? `<span class="muted">validated by ${esc(L.validated_by)}</span>` : ""}<span id="others" class="others" role="status"></span></div>
     <p class="muted" style="font-size:13px;margin-top:0">Type what is printed, one printed line per line, blank line between paragraphs. Keep headers, footnote markers and signature marks.</p>
     ${restored ? `<div class="draftnote">Restored your unsaved edits from ${esc(new Date(draft.at).toLocaleString())}. <button id="discard">Discard them</button></div>` : ""}
     <div class="pal" id="pal">${PALETTE.map((c) => `<button class="deva" data-c="${c}" title="insert ${c}">${c}</button>`).join("")}</div>
@@ -565,7 +566,7 @@ function renderEdit() {
   async function save(next) {
     const text = fixVerseDigits(ta.value), fixed = text !== ta.value;
     try {
-      const r = await api(`/api/${S.work}/${S.page}/groundtruth`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text, status: chosen(), note: $("note").value, base: res.groundtruth ? undefined : src }) });
+      const r = await api(`/api/${S.work}/${S.page}/groundtruth`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text, status: chosen(), note: $("note").value, base: res.groundtruth ? undefined : src, rev: S.data.rev || "" }) });
       store.del(draftKey);
       S.flash = `Saved p${S.page} to ${r.saved}` + (fixed ? " (verse numbers changed to Devanagari digits)" : "");
       const i = S.pages.findIndex((p) => p.page === S.page), n = next ? S.pages[i + 1] : null;
@@ -594,10 +595,11 @@ function renderEdit() {
   if (restored) $("discard").onclick = () => { store.del(draftKey); renderEdit(); };
   const dirty = () => ta.value !== res[src].text;
   async function saveQuiet() { // save the editor's text without leaving the page, so Claude and Apply see it
-    await api(`/api/${S.work}/${S.page}/groundtruth`, { method: "POST", headers: { "Content-Type": "application/json" },
+    const r = await api(`/api/${S.work}/${S.page}/groundtruth`, { method: "POST", headers: { "Content-Type": "application/json" },
       // A quiet save (before Claude checks a line) never claims a step: it keeps the page's status,
       // except that a validated page whose text changed needs validating again.
-      body: JSON.stringify({ text: fixVerseDigits(ta.value), status: L.status === "none" ? "draft" : L.status === "validated" ? "proofread" : L.status, note: $("note").value }) });
+      body: JSON.stringify({ text: fixVerseDigits(ta.value), status: L.status === "none" ? "draft" : L.status === "validated" ? "proofread" : L.status, note: $("note").value, rev: S.data.rev || "" }) });
+    S.data.rev = r.rev;
     store.del(draftKey);
   }
   function selectedLines() { // [n1, n2]: the lines of text the selection (or cursor) touches
@@ -851,6 +853,20 @@ async function chatFix() {
   CH.last = ""; chatLoad();
 }
 
+// Who else is on this page, and whether someone saved it since it was opened (every 15 s).
+setInterval(async () => {
+  if (!S.work || !S.page || document.hidden) return;
+  let r;
+  try { r = await api(`/api/${S.work}/${S.page}/presence`); } catch { return; }
+  const el = $("others");
+  if (!el) return;
+  const saved = S.data && r.rev !== (S.data.rev || "");
+  el.innerHTML = (r.others.length ? `${esc(r.others.join(" and "))} ${r.others.length > 1 ? "are" : "is"} also on this page. ` : "")
+    + (saved ? `<b>Someone saved this page after you opened it.</b> <a href="#" id="reloadpg">Reload it</a> before saving.` : "");
+  const a = $("reloadpg");
+  if (a) a.onclick = (e) => { e.preventDefault(); loadPage(S.page); };
+}, 15000);
+
 function chatToggle(open) {
   CH.open = open ?? !CH.open;
   $("chat").classList.toggle("open", CH.open);
@@ -908,7 +924,9 @@ async function renderGrid() {
   }
   pane.innerHTML = h;
   pane.querySelectorAll(".cell").forEach((b) => (b.onclick = async () => { await loadPage(+b.dataset.p); setMode("edit"); }));
-  const after = (pred) => g.pages.find((r) => r.page > S.page && pred(r)) || g.pages.find(pred);
+  // Skip pages someone else has open, so two people don't proofread the same page.
+  const free = (r) => !(g.busy || {})[r.page];
+  const after = (pred) => g.pages.find((r) => r.page > S.page && pred(r) && free(r)) || g.pages.find((r) => pred(r) && free(r));
   const go = async (r) => { if (r) { await loadPage(r.page); setMode("edit"); } };
   $("g-next-pr").onclick = () => go(after((r) => r.status === "none" || r.status === "draft"));
   $("g-next-va").onclick = () => go(after((r) => r.status === "proofread" && r.proofread_by !== me));
