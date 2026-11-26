@@ -1175,3 +1175,11 @@ def test_claude_helper_runs_on_windows(tmp_path, monkeypatch):
         p.kill()
         httpd.shutdown()
         server.Handler.hosted = False
+
+
+def test_version_is_public_and_names_the_commit():
+    """Redeploy checks which code the server runs: /api/version is open even on a hosted server."""
+    from amocr import server
+
+    assert "/api/version" in server.Handler.PUBLIC
+    assert server.CODE_VERSION == "" or len(server.CODE_VERSION) == 40
