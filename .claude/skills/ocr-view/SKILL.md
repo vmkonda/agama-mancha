@@ -15,7 +15,7 @@ It is never published or exposed on the network: the scans are copyrighted.
 2. Check whether the viewer is already running: `curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8791/`.
    If not, start it in the background: `uv run amocr serve --no-browser --open <work>/<N>`
    (run_in_background). Do not stop it at the end of the turn; the user is using it.
-3. Tell the user the URL `http://localhost:8791/#<work>/<N>`.
+3. Tell the user the URL `http://localhost:8791/proofread#<work>/<N>` (the home page, `/`, is the Library).
    The user usually works on this Mac over SSH from another machine, so also give the
    tunnel command, to run on their own machine:
    `ssh -N -L 8791:127.0.0.1:8791 <the host they ssh to>`

@@ -264,6 +264,10 @@ class Handler(BaseHTTPRequestHandler):
         parts = [p for p in url.path.split("/") if p]
         try:
             if not parts:
+                # The home page is the Library. Old links to the viewer (/#book/page…) still work: the
+                # part after # never reaches the server, so a tiny page forwards it to /proofread.
+                return self._send(HOME, "text/html; charset=utf-8")
+            if parts == ["proofread"]:
                 return self._send(files("amocr").joinpath("viewer.html").read_bytes(), "text/html; charset=utf-8")
             if parts == ["library"]:
                 return self._send(files("amocr").joinpath("library.html").read_bytes(), "text/html; charset=utf-8")
@@ -533,6 +537,11 @@ class Handler(BaseHTTPRequestHandler):
             self._err(str(e))
 
 
+HOME = (b"<!doctype html><meta charset=utf-8><title>Agama Mancha</title>"
+        b"<script>location.replace(location.hash ? '/proofread' + location.hash : '/library')</script>"
+        b"<noscript><a href='/library'>Agama Mancha: the Library</a></noscript>")
+
+
 def _librarian():
     """The librarian is an optional extra; say how to install it rather than failing obscurely."""
     try:
@@ -615,7 +624,7 @@ def serve(port: int = 8791, open_browser: bool = True, page: str | None = None,
         if probe.connect_ex(("127.0.0.1", port)) == 0:
             raise SystemExit(f"port {port} is already in use by another process; pass --port")
     httpd = ThreadingHTTPServer((host, port), Handler)
-    url = f"http://{'127.0.0.1' if host in ('0.0.0.0', '::') else host}:{port}/" + (f"#{page}" if page else "")
+    url = f"http://{'127.0.0.1' if host in ('0.0.0.0', '::') else host}:{port}/" + (f"proofread#{page}" if page else "")
     print(f"amocr viewer at {url}  (Ctrl-C to stop)", flush=True)
     if hosted:
         print(f"HOSTED, members only, listening on {host}:{port}. {len(members.load()['members'])} member(s). "
@@ -628,7 +637,7 @@ def serve(port: int = 8791, open_browser: bool = True, page: str | None = None,
             "SSH session detected. On the machine you're browsing from, run\n"
             f"  ssh -N -L {port}:127.0.0.1:{port} {getpass.getuser()}@{socket.gethostname()}\n"
             "(use whatever host name you normally ssh to), then open\n"
-            f"  http://localhost:{port}/" + (f"#{page}" if page else "") + "\n"
+            f"  http://localhost:{port}/" + (f"proofread#{page}" if page else "") + "\n"
             f"Or add the tunnel to your open ssh session: press Enter, type ~C, then -L {port}:127.0.0.1:{port}",
             flush=True,
         )

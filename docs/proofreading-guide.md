@@ -18,7 +18,8 @@ Open a terminal in the `agama-mancha` folder, type `claude`, and say:
 
 Claude brings down the latest pages from the shared drive, starts the
 viewer, and tells you which address to open in your browser (normally
-http://localhost:8791). When you're done for the day, say:
+http://localhost:8791/proofread, at your page; http://localhost:8791 itself opens the Library,
+with Proofreading one click away in the title band). When you're done for the day, say:
 
 > Upload my proofreading
 
