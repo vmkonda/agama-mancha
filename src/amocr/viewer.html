@@ -8,21 +8,21 @@
 <style>
 :root {
   --bg: #f7f6f3; --panel: #ffffff; --text: #1d1d1b; --muted: #6b6a66; --line: #e3e1dc;
-  --accent: #2f6fd6; --low: #fff1c7; --low-text: #6a4b00; --hl: rgba(47,111,214,.18); --hl-border: #2f6fd6;
+  --accent: #2f6fd6; --sus: #d9772b; --low: #fff1c7; --low-text: #6a4b00; --hl: rgba(47,111,214,.18); --hl-border: #2f6fd6;
   --del: #fbd9d6; --del-text: #8a1c12; --ins: #d4f0dc; --ins-text: #12602d;
   --header: #ece9f7; --verse: #e3eefc; --commentary: transparent; --footnote: #f1f0ea; --signature: #f1f0ea; --other: #f1f0ea;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     --bg: #161615; --panel: #1f1f1d; --text: #e8e6e1; --muted: #9a9890; --line: #33322f;
-    --accent: #7aa7f0; --low: #4a3a0c; --low-text: #f3d68a; --hl: rgba(122,167,240,.22); --hl-border: #7aa7f0;
+    --accent: #7aa7f0; --sus: #f0a060; --low: #4a3a0c; --low-text: #f3d68a; --hl: rgba(122,167,240,.22); --hl-border: #7aa7f0;
     --del: #5a1f1a; --del-text: #ffb4ab; --ins: #173f25; --ins-text: #a6e5b8;
     --header: #2c2840; --verse: #1d2b40; --footnote: #2a2926; --signature: #2a2926; --other: #2a2926;
   }
 }
 :root[data-theme="dark"] {
   --bg: #161615; --panel: #1f1f1d; --text: #e8e6e1; --muted: #9a9890; --line: #33322f;
-  --accent: #7aa7f0; --low: #4a3a0c; --low-text: #f3d68a; --hl: rgba(122,167,240,.22); --hl-border: #7aa7f0;
+  --accent: #7aa7f0; --sus: #f0a060; --low: #4a3a0c; --low-text: #f3d68a; --hl: rgba(122,167,240,.22); --hl-border: #7aa7f0;
   --del: #5a1f1a; --del-text: #ffb4ab; --ins: #173f25; --ins-text: #a6e5b8;
   --header: #2c2840; --verse: #1d2b40; --footnote: #2a2926; --signature: #2a2926; --other: #2a2926;
 }
@@ -118,8 +118,17 @@ i.wn { position: absolute; top: -6px; right: -6px; min-width: 15px; height: 15px
 .pagebar b { font-weight: 600; }
 .pwarn { font-size: 13px; margin: 0 0 8px; }
 .pwarn button { font-size: 12px; padding: 1px 8px; margin: 2px 6px 2px 0; background: var(--low); color: var(--low-text); border-color: transparent; }
+/* Worth a second look (amocr suspects): the line tinted by its score, the suspect words underlined. */
+#hl .s1 { background: color-mix(in srgb, var(--sus) 18%, transparent); }
+#hl .s2 { background: color-mix(in srgb, var(--sus) 34%, transparent); }
+#hl .s3 { background: color-mix(in srgb, var(--sus) 52%, transparent); }
+#hl .susw { text-decoration: underline wavy var(--sus); text-decoration-thickness: 1.5px; text-underline-offset: 7px; text-decoration-skip-ink: none; }
+#gut .sc { float: right; min-width: 14px; text-align: center; border-radius: 7px; padding: 0 3px; margin-top: 7px; line-height: 14px; font-size: 10px; font-weight: 600; color: #fff; background: var(--sus); }
+#gut .sc.s1 { opacity: .55; } #gut .sc.s2 { opacity: .8; }
+.sushint { font-size: 13px; margin: 4px 0 0; min-height: 1.4em; }
+.sushint b { color: var(--sus); }
 #hl .cur { box-shadow: inset 3px 0 0 var(--accent); }
-#hl .cur:not(.lowl) { background: var(--hl); }
+#hl .cur:not(.lowl):not(.s1):not(.s2):not(.s3) { background: var(--hl); }
 .pal { display: flex; flex-wrap: wrap; gap: 4px; margin: 0 0 6px; }
 .pal button { padding: 1px 8px; min-width: 30px; font-size: 16px; }
 .rom { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 8px; }
@@ -499,7 +508,8 @@ function renderEdit() {
     <div class="rom"><input id="rom" placeholder="romanised (IAST kṛṣṇa or Harvard-Kyoto kRSNa), Enter inserts" autocomplete="off" spellcheck="false"><span id="romout" class="deva"></span></div>
     <div class="pagebar" id="pagebar"></div><div class="pwarn" id="pwarn"></div>
     <div class="ed withgut"><div id="gut" aria-hidden="true"></div><div id="hl" class="deva" aria-hidden="true"></div><textarea id="gt" class="deva" spellcheck="false" wrap="off"></textarea></div>
-    <p class="keys muted"><span class="ln low" style="padding:0 4px">yellow</span> Tesseract was unsure · <kbd>F2</kbd> or <kbd>Alt ↓</kbd> next unsure line, with <kbd>Shift</kbd> / <kbd>Alt ↑</kbd> previous · <kbd>⌘/Ctrl S</kbd> save · <kbd>⌘/Ctrl ↵</kbd> save and next page · <kbd>⌘/Ctrl K</kbd> Claude checks the line(s) · <kbd>⌘/Ctrl ⇧ ↵</kbd> apply Claude's latest fix · edits are kept in this browser until saved</p>
+    <p class="sushint muted" id="sushint" role="status"></p>
+    <p class="keys muted"><span class="ln low" style="padding:0 4px">yellow</span> Tesseract was unsure · <span class="ln" style="padding:0 4px;background:color-mix(in srgb, var(--sus) 30%, transparent)">orange</span> worth a second look (the number beside the tag: darker and higher, more likely misread) · <kbd>F2</kbd> or <kbd>Alt ↓</kbd> next unsure or orange line, with <kbd>Shift</kbd> / <kbd>Alt ↑</kbd> previous · <kbd>⌘/Ctrl S</kbd> save · <kbd>⌘/Ctrl ↵</kbd> save and next page · <kbd>⌘/Ctrl K</kbd> Claude checks the line(s) · <kbd>⌘/Ctrl ⇧ ↵</kbd> apply Claude's latest fix · edits are kept in this browser until saved</p>
     <div style="display:flex;flex-wrap:wrap;gap:8px 14px;margin-top:8px;align-items:center">
       <input id="note" placeholder="note for the next reviewer (a problem page must say what)" style="flex:1;min-width:200px">
     </div>
@@ -529,6 +539,12 @@ function renderEdit() {
   const sync = () => { hl.scrollTop = ta.scrollTop; hl.scrollLeft = ta.scrollLeft; gut.scrollTop = ta.scrollTop; };
   // What the assembler will make of this page: a tag per line, the page's place in the book, warnings.
   let ST = null, stTimer = null;
+  // Lines worth a second look (scored from the text alone, as the proofreader types; see amocr suspects).
+  const susAt = (n) => (ST && ST.suspects || []).find((x) => x.line === n);
+  const susLevel = (x) => (x.score >= 6 ? "s3" : x.score >= 4 ? "s2" : "s1");
+  const DEVA_L = "\u0900-\u0963\u0971-\u097F";
+  const susWords = (html, x) => !x || !x.words.length ? html : [...new Set(x.words)].sort((a, b) => b.length - a.length)
+    .reduce((h, w) => h.replace(new RegExp(`(?<![${DEVA_L}])${w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?![${DEVA_L}])`, "g"), `<span class="susw">${w}</span>`), html);
   const TAG = (t) => !t ? "" : t.type === "verse" ? (t.verse ? `verse · ${t.verse}` : "verse")
     : t.type === "commentary" ? (t.explains ? `comm. → ${t.explains}` : "comm.")
     : t.type === "footnote" ? `footnote${t.note ? " " + t.note : ""}`
@@ -539,7 +555,8 @@ function renderEdit() {
     gut.innerHTML = rows().map((r) => {
       if (r.k == null) return "<div></div>";
       const t = ST.lines[r.k];
-      return `<div class="t-${esc(t ? t.type : "")}${warnAt.has(r.k + 1) ? " warn" : ""}" title="${esc(TAG(t))}">${esc(TAG(t))}</div>`;
+      const su = susAt(r.k + 1);
+      return `<div class="t-${esc(t ? t.type : "")}${warnAt.has(r.k + 1) ? " warn" : ""}" title="${esc(TAG(t))}${su ? " · worth a second look (" + su.score + "): " + esc(su.notes.join("; ")) : ""}">${su ? `<span class="sc ${susLevel(su)}">${su.score}</span>` : ""}${esc(TAG(t))}</div>`;
     }).join("");
     sync();
     const span = (a) => a.length ? (a.length === 1 ? a[0] : `${a[0].split("-")[0]}–${a[a.length - 1].split("-").pop()}`) : "none";
@@ -568,7 +585,7 @@ function renderEdit() {
       try {
         ST = await api(`/api/${encodeURIComponent(S.work)}/structure`, { method: "POST", headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ page: S.page, text: ta.value }) });
-        drawStructure();
+        drawStructure(); paint(false);
       } catch (e) { $("pagebar").innerHTML = `<span class="muted">structure unavailable: ${esc(e.message)}</span>`; }
     }, 300);
   }
@@ -577,8 +594,13 @@ function renderEdit() {
     // A marker is a digit right after a letter (योगी२) or right before a word (१षट्…); a lone ० after a
     // letter is the abbreviation sign (क० पु०), not a marker.
     const marks = (t) => esc(t).replace(FNM_AFTER, '$1<span class="fnm">$2</span>').replace(FNM_BEFORE, '$1<span class="fnm">$2</span>');
-    hl.innerHTML = rs.map((r, i) => `<div class="${[isLow(r) ? "lowl" : "", i === c ? "cur" : ""].join(" ").trim()}">${marks(r.t) || " "}</div>`).join("");
+    hl.innerHTML = rs.map((r, i) => {
+      const su = r.k != null ? susAt(r.k + 1) : null;
+      return `<div class="${[su ? susLevel(su) : isLow(r) ? "lowl" : "", i === c ? "cur" : ""].join(" ").trim()}">${susWords(marks(r.t), su) || " "}</div>`;
+    }).join("");
     sync();
+    const cs = rs[c] && rs[c].k != null ? susAt(rs[c].k + 1) : null;
+    $("sushint").innerHTML = cs ? `<b>Line ${cs.line}, worth a second look (${cs.score}):</b> <span class="deva">${esc(cs.notes.join(" · "))}</span>` : "";
     if (!follow) return;
     const x = tl(rs[c]);
     if (x) { showBox(x.bbox); scrollToBox(x.bbox); } else $("box").style.display = "none";
@@ -596,13 +618,13 @@ function renderEdit() {
   function jump(dir) {
     const rs = rows();
     for (let i = curRow() + dir; i >= 0 && i < rs.length; i += dir) {
-      if (!isLow(rs[i])) continue;
+      if (!isLow(rs[i]) && !(rs[i].k != null && susAt(rs[i].k + 1))) continue;
       const start = rs.slice(0, i).reduce((n, r) => n + r.t.length + 1, 0);
       ta.focus(); ta.setSelectionRange(start, start + rs[i].t.length);
       ta.scrollTop = Math.max(0, i * parseFloat(getComputedStyle(ta).lineHeight) - ta.clientHeight / 3);
       paint(); return;
     }
-    $("saved").textContent = dir > 0 ? "No more unsure lines below." : "No more unsure lines above.";
+    $("saved").textContent = dir > 0 ? "No more unsure or orange lines below." : "No more unsure or orange lines above.";
   }
   async function save(next) {
     const text = fixVerseDigits(ta.value), fixed = text !== ta.value;

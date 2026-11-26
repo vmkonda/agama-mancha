@@ -623,7 +623,15 @@ class Handler(BaseHTTPRequestHandler):
             text = body.get("text")
             if not isinstance(text, str) or len(text) > 200_000:
                 raise ValueError("text: the page's text")
-            return self._json(assemble.page_structure(work, int(body.get("page") or 0), text))
+            page = int(body.get("page") or 0)
+            st = assemble.page_structure(work, page, text)
+            try:  # lines worth a second look, from the text alone (a place to look, never a correction)
+                from . import suspects
+
+                st["suspects"] = suspects.page_suspects(work, page, text, [ln.get("type") or "other" for ln in st.get("lines") or []])
+            except Exception as e:  # never let the scorer break Proofread
+                st["suspects"], st["suspects_error"] = [], str(e)[:200]
+            return self._json(st)
         if parts[2:] == ["patterns", "mine"]:
             data = pat.merge_mined(work, include_claude=bool(body.get("include_claude")))
             return self._json({"rules": len(data["rules"])})

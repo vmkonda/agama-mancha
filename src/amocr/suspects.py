@@ -153,12 +153,77 @@ def _overlap(a, b) -> float:
     return w * h / max(1, (a[2] - a[0]) * (a[3] - a[1])) if w > 0 and h > 0 else 0.0
 
 
+_MODELS: dict[str, tuple[float, dict]] = {}
+
+
+def book_model(work: Work, max_age: float = 0) -> dict:
+    """What the scorer knows about the book: its word counts, profile, context rules and character
+    model. With max_age (seconds), a recent one is reused: Proofread scores the page on every edit."""
+    import time
+
+    hit = _MODELS.get(work.id)
+    if max_age and hit and time.time() - hit[0] < max_age:
+        return hit[1]
+    freq = _vocab(work)
+    lm = CharModel(freq)
+    m = {"freq": freq, "prof": profile(work), "lm": lm, "odd": lm.threshold(0.03),  # the least book-like 3% of words
+         "ctx": [(re.compile(context_regex(r)), r) for r in context_fixes(work)]}
+    _MODELS[work.id] = (time.time(), m)
+    return m
+
+
+def score_line(m: dict, line: str, typ: str, box=None, tess=None, min_ratio: float = 4.0, lm_margin: float = 2.0) -> dict:
+    """One line's signals: {reasons[], fixes[], notes[], words[]}. notes are for a proofreader (what to
+    look at); words are the suspect words as written in the line."""
+    freq, prof, lm = m["freq"], m["prof"], m["lm"]
+    reasons, fixes, notes, words = [], [], [], []
+    for tok in line.split():
+        w = clean(tok)
+        if len(w) < 2:
+            continue
+        # Look-alike: compare whole words first, then the word's letter sequences (catches compounds).
+        cands = lookalikes(w, prof["lookalikes"])
+        best = max(((freq[v], v, why) for v, why in cands), default=(0, "", ""))
+        if not (best[0] >= 3 and best[0] >= min_ratio * freq[w]) and cands and len(w) >= 3:
+            lm_best = max(((lm.score(v) - lm.score(w), v, why) for v, why in cands), default=(0, "", ""))
+            if lm_best[0] >= lm_margin:
+                reasons.append(f"lookalike: {w} → {lm_best[1]} reads more like this book ({lm_best[2]})")
+                fixes.append({"from": w, "to": lm_best[1], "why": lm_best[2], "seen": 0, "rare": freq[w]})
+                notes.append(f"{w} → {lm_best[1]}? ({lm_best[2]})")
+                words.append(w)
+                continue
+        if best[0] >= 3 and best[0] >= min_ratio * freq[w]:
+            reasons.append(f"lookalike: {w} ({freq[w]}x) → {best[1]} ({best[0]}x), {best[2]}")
+            fixes.append({"from": w, "to": best[1], "why": best[2], "seen": best[0], "rare": freq[w]})
+            notes.append(f"{w} → {best[1]}? ({best[2]}; {best[1]} is {best[0]}x in this book, {w} {freq[w]}x)")
+            words.append(w)
+        elif freq[w] <= 1 and len(w) >= 3 and not re.search(r"[०-९0-9]", w) and lm.per_char(w) < m["odd"]:
+            reasons.append(f"rare: {w} is unusual for this book")
+            notes.append(f"{w}: an unusual word for this book")
+            words.append(w)
+    for rx, r in m["ctx"]:
+        if rx.search(line):
+            reasons.append(f"context: {r['from']} {r['next']} → {r['to']} {r['next']} ({r['to']} {r['next']} {r['seen']}x in this book)")
+            fixes.append({"from": r["from"], "to": r["to"], "why": "context", "seen": r["seen"], "rare": r["count"]})
+            if r["from"] not in words:  # one note per word: the look-alike note already names it
+                notes.append(f"{r['from']} {r['next']} → {r['to']} {r['next']}? ({r['to']} {r['next']} is {r['seen']}x in this book)")
+                words.append(r["from"])
+    if typ == "verse" and prof["metre"]:
+        n = syllables(line)
+        if n and n != prof["metre"]:
+            reasons.append(f"metre: {n} syllables, not {prof['metre']}")
+            notes.append(f"{n} syllables, not {prof['metre']}: a letter missing or extra?")
+    if box and tess:
+        hit = max(tess, key=lambda t: _overlap(box, t["bbox"]))
+        if _overlap(box, hit["bbox"]) > 0.5 and cer(normalize(hit["text"]), normalize(line), ignore_space=True) > TESS_DIFF:
+            reasons.append("tesseract: reads this line differently")
+            notes.append("Tesseract reads this line differently")
+    return {"reasons": reasons, "fixes": fixes, "notes": notes, "words": words}
+
+
 def score_book(work: Work, pages: list[int] | None = None, min_ratio: float = 4.0, lm_margin: float = 2.0) -> list[dict]:
     """One entry per non-blank line: {page, n, text, type, score, reasons[], fixes[]}."""
-    freq, prof = _vocab(work), profile(work)
-    ctx = [(re.compile(context_regex(r)), r) for r in context_fixes(work)]
-    lm = CharModel(freq)
-    odd = lm.threshold(0.03)  # the least book-like 3% of words
+    m = book_model(work)
     out, verse_seq = [], []
     for page in pages or pat.pages(work):
         d = pat.draft(work, page)
@@ -169,47 +234,41 @@ def score_book(work: Work, pages: list[int] | None = None, min_ratio: float = 4.
         for k, line in enumerate(rows):
             typ = types[k] if k < len(types) else "other"
             box = d["boxes"][k] if k < len(d["boxes"]) else None
-            reasons, fixes = [], []
-            for tok in line.split():
-                w = clean(tok)
-                if len(w) < 2:
-                    continue
-                # Look-alike: compare whole words first, then the word's letter sequences (catches compounds).
-                cands = lookalikes(w, prof["lookalikes"])
-                best = max(((freq[v], v, why) for v, why in cands), default=(0, "", ""))
-                if not (best[0] >= 3 and best[0] >= min_ratio * freq[w]) and cands and len(w) >= 3:
-                    lm_best = max(((lm.score(v) - lm.score(w), v, why) for v, why in cands), default=(0, "", ""))
-                    if lm_best[0] >= lm_margin:
-                        reasons.append(f"lookalike: {w} → {lm_best[1]} reads more like this book ({lm_best[2]})")
-                        fixes.append({"from": w, "to": lm_best[1], "why": lm_best[2], "seen": 0, "rare": freq[w]})
-                        continue
-                if best[0] >= 3 and best[0] >= min_ratio * freq[w]:
-                    reasons.append(f"lookalike: {w} ({freq[w]}x) → {best[1]} ({best[0]}x), {best[2]}")
-                    fixes.append({"from": w, "to": best[1], "why": best[2], "seen": best[0], "rare": freq[w]})
-                elif freq[w] <= 1 and len(w) >= 3 and not re.search(r"[०-९0-9]", w) and lm.per_char(w) < odd:
-                    reasons.append(f"rare: {w} is unusual for this book")
-            for rx, r in ctx:
-                if rx.search(line):
-                    reasons.append(f"context: {r['from']} {r['next']} → {r['to']} {r['next']} ({r['to']} {r['next']} {r['seen']}x in this book)")
-                    fixes.append({"from": r["from"], "to": r["to"], "why": "context", "seen": r["seen"], "rare": r["count"]})
-            if typ == "verse" and prof["metre"]:
-                n = syllables(line)
-                if n and n != prof["metre"]:
-                    reasons.append(f"metre: {n} syllables, not {prof['metre']}")
-                m = re.search(r"॥\s*([०-९0-9]+)\s*॥\s*$", line)
-                if m:
-                    verse_seq.append((int(m.group(1).translate(DIGITS)), len(out)))
-            if box and tess:
-                hit = max(tess, key=lambda t: _overlap(box, t["bbox"]))
-                if _overlap(box, hit["bbox"]) > 0.5 and cer(normalize(hit["text"]), normalize(line), ignore_space=True) > TESS_DIFF:
-                    reasons.append("tesseract: reads this line differently")
-            out.append({"page": page, "n": k + 1, "text": line, "type": typ, "reasons": reasons, "fixes": fixes})
+            r = score_line(m, line, typ, box, tess, min_ratio, lm_margin)
+            if typ == "verse" and m["prof"]["metre"]:
+                v = re.search(r"॥\s*([०-९0-9]+)\s*॥\s*$", line)
+                if v:
+                    verse_seq.append((int(v.group(1).translate(DIGITS)), len(out)))
+            out.append({"page": page, "n": k + 1, "text": line, "type": typ, "reasons": r["reasons"], "fixes": r["fixes"]})
     for i in range(1, len(verse_seq) - 1):  # a number that breaks an otherwise steady sequence
         (a, _), (b, idx), (c, _) = verse_seq[i - 1], verse_seq[i], verse_seq[i + 1]
         if b != a + 1 and c == a + 2:
             out[idx]["reasons"].append(f"verse_no: ॥ {b} ॥ between {a} and {c}")
     for e in out:
-        e["score"] = sum(WEIGHTS[r.split(":")[0]] for r in e["reasons"])
+        e["score"] = score(e["reasons"])
+    return out
+
+
+def score(reasons: list[str]) -> int:
+    return sum(WEIGHTS[r.split(":")[0]] for r in reasons)
+
+
+def page_suspects(work: Work, page: int, text: str, types: list[str] | None = None, min_score: int = 2) -> list[dict]:
+    """The lines of a page being proofread that are worth a second look, scored as the proofreader
+    types: [{line, score, notes[], words[]}] for lines scoring min_score or more. Tesseract's reading
+    is compared only while the lines still match the engine's (boxes are per engine line)."""
+    m = book_model(work, max_age=300)
+    rows = [ln for ln in text.split("\n") if ln.strip()]
+    d = pat.draft(work, page)
+    boxes = (d or {}).get("boxes") or []
+    tess = _tess_lines(work, page) if len(boxes) == len(rows) else []
+    out = []
+    for k, line in enumerate(rows):
+        typ = types[k] if types and k < len(types) else "other"
+        r = score_line(m, line, typ, boxes[k] if tess else None, tess)
+        s = score(r["reasons"])
+        if s >= min_score:
+            out.append({"line": k + 1, "score": s, "notes": r["notes"], "words": r["words"]})
     return out
 
 

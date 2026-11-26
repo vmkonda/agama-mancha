@@ -1297,3 +1297,22 @@ def test_windows_scripts_parse():
                "if ($e) { $e | ForEach-Object { $_.ToString() }; exit 1 }") % str(f).replace("'", "''")
         r = subprocess.run(["powershell", "-NoProfile", "-Command", cmd], capture_output=True, text=True)
         assert r.returncode == 0, f"{f.name}: {r.stdout}{r.stderr}"
+
+
+def test_page_suspects_score_the_text_being_edited(tmp_path, monkeypatch):
+    import json
+
+    from amocr import suspects as sus
+    from amocr.catalog import Work
+
+    monkeypatch.setenv("AMOCR_DATA", str(tmp_path))
+    w = Work(id="B-sus", title="t", languages=["hin"], sha256="x", extra={"profile": {"lookalikes": [["ो", "ी", "shape"]]}})
+    text = "उसी तरह है ।\n" * 40
+    ocr = w.page_dir(1) / "ocr"
+    ocr.mkdir(parents=True)
+    (ocr / "surya-2.5-0.24.0.json").write_text(json.dumps({"text": text, "lines": [{"text": text.strip(), "bbox": [0, 0, 9, 9]}]},
+                                                          ensure_ascii=False), encoding="utf-8")
+    got = sus.page_suspects(w, 1, "उसी तरह है ।\n\nउसो तरह है ।\n")
+    assert [x["line"] for x in got] == [2]  # line numbers count lines of text, as in Proofread
+    assert got[0]["words"] == ["उसो"] and got[0]["score"] >= 3 and "उसो → उसी" in got[0]["notes"][0]
+    assert sus.page_suspects(w, 1, "उसी तरह है ।\n") == []

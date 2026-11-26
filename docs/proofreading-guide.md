@@ -100,8 +100,9 @@ The tags are always one of: `header` (with `ch N` on a chapter heading),
 `verse` (with its number on the last line), `comm.` (with `→ N`, the verse it
 explains, on its last line), `footnote N`, `colophon`, `signature`. The
 highlights are always: the current line (a bar at the left), yellow for an
-unsure line, an outlined box for a footnote marker, and a yellow tag for a
-line with a warning.
+unsure line, orange for a line worth a second look (darker for a higher score,
+with the score beside its tag and the suspect words underlined), an outlined box
+for a footnote marker, and a yellow tag for a line with a warning.
 
 What a book brings is only data that fills these same places: its brief and
 glossary, its look-alike profile, and the rules learned from corrections.
@@ -151,8 +152,19 @@ Nothing in the history is ever deleted.
   the page has no Surya reading), matched line by line, so after you add or
   remove lines it can be one line off.
 - **Unsure lines are yellow.** These are the lines Tesseract was least sure
-  of, where most mistakes are. **F2** (or **Alt ↓**) jumps to the next one
-  and selects it; **Shift F2** (or **Alt ↑**) goes back.
+  of, where most mistakes are. **F2** (or **Alt ↓**) jumps to the next yellow
+  or orange line and selects it; **Shift F2** (or **Alt ↑**) goes back.
+- **Orange lines are worth a second look.** Each line is scored from the text
+  alone (free, no Claude), the same way as `amocr suspects` (docs/engines.md): a
+  word that is rare in this book while its look-alike is common (उसो where उसी is
+  usual: this typeface prints ी like ो), a word that doesn't fit the next one
+  (उसो तरह), an unusual word, a verse with the wrong syllable count, or a line
+  Tesseract reads differently. The score is the number beside the line's tag, and
+  the orange is darker the higher it is; the suspect words are underlined. The
+  line under the text says why, for the line your cursor is on. **F2** jumps to
+  orange lines as well as yellow ones. A score is a place to look, never a
+  correction: type what is printed, and read the other lines too, since a wrong
+  letter that makes a real word isn't caught.
 - **Hard characters.** The button row inserts ऽ । ॥ ् ं ँ ः ॐ, the
   Devanagari digits and a dash at the cursor.
 - **Romanised typing.** Type in the box above the text and press Enter to
