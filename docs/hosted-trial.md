@@ -91,7 +91,7 @@ Unregister-ScheduledTask -TaskName "Agama Mancha redeploy" -Confirm:$false   # t
 ```
 
 A change that needs more than a restart (a new index format, say) says so in its pull request.
-The VPS deployment (GitHub Actions, a push to the `deploy` branch) is in docs/deploy-vps.md.
+The VPS deployment (GitHub Actions, on every merge to `main`) is in docs/deploy-vps.md.
 
 ### Keeping the server in step with Proton Drive
 

@@ -1,14 +1,13 @@
 # Deploying Agama Mancha to a VPS (GitHub Actions)
 
 Agama Mancha runs on a Linux VPS behind the web server that's already there (Caddy or nginx), on a
-subdomain of its own. **Pushing to the `deploy` branch updates it**: GitHub Actions runs the tests,
-then connects to the VPS over SSH and runs `scripts/linux/deploy.sh`, which pulls that commit,
-updates the dependencies and restarts the service. Nothing else on the VPS is touched.
+subdomain of its own. **Every merge to `main` updates it**: GitHub Actions runs the tests, then
+connects to the VPS over SSH and runs `scripts/linux/deploy.sh`, which pulls `main`, updates the
+dependencies and restarts the service. Nothing else on the VPS is touched.
 
-```
-git push origin main:deploy              # release what's on main
-git push -f origin <commit>:deploy       # roll back to an earlier commit
-```
+- **Release:** merge a pull request into `main`.
+- **Roll back:** revert the pull request (the revert is a merge to `main`, so it deploys), or in an
+  emergency **Actions → deploy → Run workflow** with an earlier commit of `main`.
 
 What runs where:
 
@@ -97,6 +96,9 @@ script**, so this key can do nothing else, whatever it's asked:
 command="/home/agama/agama-mancha/scripts/linux/deploy.sh",restrict ssh-ed25519 AAAA… github-actions deploy
 ```
 
+The script reads what the workflow sends only as `deploy` or `deploy <commit>`, and deploys a commit
+only if it is on `main`; anything else is refused.
+
 Note the VPS's host key for pinning: `ssh-keyscan -p <port> <vps host>` (from a machine you trust,
 and check the fingerprint against `ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub` on the VPS).
 
@@ -114,13 +116,15 @@ In the repository: **Settings → Environments → New environment → `producti
 | `VPS_KNOWN_HOSTS` | the `ssh-keyscan` output |
 
 Optionally, under the environment, **Required reviewers** (a deploy then waits for a click) and
-**Deployment branches → `deploy` only**. Then delete the private key from your machine: GitHub has
+**Deployment branches → `main` only**. Then delete the private key from your machine: GitHub has
 the only copy it needs.
 
-Create the branch once: `git push origin main:deploy`. The **deploy** workflow (Actions tab) runs
-the tests, then the deploy; its log ends with `running <commit> (was <commit>)`. If the server
-doesn't answer with the new commit within two minutes, the job fails and shows the service's last
-log lines; the previous code isn't restored automatically: push the last good commit to `deploy`.
+**Switch deploys on** last, when everything above is in place: **Settings → Secrets and variables →
+Actions → Variables → New repository variable**, `VPS_DEPLOY` = `on`. Until then a merge to `main`
+only runs the tests. Then **Actions → deploy → Run workflow** (empty commit) for the first deploy;
+its log ends with `running <commit> (was <commit>)`. If the server doesn't answer with the new
+commit within two minutes, the job fails and shows the service's last log lines; the previous code
+isn't restored automatically: run the workflow with the last good commit.
 
 ## 4. Switching the team over
 
@@ -138,8 +142,9 @@ log lines; the previous code isn't restored automatically: push the last good co
 
 | | |
 |---|---|
-| release | `git push origin main:deploy` (or Actions → deploy → Run workflow) |
-| roll back | `git push -f origin <commit>:deploy` |
+| release | merge a pull request into `main` (or Actions → deploy → Run workflow) |
+| roll back | revert the pull request; in an emergency, Run workflow with an earlier commit of `main` |
+| pause deploys | set `VPS_DEPLOY` to anything but `on` |
 | logs | `journalctl --user -u agama-mancha -f`; sync: `journalctl --user -u agama-mancha-sync`, `data/sync.log` |
 | restart by hand | `systemctl --user restart agama-mancha` |
 | members | `uv run amocr member add "Name" --role proofreader` (prints an invite link) |
