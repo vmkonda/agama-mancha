@@ -42,6 +42,34 @@ Open the sign-in link that step 4 printed, with `HOST` replaced by `localhost` o
 itself (or by its address from another device): `http://localhost:8770/login?token=…`. Without the
 link (or after signing out of the browser) every page says *members only*.
 
+### Running it in the background, and redeploying when the code changes
+
+Instead of keeping step 5's window open, start it in the background (it logs to `data\serve.log`):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\windows\serve.ps1
+```
+
+**Redeploy** after a change is merged on GitHub: it stops the server, pulls `main`, updates the
+dependencies and starts it again. `data\` (library, index, members, proofreading) isn't in git and
+is never touched; local edits to the code make it stop rather than overwrite them.
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\windows\redeploy.ps1          # only if main changed
+powershell -ExecutionPolicy Bypass -File scripts\windows\redeploy.ps1 -Force   # restart anyway
+```
+
+**Automatically**: a scheduled task checks GitHub every 15 minutes and redeploys when `main` has
+changed (log: `data\redeploy.log`):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\windows\auto-redeploy.ps1
+Unregister-ScheduledTask -TaskName "Agama Mancha redeploy" -Confirm:$false   # to remove it
+```
+
+A change that needs more than a restart (a new index format, say) says so in its pull request; on
+the real deployment this becomes a container image built on every merge (docs/plan.md).
+
 ## On the Mac (a member's machine with Claude Code)
 
 In a terminal in the project folder, or ask Claude Code to do it:
