@@ -946,6 +946,19 @@ def cmd_worker(args) -> None:
     run(srv, args.token, [e.strip() for e in args.engines.split(",")] if args.engines else None, args.batch, args.once)
 
 
+def cmd_fix_worker(args) -> None:
+    """The local AI that makes proofreaders' instructed fixes, for a hosted server or this machine's viewer."""
+    from librarian import remote
+
+    from . import fixer
+
+    srv = f"http://127.0.0.1:{args.port}" if args.local else remote.server(args.server, hosted=True)
+    if not srv:
+        raise SystemExit("which server? --server, --local, or AGAMA_SERVER in ~/.config/agama-mancha/hosted.env")
+    # A local viewer has no members: any token will do (and the hosted one stays out of local requests).
+    fixer.run(srv, (args.token or "local") if args.local else args.token, args.model or fixer.MODEL, args.once)
+
+
 def cmd_queue(args) -> None:
     """On the server: queue a book's pages for an engine, or show the queue."""
     from . import ocrqueue
@@ -1138,6 +1151,13 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--engines", help="which engines to offer, e.g. surya or tesseract,surya (default: all installed)")
     p.add_argument("--batch", type=int, default=10, help="pages leased at a time")
     p.add_argument("--once", action="store_true", help="stop when the queue is empty instead of waiting")
+    p = plain_cmd("fix-worker", cmd_fix_worker, "local AI for 'Fix with local AI': makes the edits proofreaders describe")
+    p.add_argument("--server", help="the hosted server (default: AGAMA_SERVER in ~/.config/agama-mancha/hosted.env)")
+    p.add_argument("--local", action="store_true", help="this machine's own viewer instead of a hosted server")
+    p.add_argument("--port", type=int, default=8770, help="with --local: the viewer's port")
+    p.add_argument("--token", help="your listener token (default: AGAMA_TOKEN in that file)")
+    p.add_argument("--model", default=None, help="the Ollama model (default: qwen3.8:27b-mlx, or AMOCR_FIX_MODEL)")
+    p.add_argument("--once", action="store_true", help="stop when nothing is waiting")
     p = plain_cmd("queue", cmd_queue, "on the server: queue a book for OCR workers, or show the queue")
     p.add_argument("book", nargs="?", help="the book to queue (omit to just show the queue)")
     p.add_argument("--engine", default="surya", choices=["tesseract", "surya"])

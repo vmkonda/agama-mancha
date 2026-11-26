@@ -195,6 +195,14 @@ own Claude Code session. Start it once: in your Claude Code session, say
   **⌘/Ctrl ⇧ ↵** applies Claude's latest proposal from the keyboard. Nothing changes until you press it, and the page still
   needs your full check before you save it as proofread. A rule Claude adds has a button
   that opens its matches in Suggestions.
+- **Fix with local AI** (in the chat panel, next to Send) makes a change *you* describe, so
+  you don't have to retype the line: select the line(s) in the text, type what to change
+  (“the marker after योगी is २”, “षण्माससभ्यसेद् should be षण्मासमभ्यसेद्”, “remove the quotes”) and
+  press it. A local model on the team's machine (free, shared by everyone) returns the edited
+  line(s) with **Apply to the draft**, marked *Local AI*. It doesn't look at the scan or decide
+  what's right; it only carries out your words, so check the old and new text before applying.
+  Claude never receives these requests. If no local AI is running, the panel says so and the
+  request waits.
 
 You can also type the same requests into the Claude Code session directly:
 

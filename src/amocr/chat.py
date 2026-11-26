@@ -50,8 +50,8 @@ def _append(work: Work, msg: dict) -> dict:
 
 def post(work: Work, role: str, text: str, page: int | None = None, n: int | None = None,
          reply_to: str | None = None, actions: list[dict] | None = None, n2: int | None = None,
-         kind: str | None = None, by: str | None = None) -> dict:
-    if role not in ("user", "claude", "system"):
+         kind: str | None = None, by: str | None = None, model: str | None = None) -> dict:
+    if role not in ("user", "claude", "ai", "system"):
         raise ValueError("bad role")
     text = (text or "").strip()
     if not text and not actions:
@@ -62,7 +62,7 @@ def post(work: Work, role: str, text: str, page: int | None = None, n: int | Non
     if n2 is not None and (n is None or n2 < n or n2 - n > 30):
         raise ValueError("a line range is n..n2, at most 31 lines")
     for k, v in (("page", page), ("n", n), ("n2", n2 if n2 != n else None), ("kind", kind), ("reply_to", reply_to),
-                 ("actions", actions), ("by", by or None)):
+                 ("actions", actions), ("by", by or None), ("model", model)):
         if v is not None:
             msg[k] = v
     return _append(work, msg)
@@ -79,11 +79,13 @@ def thread(work: Work, who: str | None = None) -> list[dict]:
             or (m["role"] == "system" and m.get("applies") in mine | {x["id"] for x in msgs if x.get("reply_to") in mine})]
 
 
-def pending(work: Work, who: str | None = None) -> list[dict]:
-    """The person's messages that have no reply yet, oldest first."""
-    msgs = thread(work, who)
-    answered = {m.get("reply_to") for m in msgs if m["role"] == "claude"}
-    return [m for m in msgs if m["role"] == "user" and m["id"] not in answered]
+def pending(work: Work, who: str | None = None, fixes: bool = False) -> list[dict]:
+    """The person's messages that have no reply yet, oldest first. Instructions for the local AI
+    ("Fix with local AI", kind "fix") are separate: Claude never gets them, and the local AI worker
+    (fixes=True) gets only those, from every member."""
+    msgs = load(work) if fixes else thread(work, who)
+    answered = {m.get("reply_to") for m in msgs if m["role"] in ("claude", "ai")}
+    return [m for m in msgs if m["role"] == "user" and m["id"] not in answered and (m.get("kind") == "fix") == fixes]
 
 
 def applied(work: Work) -> set[str]:
@@ -204,7 +206,7 @@ def check_action(work: Work, a: dict) -> dict:
 
 def apply(work: Work, msg_id: str, index: int) -> dict:
     """The person pressed Apply on a line fix in a Claude message."""
-    msg = next((m for m in load(work) if m["id"] == msg_id and m["role"] == "claude"), None)
+    msg = next((m for m in load(work) if m["id"] == msg_id and m["role"] in ("claude", "ai")), None)
     if not msg or not 0 <= index < len(msg.get("actions", [])):
         raise LookupError("no such suggestion")
     if f"{msg_id}:{index}" in applied(work):

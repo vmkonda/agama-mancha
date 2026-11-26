@@ -1175,3 +1175,49 @@ def test_claude_helper_runs_on_windows(tmp_path, monkeypatch):
         p.kill()
         httpd.shutdown()
         server.Handler.hosted = False
+
+
+def test_fix_with_local_ai(tmp_path, monkeypatch):
+    """An instruction goes to the local AI worker only (never to Claude); its edits come back as proposals
+    limited to the selected lines, labelled local AI, and apply like Claude's."""
+    import json
+    import socket
+    import threading
+    from http.server import ThreadingHTTPServer
+
+    from amocr import chat, fixer, helper, server
+    from amocr.catalog import load_works
+
+    monkeypatch.setenv("AMOCR_DATA", str(tmp_path))
+    w = _queue_book(tmp_path)
+    (w.page_dir(1) / "ocr").mkdir(parents=True, exist_ok=True)
+    (w.page_dir(1) / "ocr" / "surya-2.5-0.24.0.json").write_text(json.dumps(
+        {"text": "षण्माससभ्यसेद्योगी१\nद्वितीया\n", "lines": [{"text": "षण्माससभ्यसेद्योगी१", "bbox": [2, 2, 30, 9]},
+                                                    {"text": "द्वितीया", "bbox": [2, 10, 30, 18]}]}), encoding="utf-8")
+    q = chat.post(w, "user", "षण्माससभ्यसेद् should be षण्मासमभ्यसेद्, and the marker is २", page=1, n=1, kind="fix")
+    works = load_works()
+    assert chat.pending(w) == [] and helper.next_task(works, None, timeout=0) is None      # Claude never gets it
+    t = fixer.next_task(works, timeout=0)
+    assert t["id"] == q["id"] and t["lines"] == [{"n": 1, "text": "षण्माससभ्यसेद्योगी१"}]
+    assert fixer.next_task(works, timeout=0) is None                                        # claimed by that worker
+    assert fixer.active()
+
+    def fake_edit(task, model, ollama=None):
+        return {"edits": [{"line": 1, "to": "षण्मासमभ्यसेद्योगी२"}, {"line": 2, "to": "not selected"}], "note": ""}
+    monkeypatch.setattr(fixer, "edit", fake_edit)
+    fixer._CLAIMS.clear()
+    server.Handler.hosted, server.Handler.works = False, works
+    with socket.socket() as s_:
+        s_.bind(("127.0.0.1", 0)); port = s_.getsockname()[1]
+    httpd = ThreadingHTTPServer(("127.0.0.1", port), server.Handler)
+    threading.Thread(target=httpd.serve_forever, daemon=True).start()
+    try:
+        assert fixer.run(f"http://127.0.0.1:{port}", "local", "test-model", once=True, log=lambda *_: None) == 1
+    finally:
+        httpd.shutdown()
+    a = [m for m in chat.load(w) if m.get("reply_to") == q["id"]][0]
+    assert a["role"] == "ai" and a["model"] == "test-model" and "outside the selected lines" in a["text"]
+    assert [(x["n"], x["from"], x["to"]) for x in a["actions"]] == [(1, "षण्माससभ्यसेद्योगी१", "षण्मासमभ्यसेद्योगी२")]
+    assert chat.pending(w, fixes=True) == []
+    chat.apply(w, a["id"], 0)
+    assert chat.line_context(w, 1, 1)["text"] == "षण्मासमभ्यसेद्योगी२"

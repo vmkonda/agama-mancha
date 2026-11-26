@@ -439,10 +439,19 @@ class Handler(BaseHTTPRequestHandler):
             if parts[0] == "api" and len(parts) == 3 and parts[2] == "chat":
                 from . import chat
 
+                from . import fixer
+
                 work, _ = self._work_page(parts[1:2])
                 me = members.who() if self.hosted else None
                 return self._json({"messages": chat.thread(work, me)[-200:], "listening": chat.listening(work, me),
-                                   "applied": sorted(chat.applied(work)), "me": me})
+                                   "applied": sorted(chat.applied(work)), "me": me, "fixer": fixer.active()})
+            if parts[:3] == ["api", "fix", "next"]:     # the local AI worker: the next instruction from anyone
+                from . import fixer
+
+                if self.hosted and self._role() == "reader":
+                    return self._err("readers don't run workers", HTTPStatus.FORBIDDEN)
+                q = parse_qs(url.query)
+                return self._json({"task": fixer.next_task(self.works, timeout=min(float((q.get("timeout") or ["25"])[0] or 25), 55))})
             if parts[:3] == ["api", "helper", "next"]:  # a member's Claude helper: their next question, as a task
                 from . import helper
 
@@ -586,7 +595,7 @@ class Handler(BaseHTTPRequestHandler):
 
             page, n, n2 = body.get("page"), body.get("n"), body.get("n2")
             m = chat.post(work, "user", str(body.get("text", "")), page=int(page) if page else None, n=int(n) if n else None,
-                          n2=int(n2) if n2 else None, kind="check" if body.get("kind") == "check" else None,
+                          n2=int(n2) if n2 else None, kind=body.get("kind") if body.get("kind") in ("check", "fix") else None,
                           by=members.who() if Handler.hosted else None)
             return self._json(m)
         if parts[2:] == ["chat", "reply"]:                 # a listener's answer, with proposed fixes
@@ -617,6 +626,15 @@ class Handler(BaseHTTPRequestHandler):
         parts = [p for p in urlparse(self.path).path.split("/") if p]
         if parts[:2] == ["api", "ocr"]:
             return self._ocr_post(parts[2:])
+        if parts == ["api", "fix", "answer"]:             # the local AI worker's edits, as proposals to apply
+            from . import fixer
+
+            if self.hosted and self._role() == "reader":
+                return self._err("readers don't run workers", HTTPStatus.FORBIDDEN)
+            try:
+                return self._json(fixer.submit(self.works, self._body()))
+            except (ValueError, LookupError, json.JSONDecodeError) as e:
+                return self._err(str(e))
         if parts == ["api", "helper", "answer"]:          # a member's Claude helper, answering their question
             from . import helper
 
