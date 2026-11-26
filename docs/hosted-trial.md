@@ -141,6 +141,22 @@ allowed. The listener notices and makes its calls through `curl` (the token pass
 input, never the command line), so nothing needs changing in System Settings. Allowing your terminal app
 under System Settings → Privacy & Security → Local Network also works.
 
+## The proofreading chat on the server
+
+*Check with Claude* and the chat panel in Proofread work on the hosted server too, the same way as the
+study chat: your questions are yours alone, and your own Claude answers them from your machine.
+
+In Claude Code on the Mac, say *"listen to the viewer chat on the hosted server"*. Claude runs
+
+```sh
+uv run amocr chat any wait --hosted          # your next question, in any book (or name one book)
+```
+
+which prints the line(s) as they stand and saves an image of them from the scan on your Mac, then
+answers with `uv run amocr chat <book> reply <id> --hosted --text "…" --fix PAGE:LINE:"…"`. Proposed
+fixes are checked on the server (pages you've proofread or validated stay locked), and you apply them in
+the panel as before. Restricted books are never handed to the listener.
+
 ## OCR workers: your Mac reads pages for the server
 
 The server keeps a queue of pages waiting for an engine; a **worker** on a member's machine leases a

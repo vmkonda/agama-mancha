@@ -50,7 +50,7 @@ def _append(work: Work, msg: dict) -> dict:
 
 def post(work: Work, role: str, text: str, page: int | None = None, n: int | None = None,
          reply_to: str | None = None, actions: list[dict] | None = None, n2: int | None = None,
-         kind: str | None = None) -> dict:
+         kind: str | None = None, by: str | None = None) -> dict:
     if role not in ("user", "claude", "system"):
         raise ValueError("bad role")
     text = (text or "").strip()
@@ -61,15 +61,27 @@ def post(work: Work, role: str, text: str, page: int | None = None, n: int | Non
     msg = {"id": f"{int(time.time() * 1000):x}{secrets.token_hex(2)}", "at": _now(), "role": role, "text": text}
     if n2 is not None and (n is None or n2 < n or n2 - n > 30):
         raise ValueError("a line range is n..n2, at most 31 lines")
-    for k, v in (("page", page), ("n", n), ("n2", n2 if n2 != n else None), ("kind", kind), ("reply_to", reply_to), ("actions", actions)):
+    for k, v in (("page", page), ("n", n), ("n2", n2 if n2 != n else None), ("kind", kind), ("reply_to", reply_to),
+                 ("actions", actions), ("by", by or None)):
         if v is not None:
             msg[k] = v
     return _append(work, msg)
 
 
-def pending(work: Work) -> list[dict]:
-    """The person's messages that have no reply yet, oldest first."""
+def thread(work: Work, who: str | None = None) -> list[dict]:
+    """On a hosted server, a member's own questions and the answers to them (their listener answers with
+    their own Claude); locally (who=None), everything."""
     msgs = load(work)
+    if who is None:
+        return msgs
+    mine = {m["id"] for m in msgs if m["role"] == "user" and m.get("by") == who}
+    return [m for m in msgs if m["id"] in mine or m.get("reply_to") in mine
+            or (m["role"] == "system" and m.get("applies") in mine | {x["id"] for x in msgs if x.get("reply_to") in mine})]
+
+
+def pending(work: Work, who: str | None = None) -> list[dict]:
+    """The person's messages that have no reply yet, oldest first."""
+    msgs = thread(work, who)
     answered = {m.get("reply_to") for m in msgs if m["role"] == "claude"}
     return [m for m in msgs if m["role"] == "user" and m["id"] not in answered]
 
@@ -92,7 +104,17 @@ def stop_listening(work: Work) -> None:
     _beat_path(work).unlink(missing_ok=True)
 
 
-def listening(work: Work) -> bool:
+# On a hosted server: when each member's remote listener last asked for questions.
+_LAST_POLL: dict[str, float] = {}
+
+
+def polled(who: str) -> None:
+    _LAST_POLL[who] = time.time()
+
+
+def listening(work: Work, who: str | None = None) -> bool:
+    if who is not None:
+        return time.time() - _LAST_POLL.get(who, 0) < LISTEN_FRESH + 30
     p = _beat_path(work)
     return p.exists() and time.time() - p.stat().st_mtime < LISTEN_FRESH
 

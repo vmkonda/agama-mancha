@@ -744,8 +744,9 @@ async function chatLoad() {
   if (CH.listening !== d.listening) { // only touch the status when it changes (screen readers re-announce it)
     CH.listening = d.listening;
     $("chatdot").classList.toggle("on", d.listening);
-    $("chatstate").innerHTML = d.listening ? "Claude is listening" :
-      "Claude isn't listening. In your Claude Code session, say <b>listen to the viewer chat</b>.";
+    $("chatstate").innerHTML = d.listening ? "Claude is listening" : d.me
+      ? "Claude isn't listening. On your own machine, in Claude Code, say <b>listen to the viewer chat on the hosted server</b>."
+      : "Claude isn't listening. In your Claude Code session, say <b>listen to the viewer chat</b>.";
   }
   const key = JSON.stringify([d.messages.length && d.messages[d.messages.length - 1].id, d.applied.length]);
   if (key === CH.last) return;

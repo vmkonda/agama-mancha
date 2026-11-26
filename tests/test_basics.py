@@ -1019,3 +1019,52 @@ def test_ocr_worker_end_to_end(tmp_path, monkeypatch):
         rec = json.loads((w.page_dir(p) / "ocr" / "tesseract-fake-1.0.json").read_text(encoding="utf-8"))
         assert rec["text"] == "पठितम्\n" and rec["operator"] == "Anna" and rec["via"] == "ocr-worker"
     assert ocrqueue.status()["books"][f"{w.id} · tesseract"]["done"] == 2
+
+
+def test_hosted_proofreading_chat(tmp_path, monkeypatch):
+    """Per-member proofreading chat: a member's question reaches only their listener (over HTTP, with the
+    line image), the reply's fix is checked on the server, and restricted books are never handed out."""
+    import json
+    import socket
+    import threading
+    from http.server import ThreadingHTTPServer
+
+    import pytest
+
+    pytest.importorskip("lancedb")
+    from amocr import chat, members, server
+    from amocr.catalog import load_works
+    from librarian import remote
+
+    monkeypatch.setenv("AMOCR_DATA", str(tmp_path))
+    w = _queue_book(tmp_path)
+    (w.page_dir(1) / "ocr").mkdir(parents=True, exist_ok=True)
+    (w.page_dir(1) / "ocr" / "surya-2.5-0.24.0.json").write_text(json.dumps(
+        {"text": "रामो वनं\n", "lines": [{"text": "रामो वनं", "bbox": [2, 2, 30, 15]}]}), encoding="utf-8")
+    members.add("Anna", "proofreader"); members.add("Bala", "proofreader")
+    anna, bala = members.issue_token("Anna"), members.issue_token("Bala")
+    chat.post(w, "user", "Is this रामः?", page=1, n=1, by="Anna")
+
+    server.Handler.hosted, server.Handler.works = True, load_works()
+    with socket.socket() as s_:
+        s_.bind(("127.0.0.1", 0)); port = s_.getsockname()[1]
+    httpd = ThreadingHTTPServer(("127.0.0.1", port), server.Handler)
+    threading.Thread(target=httpd.serve_forever, daemon=True).start()
+    base = f"http://127.0.0.1:{port}"
+    try:
+        assert remote.call(base, "/api/chat/next", bala, query={"timeout": 1})["message"] is None    # not Bala's
+        r = remote.call(base, "/api/chat/next", anna, query={"timeout": 1})
+        assert r["work"] == w.id and r["message"]["text"] == "Is this रामः?" and r["context"]["text"] == "रामो वनं"
+        assert remote.fetch(base, r["context"]["image_url"], anna)[:4] == b"\x89PNG"
+        with pytest.raises(SystemExit, match="no such question of yours"):
+            remote.call(base, f"/api/{w.id}/chat/reply", bala, body={"msg": r["message"]["id"], "text": "x"})
+        rep = remote.call(base, f"/api/{w.id}/chat/reply", anna,
+                          body={"msg": r["message"]["id"], "text": "Printed रामः.", "fixes": [{"page": 1, "n": 1, "to": "रामः वनं"}]})
+        assert rep["actions"][0]["to"] == "रामः वनं" and rep["actions"][0]["from"] == "रामो वनं"
+        assert remote.call(base, "/api/chat/next", anna, query={"timeout": 1})["message"] is None      # answered
+        w.restricted = True; w.save(); server.Handler.works = load_works()
+        chat.post(w, "user", "and this?", page=1, n=1, by="Anna")
+        assert remote.call(base, "/api/chat/next", anna, query={"timeout": 1})["message"] is None      # restricted
+    finally:
+        httpd.shutdown()
+        server.Handler.hosted = False
