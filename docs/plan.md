@@ -186,9 +186,65 @@ revoked.
 - **Licences travel with each work** (GRETIL's CC BY-NC-SA: non-commercial, share-alike if shared).
   Opening the library to outside scholars is a sharing act: check each work's licence first.
 
+### Security: members of Vimarsha only
+
+Two layers, and no passwords of our own to store or leak.
+
+**1. A gate in front of everything.** Nothing on the server (pages, API, scans, the MCP
+endpoint) can be reached without first proving you are a listed member. Two good options:
+
+| | Cloudflare Tunnel + Cloudflare Access | Tailscale |
+|---|---|---|
+| How it works | the VPS opens **no inbound ports**: a small `cloudflared` process connects out to Cloudflare, which lets a request through only after the person proves an allowed email (one-time code, or Google login) | the server isn't on the public internet at all; members join Vimarsha's private network (the "tailnet") by invitation and reach the app there |
+| Who is a member | an allow-list of emails, or a Google group, kept by the coordinator | the tailnet's member list, kept by the coordinator |
+| Members install | nothing (a browser) | the Tailscale app on each device |
+| Listeners (Claude Code) | a per-person service token through Access | work as they are, inside the tailnet |
+| claude.ai connector (route 3) | possible later, with the MCP endpoint's own sign-in (OAuth) | not possible: claude.ai's servers can't reach a private tailnet |
+| Cost | free for small teams | free for small teams |
+
+Recommendation: **Cloudflare Tunnel + Access** (nothing for members to install, no open ports,
+room for the connector later); Tailscale if the team prefers a fully private network.
+
+**2. Inside the app,** from the verified identity the gate passes on:
+
+- **Roles:** reader, proofreader, validator, coordinator, admin. The coordinator invites and
+  removes members; there is no sign-up page.
+- **Personal tokens** for listeners and the MCP endpoint, each revocable from the person's account.
+- **Restricted works** are enforced by the server: never sent to an external model by any route.
+- **An audit log** of sign-ins, imports, claims and status changes; rate limits on the API.
+
+**And the machine itself:** TLS everywhere, the disk encrypted, secrets only in environment
+variables, automatic security updates, SSH by key only (or only through the tunnel), and the
+server's backups encrypted.
+
+### Deployment
+
+**One VPS.** OCR (Surya, Claude review) stays on volunteers' Macs, where it runs today, and
+results arrive as they do now; the server hosts, searches and coordinates, so it needs no GPU.
+
+| | |
+|---|---|
+| Size to start | 4 vCPU, 16 GB RAM, ~200 GB disk: the original PDFs (~33 GB) and page images (~150 MB per book so far, so the whole library's scans grow to roughly 150–250 GB over time) |
+| Containers (Docker Compose) | the app; Ollama with bge-m3 for search queries and imports (fine on CPU); `cloudflared` for the tunnel; the database; a backup job |
+| Database | SQLite for a team this size (one file, continuously copied off the machine with Litestream); PostgreSQL if it grows |
+| Web server | the app moves from Python's built-in server to a production one (an ASGI framework behind uvicorn) |
+| Updates | a merge to `main` → GitHub Actions runs the tests and builds the image → the VPS pulls it and restarts (one command, or automatic); database changes as migrations |
+| Backups | nightly, encrypted (restic) to a second place, e.g. Proton or object storage; a restore tested once a month |
+| Watching it | an uptime check and the container logs; an alert to the coordinator if it goes down |
+| Cost | roughly €15–40 a month for the VPS; Cloudflare and Tailscale free at this size |
+
+**Getting the library onto it:** the e-texts and index are rebuilt there (`librarian ingest`,
+`build`); books' page readings and proofreading come from the material folder, synced from Proton
+(a member signs the Proton CLI in on the server once) or pushed by volunteers as today.
+
+**Order of work:** (H1) the private server for the team: gate, accounts, database, the pages as
+they are, route 1 listeners; (H2) route 2, per-person API keys; (H3) the connector for claude.ai and,
+if decided, access for scholars.
+
 ### What changes in the code (when it's decided)
 
-1. Accounts, sessions, roles; the operator name from the login.
+1. Accounts and roles from the gate's verified identity (no passwords of our own); the operator
+   name from the login; personal tokens; an audit log.
 2. A database for the board, claims, ladder, history, study and evaluation, replacing the files
    (and Proton as the coordination channel).
 3. The librarian MCP server over HTTP with per-user tokens; the study queue as an HTTP API that
@@ -196,12 +252,14 @@ revoked.
 4. Route 2: an optional per-person API key in the browser session; the server calls Claude with it.
 5. Route 3: a connector tool that saves an answer to the person's study thread.
 6. Sync of the library and the material folder to the server; backups.
+7. A production web server (ASGI) in place of Python's built-in one; a container image built by CI.
 
 ### Open decisions
 
 1. **Where it runs** (a VPS, a Vimarsha machine) and who administers it.
-2. **Who gets accounts** at first: the team only, or scholars too (and then, which works).
-3. **Which Claude routes** to offer at launch (1 and 3 cost Vimarsha nothing; 2 bills each person).
-4. **Proton's role**: remains the store of originals with the server syncing from it, or the
+2. **The gate:** Cloudflare Access or Tailscale; and who keeps the member list.
+3. **Who gets accounts** at first: the team only, or scholars too (and then, which works).
+4. **Which Claude routes** to offer at launch (1 and 3 cost Vimarsha nothing; 2 bills each person).
+5. **Proton's role**: remains the store of originals with the server syncing from it, or the
    server becomes the store and Proton the backup.
-5. **When**: after Mālinī is finished end to end, or alongside it.
+6. **When**: after Mālinī is finished end to end, or alongside it.
