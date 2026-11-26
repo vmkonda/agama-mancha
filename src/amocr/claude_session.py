@@ -58,7 +58,11 @@ def prep(work: Work, page: int, image: Path, mode: str = "bands") -> Path:
     w, h = im.size
     for i, (a, b) in enumerate(BANDS):
         im.crop((0, int(h * a), w, int(h * b))).save(d / f"band{i}.png")
-    base = sorted((work.page_dir(page) / "ocr").glob(f"{BASELINE}-*.txt"))
+    from .languages import tesseract_langs
+
+    ocr = work.page_dir(page) / "ocr"   # the book's own models first (san+hin, or eng ...), else any Tesseract reading
+    base = sorted(ocr.glob(f"tesseract-{tesseract_langs(work)}-psm3-*.txt")) or sorted(ocr.glob(f"{BASELINE}-*.txt")) \
+        or sorted(ocr.glob("tesseract-*-psm3-*.txt"))
     if base:
         (d / "tesseract.txt").write_text(base[-1].read_text(encoding="utf-8"), encoding="utf-8")
     return d

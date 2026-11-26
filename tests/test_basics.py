@@ -1335,6 +1335,77 @@ def test_page_fixes_on_the_page_being_edited(tmp_path, monkeypatch):
     assert len(pat.page_fixes(w, 7, "उसो दिन ।\n")) == 1  # elsewhere it still is
 
 
+def test_book_languages(tmp_path, monkeypatch):
+    """A book's languages pick its Tesseract models, everywhere: suggested from the inventory, set by
+    hand, carried by queue jobs to workers."""
+    import pytest
+
+    from amocr import languages, ocrqueue, worker
+    from amocr.catalog import Work, load_works
+    from amocr.cli import main
+
+    assert languages.normalize(["sa", "hi", "English", "san"]) == ["san", "hin", "eng"]
+    with pytest.raises(ValueError):
+        languages.normalize(["san; rm -rf /"])
+    assert languages.tesseract_langs(Work(id="B-x", title="t", languages=[], sha256="0")) == "san+hin"   # the default
+    assert languages.suggest({"scripts_seen": {"Devanagari": 3}}) == ["san", "hin"]
+    assert languages.suggest({"scripts_seen": {"Latin": 3}}) == ["eng"]
+    assert languages.suggest({"script": "Latin (IAST)"}) == ["eng"]
+    assert languages.suggest({"scripts_seen": {"Devanagari": 2, "Latin": 1}}) == ["san", "hin", "eng"]
+    assert languages.suggest({"scripts_seen": {"Devanagari": 3}}, "Tantraloka, with English translation") == ["san", "hin", "eng"]
+
+    monkeypatch.setenv("AMOCR_DATA", str(tmp_path))
+    w = _queue_book(tmp_path)
+    main(["languages", w.id, "san", "hin", "eng"])
+    w = load_works()[w.id]
+    assert w.languages == ["san", "hin", "eng"] and w.extra.get("languages_set")
+    assert ocrqueue.add(w, "tesseract") == 2
+    job = ocrqueue.lease("anna", ["tesseract"], n=1)[0]
+    assert job["langs"] == "san+hin+eng"
+
+    class Tess:            # stands in for Tesseract (not installed on CI)
+        def __init__(self, langs="san+hin", **_):
+            self.langs = langs
+    monkeypatch.setattr("amocr.engines.get_engine", lambda name, **kw: Tess(**kw))
+    engs = {"tesseract": Tess()}  # what `available()` gives a worker: the default models
+    assert worker._for_book(engs, {"engine": "tesseract", "langs": "san+hin"}) is engs["tesseract"]
+    other = worker._for_book(engs, job)
+    assert other is not engs["tesseract"] and other.langs == "san+hin+eng"
+    assert worker._for_book(engs, job) is other  # made once per set of models
+
+
+def test_english_needs_the_english_model(tmp_path):
+    """Why per-book languages: an English line read with the Sanskrit and Hindi models comes out wrong."""
+    import shutil
+
+    import pytest
+    from PIL import Image, ImageDraw, ImageFont
+
+    from amocr.engines.tesseract import Tesseract
+    from amocr.metrics import cer
+
+    if not shutil.which("tesseract"):
+        pytest.skip("Tesseract not installed")
+    try:
+        Tesseract(langs="eng").version()
+    except SystemExit:
+        pytest.skip("no eng model")
+    text = "The commentary explains the meaning of this verse"
+    try:
+        font = ImageFont.truetype("DejaVuSans.ttf", 40)
+    except OSError:
+        try:
+            font = ImageFont.truetype("/System/Library/Fonts/Supplemental/Arial.ttf", 40)
+        except OSError:
+            pytest.skip("no font to draw with")
+    img = Image.new("L", (1300, 120), 255)
+    ImageDraw.Draw(img).text((20, 30), text, fill=0, font=font)
+    img.save(tmp_path / "line.png")
+    eng = Tesseract(langs="eng").run(tmp_path / "line.png").text.strip()
+    mixed = Tesseract(langs="san+hin+eng").run(tmp_path / "line.png").text.strip()
+    assert cer(eng, text) < 0.05 and cer(mixed, text) < 0.1
+
+
 def test_ocr_queue_report(tmp_path, monkeypatch):
     """What the Library page and Pages map show: progress per book, speed, time left, set-aside pages."""
     import json

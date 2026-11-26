@@ -26,7 +26,7 @@ from .pages import inventory, read_jsonl, write_jsonl
 from .proton import Proton, ProtonError, mirror_dir, results_root
 
 # Which result stands for a page in book.txt, best first.
-PREFERENCE = ["groundtruth", "claude-code-correct", "claude-code-direct", "tesseract-san+hin"]
+PREFERENCE = ["groundtruth", "claude-code-correct", "claude-code-direct", "tesseract-"]  # any Tesseract models
 
 
 def now() -> str:

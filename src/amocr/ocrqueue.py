@@ -61,6 +61,9 @@ def add(work: Work, engine: str, pages: list[int] | None = None) -> int:
 
     if engine not in ENGINES:
         raise ValueError(f"engine must be one of {', '.join(ENGINES)}")
+    from .languages import tesseract_langs
+
+    langs = tesseract_langs(work)      # the book's Tesseract models (Surya places its lines with them too)
     rows = read_jsonl(work.workdir / "inventory.jsonl")
     if not rows:
         raise ValueError(f"{work.id} has no page inventory on this server")
@@ -77,7 +80,7 @@ def add(work: Work, engine: str, pages: list[int] | None = None) -> int:
                 continue
             jid = f"{work.id}-{p:04d}-{engine}"
             d["jobs"][jid] = {"book": work.id, "page": p, "engine": engine, "state": "queued", "attempts": 0,
-                              "queued_at": _now()}
+                              "queued_at": _now(), "langs": langs}
             n += 1
         _save(d)
     return n
@@ -105,7 +108,7 @@ def lease(who: str, engines: list[str], n: int = 10, host: str = "") -> list[dic
             j["state"] = "leased"
             j["lease"] = {"by": who, "host": host[:80], "until": time.time() + LEASE_MINUTES * 60, "key": secrets.token_hex(8)}
             out.append({"job": jid, "key": j["lease"]["key"], "book": j["book"], "page": j["page"], "engine": j["engine"],
-                        "image": f"/img/{j['book']}/{j['page']}"})
+                        "langs": j.get("langs") or "san+hin", "image": f"/img/{j['book']}/{j['page']}"})
         _save(d)
     return out
 

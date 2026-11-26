@@ -70,8 +70,16 @@ def _image(work: Work, row: dict) -> Path:
     return out
 
 
-def _tesseract(work: Work, rows: list[dict], pages: list[int], langs="san+hin", psm=3, force=False, quiet=False) -> None:
-    _run_engine(work, rows, pages, get_engine("tesseract", langs=langs, psm=psm), force, quiet)
+def _tesseract(work: Work, rows: list[dict], pages: list[int], langs=None, psm=3, force=False, quiet=False) -> None:
+    from .languages import tesseract_langs
+
+    _run_engine(work, rows, pages, get_engine("tesseract", langs=langs or tesseract_langs(work), psm=psm), force, quiet)
+
+
+def _surya(work: Work):
+    from .languages import tesseract_langs
+
+    return get_engine("surya", tesseract_langs=tesseract_langs(work))
 
 
 def _run_engine(work: Work, rows: list[dict], pages: list[int], engine, force=False, quiet=False) -> None:
@@ -132,7 +140,7 @@ def cmd_ocr(work: Work, args) -> None:
     if args.engine == "tesseract":
         _tesseract(work, rows, pages, args.langs, args.psm, args.force)
     elif args.engine == "surya":
-        _run_engine(work, rows, pages, get_engine("surya"), args.force)
+        _run_engine(work, rows, pages, _surya(work), args.force)
     else:
         raise SystemExit(f"unknown engine {args.engine!r} for `amocr ocr`: tesseract or surya (Claude runs via claude-next/claude-import)")
 
@@ -184,7 +192,7 @@ def _prep_pages(work: Work, rows: list[dict], pages: list[int], mode: str) -> li
         missing = [p for p in pages if not base_result(work, p)]
         if missing:
             print(f"Surya on {len(missing)} page(s) first ...")
-            _run_engine(work, rows, missing, get_engine("surya"))
+            _run_engine(work, rows, missing, _surya(work))
     return [(p, prep(work, p, _image(work, rows[p - 1]), mode)) for p in pages]
 
 
@@ -641,7 +649,7 @@ def cmd_push(work: Work, args) -> None:
     _board_quietly()
 
 
-def _inventory_quietly(w: Work) -> None:
+def _inventory_quietly(w: Work) -> dict | None:
     """Record a fetched book's text-layer facts and share them; never fail the fetch over it."""
     from . import board, book, inventory
 
@@ -651,8 +659,10 @@ def _inventory_quietly(w: Work) -> None:
         f = inventory.record(mine, board.sha1_of(w), w.source)
         print(f"   {inventory.VERDICTS[f['verdict']]}" + (f", {f['script']}" if f.get("script") else ""))
         inventory.publish(pd, cfg, mine)
+        return f
     except (SystemExit, Exception) as e:  # noqa: BLE001
         print(f"inventory not shared: {e}")
+        return None
 
 
 def cmd_sync(args) -> None:
@@ -760,8 +770,48 @@ def cmd_fetch(args) -> None:
 
     w, pulled = fetch(args.remote, title=args.title, restricted=args.restricted)
     print(f"{w.id}  {w.title}\n   results from others: {pulled}")
-    _inventory_quietly(w)
+    facts = _inventory_quietly(w)
+    _languages_from_inventory(w, facts)
     print(f"next: `amocr ocr {w.id}` (Tesseract, all pages), then `amocr claude-next {w.id}`")
+
+
+def _languages_from_inventory(w: Work, facts: dict | None) -> None:
+    """A new book's languages from the scripts its inventory saw, unless someone set them by hand."""
+    from . import languages
+
+    if (w.extra or {}).get("languages_set") or not facts:
+        return
+    want = languages.suggest(facts, w.title + " " + w.source_name)
+    if want != list(w.languages or []):
+        w.languages = want
+        w.extra = dict(w.extra or {}) | {"languages_from": "inventory"}
+        w.save()
+    print(f"   languages: {'+'.join(w.languages)} (from the scripts seen; change with `amocr languages {w.id} …`)")
+
+
+def cmd_languages(work: Work, args) -> None:
+    """Show or set a book's languages: the Tesseract models its pages are read with."""
+    from . import languages
+    from .setup import models_present
+
+    if args.codes:
+        try:
+            work.languages = languages.normalize(args.codes)
+        except ValueError as e:
+            raise SystemExit(str(e)) from None
+        work.extra = dict(work.extra or {}) | {"languages_set": True, "languages_from": "set by hand"}
+        work.save()
+        missing = [c for c in work.languages if not models_present([c])]
+        print(f"{work.id}: languages {'+'.join(work.languages)}; Tesseract reads with -l {languages.tesseract_langs(work)}")
+        if missing:
+            print(f"   no model here for {', '.join(missing)}: `uv run amocr setup-models` installs san, hin and eng; "
+                  "OCR workers need the models too")
+        print("   pages already read keep their readings; queue them again for new ones")
+        return
+    how = (work.extra or {}).get("languages_from", "the default")
+    print(f"{work.id}: languages {'+'.join(work.languages or languages.DEFAULT)} ({how}); "
+          f"Tesseract reads with -l {languages.tesseract_langs(work)}")
+    print(f"   set them: amocr languages {work.id} san hin eng   (Devanagari with English: all three)")
 
 
 def cmd_init(args) -> None:
@@ -1087,7 +1137,7 @@ def main(argv: list[str] | None = None) -> None:
     p = book_cmd("ocr", cmd_ocr, pages=True, help="OCR pages with Tesseract or Surya (default: all pages)")
     p.add_argument("--engine", default="tesseract", choices=["tesseract", "surya"],
                    help="surya: local Surya 2.5 model (optional install, see docs/engines.md)")
-    p.add_argument("--langs", default="san+hin")
+    p.add_argument("--langs", help="Tesseract models, e.g. san+hin+eng (default: the book's languages; see `amocr languages`)")
     p.add_argument("--psm", type=int, default=3)
     p.add_argument("--force", action="store_true", help="redo pages that already have a result")
     mode_help = ("review: Claude checks every line of Surya's reading against line images; screen: Claude reads "
@@ -1158,6 +1208,8 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--mode", choices=["auto", "review", "screen", "bands"], default="auto", help=mode_help)
     book_cmd("push", cmd_push, help="upload results to the material folder")
     book_cmd("pull", cmd_pull, help="download results others pushed")
+    p = book_cmd("languages", cmd_languages, help="show or set a book's languages (the Tesseract models it's read with)")
+    p.add_argument("codes", nargs="*", metavar="code", help="e.g. san hin eng (Devanagari with English commentary)")
     p = plain_cmd("sync", cmd_sync, help="on a server: pull from and push to the material folder, every book")
     p.add_argument("books", nargs="*", metavar="book", help="only these books (default: every book with a Proton path)")
     p.add_argument("--push-all", action="store_true", help="push even books that haven't changed since their last push")

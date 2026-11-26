@@ -25,6 +25,32 @@ def available(wanted: list[str] | None = None) -> dict:
     return out
 
 
+_BY_LANGS: dict[str, object] = {}   # Tesseract engines by models
+
+
+def _for_book(engs: dict, job: dict):
+    """The engine for a job, with the book's Tesseract models (the job says which: san+hin, eng ...).
+    Tesseract reads with them; Surya places its lines with Tesseract boxes read with them."""
+    from .engines import get_engine
+    from .languages import normalize
+
+    langs = "+".join(normalize(str(job.get("langs") or "san+hin").split("+")))
+    name = job["engine"]
+    if name == "surya":   # one Surya (its model is large); only the Tesseract that places its lines changes
+        eng = engs["surya"]
+        if getattr(eng, "_tess", None) is not None and eng._tess.langs != langs:
+            eng._tess = get_engine("tesseract", langs=langs)
+        return eng
+    if name == "tesseract":
+        base = engs["tesseract"]
+        if getattr(base, "langs", langs) == langs:    # the engine this worker started with already fits
+            return base
+        if langs not in _BY_LANGS:
+            _BY_LANGS[langs] = get_engine("tesseract", langs=langs)
+        return _BY_LANGS[langs]
+    return engs[name]
+
+
 def run(server: str, token: str | None = None, engines: list[str] | None = None, batch: int = 10,
         once: bool = False, idle: float = 30, log=print) -> int:
     from librarian import remote
@@ -46,7 +72,7 @@ def run(server: str, token: str | None = None, engines: list[str] | None = None,
                 time.sleep(idle)
                 continue
             for j in jobs:
-                eng = engs[j["engine"]]
+                eng = _for_book(engs, j)
                 with tempfile.TemporaryDirectory() as td:
                     img = Path(td) / "page.png"
                     try:
@@ -67,7 +93,7 @@ def run(server: str, token: str | None = None, engines: list[str] | None = None,
     except KeyboardInterrupt:
         log("stopped; any pages still leased go back to the queue when their lease expires")
     finally:
-        for e in engs.values():
+        for e in [*engs.values(), *_BY_LANGS.values()]:
             e.close()
     log(f"{done} page(s) read")
     return done

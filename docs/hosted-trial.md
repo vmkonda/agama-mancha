@@ -247,6 +247,10 @@ that fails three times is set aside. A reading is saved exactly like `amocr ocr`
 existing one, and credited to the member whose worker read it. Rehearsed on the Mac with real Surya: three
 pages leased over HTTP, read at about 12 s a page, and the readings were byte for byte the ones made locally.
 
+**Languages.** Each queued page carries its book's Tesseract models (`amocr languages <book>`;
+docs/engines.md), so a worker reads an English book with `eng` and a Devanagari one with `san+hin`.
+Workers need those models installed (`uv run amocr setup-models` installs san, hin and eng).
+
 **Seeing the queue.** The **Library** page shows, in each queued book's row, how far OCR has got and
 roughly how long is left (*OCR · Surya: 200/460 read · 10 being read on <machine> · 249 waiting · about
 52 min left*), worked out from the last hour's speed and the books ahead of it in line, plus any pages
