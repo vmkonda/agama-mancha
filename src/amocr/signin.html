@@ -76,7 +76,12 @@ async function account() {
     <section><form id="pw"><label for="c">Current password</label><input id="c" type="password" autocomplete="current-password" required>
       <label for="n1">New password</label><input id="n1" type="password" autocomplete="new-password" minlength="10" required>
       <button>Change password</button><div class="err" id="pe"></div></form></section>
-    <section><label>Listener token, for Claude Code on your own machine</label>
+    <section><label>Claude's help while you work</label>
+      <p>Download your Claude helper once and double-click it whenever you want Claude's help while proofreading or
+        studying. It uses your own Claude account (a paid claude.ai plan) and sets itself up the first time.
+        Keep its window open while you work. Downloading it again replaces the old file.</p>
+      <button id="helper" type="button">Download my Claude helper (Windows)</button><div id="hout"></div></section>
+    <section><label>For Claude Code users: a listener token</label>
       <p>A new token replaces the old one. It is shown once: put it in <code>~/.config/agama-mancha/hosted.env</code> on your machine, nowhere else.</p>
       <button class="quiet" id="tok" type="button">Issue a new listener token</button><div id="tout"></div></section>
     <section><button class="quiet" id="out" type="button">Sign out</button></section></div>`;
@@ -87,6 +92,14 @@ async function account() {
     if (!confirm("Issue a new listener token? The old one stops working.")) return;
     try { const r = await post("/api/auth/token"); $("tout").innerHTML = `<div class="token">${esc(r.token)}</div><p>Copy it now; it won't be shown again.</p>`; }
     catch (err) { $("tout").innerHTML = `<div class="err">${esc(err.message)}</div>`; } };
+  $("helper").onclick = async () => {
+    try { const r = await fetch("/api/auth/helper", { method: "POST" });
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || r.status);
+      const a = document.createElement("a"); a.href = URL.createObjectURL(await r.blob());
+      a.download = "Agama Mancha Claude helper.cmd"; document.body.append(a); a.click(); a.remove();
+      $("hout").innerHTML = `<p class="ok">Downloaded. Find it in your Downloads folder and double-click it. If Windows asks,
+        choose <b>More info</b> → <b>Run anyway</b>; it is your own file from Agama Mancha.</p>`; }
+    catch (err) { $("hout").innerHTML = `<div class="err">${esc(err.message)}</div>`; } };
   $("out").onclick = async () => { await post("/api/auth/logout"); location.replace("/login"); };
 }
 

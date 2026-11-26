@@ -204,15 +204,27 @@ def end_sessions(name: str) -> None:
 
 # ---- listener tokens ----------------------------------------------------------------------------
 
-def issue_token(name: str) -> str:
-    """A new listener token for a member (replacing any old one); shown once, stored as a hash."""
+TOKEN_KINDS = {"listener": "token_sha256", "helper": "helper_sha256"}
+
+
+def issue_token(name: str, kind: str = "listener") -> str:
+    """A new token for a member (replacing any old one of that kind); shown once, stored as a hash.
+    `listener`: for Claude Code on their machine (hosted.env); `helper`: baked into the Claude helper
+    file they download. Separate, so downloading a helper never breaks a listener."""
     d = load()
     if name not in d["members"]:
         raise ValueError(f"no member {name!r}")
-    token = "am_" + secrets.token_urlsafe(32)
-    d["members"][name]["token_sha256"] = _h(token)
+    token = ("am_" if kind == "listener" else "amh_") + secrets.token_urlsafe(32)
+    d["members"][name][TOKEN_KINDS[kind]] = _h(token)
     save(d)
     return token
+
+
+def revoke_tokens(name: str) -> None:
+    d = load()
+    for f in TOKEN_KINDS.values():
+        d["members"].get(name, {}).pop(f, None)
+    save(d)
 
 
 def check(token: str | None) -> tuple[str, str] | None:
@@ -221,8 +233,9 @@ def check(token: str | None) -> tuple[str, str] | None:
         return None
     h = _h(token)
     for name, m in load()["members"].items():
-        if m.get("token_sha256") and hmac.compare_digest(h, m["token_sha256"]):
-            return name, m["role"]
+        for f in TOKEN_KINDS.values():
+            if m.get(f) and hmac.compare_digest(h, m[f]):
+                return name, m["role"]
     return None
 
 

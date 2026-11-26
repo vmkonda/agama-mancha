@@ -323,7 +323,10 @@ per-member study threads, and the listener side (`librarian --server … study w
 `search`; or `AGAMA_SERVER` / `AGAMA_TOKEN`). Windows as the server, the Mac as a member's machine:
 docs/hosted-trial.md (PR #25). OCR workers built (2026-11-26): `amocr queue <book> --engine surya` on the
 server, `amocr worker` on a member's machine (leases, 15-minute expiry, three tries, readings saved like
-local ones and credited to the member); readers can't run workers.
+local ones and credited to the member); readers can't run workers. Volunteers are browser-only (decided 2026-11-26): no API key, so
+each person's own Claude answers, through the **Claude helper**, a `.cmd` file made for them on their
+Account page (server and a helper token inside) that installs and signs in to Claude Code on first run
+and answers their panel questions inline; OCR runs on a managed pool of machines (the Mac for now).
 
 ### What changes in the code (when it's decided)
 
