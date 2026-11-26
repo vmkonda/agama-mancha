@@ -141,6 +141,34 @@ allowed. The listener notices and makes its calls through `curl` (the token pass
 input, never the command line), so nothing needs changing in System Settings. Allowing your terminal app
 under System Settings → Privacy & Security → Local Network also works.
 
+## OCR workers: your Mac reads pages for the server
+
+The server keeps a queue of pages waiting for an engine; a **worker** on a member's machine leases a
+batch, reads them with its own engines (Surya, Tesseract), sends the readings back and deletes its
+copies of the images. Workers serve everyone's pages (local engines may be shared; Claude is never a
+worker). Every connection goes out from the worker's machine.
+
+**On the server** (a coordinator or admin), queue a book:
+
+```powershell
+uv run amocr queue B-c43bd56b1c --engine surya               # every page with no text layer and no Surya reading
+uv run amocr queue B-c43bd56b1c --engine surya --pages 221-238
+uv run amocr queue                                           # what's waiting, being read, done; which workers are active
+```
+
+**On the Mac** (any member but a reader), using the same settings file and listener token as the
+study listener:
+
+```sh
+uv run --extra surya amocr worker --engines surya            # keeps going, waits when the queue is empty
+uv run --extra surya amocr worker --engines surya --once     # stops when the queue is empty
+```
+
+A lease lasts 15 minutes; if the worker stops (Ctrl-C, sleep), its pages go back to the queue. A page
+that fails three times is set aside. A reading is saved exactly like `amocr ocr` saves it, never over an
+existing one, and credited to the member whose worker read it. Rehearsed on the Mac with real Surya: three
+pages leased over HTTP, read at about 12 s a page, and the readings were byte for byte the ones made locally.
+
 ## What this shows
 
 - **Members only:** every page, scan and API call needs a signed-in session (name and password) or,

@@ -131,3 +131,21 @@ def call(base: str, path: str, token: str | None = None, body: dict | None = Non
     if code >= 400:
         raise SystemExit(f"{base}: {payload.get('error') or f'HTTP {code}'}")
     return payload
+
+
+def fetch(base: str, path: str, token: str | None = None, timeout: float = 120) -> bytes:
+    """Download a file (a page image, say) from the server; the same macOS fallback through curl."""
+    url = f"{base}{path}"
+    tok = _token(token)
+    req = urllib.request.Request(url, headers={"Authorization": f"Bearer {tok}"})
+    try:
+        return urllib.request.urlopen(req, timeout=timeout).read()
+    except urllib.error.HTTPError as e:
+        raise SystemExit(f"{base}: {e.code} for {path}") from None
+    except (urllib.error.URLError, OSError) as e:
+        if not (_blocked(e) and shutil.which("curl")):
+            raise SystemExit(f"{base}: can't connect ({getattr(e, 'reason', e)})") from None
+    code, out = _via_curl("GET", url, tok, None, timeout)
+    if code >= 400:
+        raise SystemExit(f"{base}: {code} for {path}")
+    return out
