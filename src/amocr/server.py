@@ -12,6 +12,7 @@ import getpass
 import json
 import os
 import re
+import urllib.parse
 from pathlib import Path
 import socket
 from datetime import datetime, timezone
@@ -206,45 +207,101 @@ class Handler(BaseHTTPRequestHandler):
 
     hosted = False
 
-    def _token(self) -> str | None:
-        auth = self.headers.get("Authorization", "")
-        if auth.startswith("Bearer "):
-            return auth[7:].strip()
+    PUBLIC = {"/login", "/invite", "/theme.css", "/api/auth/login", "/api/auth/invite"}
+
+    def _cookie(self, name: str) -> str | None:
         for part in (self.headers.get("Cookie") or "").split(";"):
             k, _, v = part.strip().partition("=")
-            if k == "am_token":
+            if k == name:
                 return v
         return None
 
+    def _bearer(self) -> str | None:
+        auth = self.headers.get("Authorization", "")
+        return auth[7:].strip() if auth.startswith("Bearer ") else None
+
     def _gate(self) -> bool:
-        """Hosted mode: admit members only, and remember who this request is for. True = go ahead."""
+        """Hosted mode: admit members only (a browser session, or a listener's token) and remember who
+        this request is for. The sign-in pages are open. True = go ahead."""
+        self._member = None
         if not self.hosted:
             return True
         url = urlparse(self.path)
-        if url.path == "/login":                       # the sign-in link: set the cookie, then the app
-            tok = (parse_qs(url.query).get("token") or [""])[0]
-            if members.check(tok):
-                self.send_response(HTTPStatus.SEE_OTHER)
-                self.send_header("Set-Cookie", f"am_token={tok}; HttpOnly; SameSite=Strict; Path=/; Max-Age=31536000")
-                self.send_header("Location", "/library")
+        who = members.check_session(self._cookie("am_session")) or members.check(self._bearer())
+        if who:
+            self._member = who
+            return True
+        if url.path in self.PUBLIC:
+            return True
+        if url.path.startswith("/api/"):
+            self._err("members only: sign in", HTTPStatus.UNAUTHORIZED)
+        else:                                          # a page: to the sign-in page, then back here
+            nxt = urllib.parse.quote(url.path + (("?" + url.query) if url.query else ""), safe="")
+            self.send_response(HTTPStatus.SEE_OTHER)
+            self.send_header("Location", f"/login?next={nxt}")
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+        return False
+
+    def _session_cookie(self, sid: str | None) -> str:
+        if not sid:
+            return "am_session=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0"
+        return f"am_session={sid}; HttpOnly; SameSite=Strict; Path=/; Max-Age={members.SESSION_DAYS * 86400}"
+
+    def _auth_post(self, parts: list[str]) -> None:
+        """Sign in, set a password from an invite, sign out, change password, issue a listener token."""
+        try:
+            b = self._body()
+        except (ValueError, json.JSONDecodeError) as e:
+            return self._err(str(e))
+        act = parts[2] if len(parts) == 3 else ""
+        try:
+            if act in ("login", "invite"):
+                if act == "login":
+                    who = members.verify(str(b.get("name", "")).strip(), str(b.get("password", "")))
+                    if not who:
+                        return self._err("wrong name or password", HTTPStatus.UNAUTHORIZED)
+                    name = who[0]
+                else:
+                    name = members.use_invite(str(b.get("code", "")), str(b.get("password", "")))
+                body = json.dumps({"ok": True, "name": name}).encode()
+                self.send_response(HTTPStatus.OK)
+                self.send_header("Set-Cookie", self._session_cookie(members.new_session(name)))
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.send_header("Content-Length", str(len(body)))
                 self.end_headers()
-                return False
-        who = members.check(self._token())
-        if not who:
-            if url.path.startswith("/api/"):
-                self._err("members only: sign in with your link, or send your token", HTTPStatus.UNAUTHORIZED)
-            else:
-                self._send(b"<!doctype html><meta charset=utf-8><title>Agama Mancha</title><body style='font:16px sans-serif;margin:3em'>"
-                           b"<h1>Agama Mancha</h1><p>Members of Vimarsha only. Open the sign-in link you were given.</p>",
-                           "text/html; charset=utf-8", HTTPStatus.UNAUTHORIZED)
-            return False
-        self._member = who
-        return True
+                self.wfile.write(body)
+                return
+            if not self._member:
+                return self._err("members only: sign in", HTTPStatus.UNAUTHORIZED)
+            name = self._member[0]
+            if act == "logout":
+                members.end_session(self._cookie("am_session"))
+                body = b'{"ok": true}'
+                self.send_response(HTTPStatus.OK)
+                self.send_header("Set-Cookie", self._session_cookie(None))
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+                return
+            if act == "password":
+                if not members.verify(name, str(b.get("current", ""))):
+                    return self._err("the current password isn't right", HTTPStatus.UNAUTHORIZED)
+                members.set_password(name, str(b.get("new", "")))
+                return self._json({"ok": True})
+            if act == "token":
+                return self._json({"token": members.issue_token(name)})
+        except PermissionError as e:
+            return self._err(str(e), HTTPStatus.TOO_MANY_REQUESTS)
+        except ValueError as e:
+            return self._err(str(e))
+        self._err("not found", HTTPStatus.NOT_FOUND)
 
     def do_GET(self):
         if not self._gate():
             return
-        tok = members.set_current(getattr(self, "_member", (None,))[0])
+        tok = members.set_current((self._member or (None,))[0])
         try:
             self._do_get()
         finally:
@@ -253,7 +310,7 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         if not self._gate():
             return
-        tok = members.set_current(getattr(self, "_member", (None,))[0])
+        tok = members.set_current((self._member or (None,))[0])
         try:
             self._do_post()
         finally:
@@ -267,6 +324,11 @@ class Handler(BaseHTTPRequestHandler):
                 # The home page is the Library. Old links to the viewer (/#book/page…) still work: the
                 # part after # never reaches the server, so a tiny page forwards it to /proofread.
                 return self._send(HOME, "text/html; charset=utf-8")
+            if parts in (["login"], ["invite"], ["account"]):
+                return self._send(files("amocr").joinpath("signin.html").read_bytes(), "text/html; charset=utf-8")
+            if parts == ["api", "me"]:
+                m = self._member
+                return self._json({"hosted": self.hosted, "name": m[0] if m else None, "role": m[1] if m else None})
             if parts == ["proofread"]:
                 return self._send(files("amocr").joinpath("viewer.html").read_bytes(), "text/html; charset=utf-8")
             if parts == ["library"]:
@@ -275,6 +337,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(files("amocr").joinpath("librarian.html").read_bytes(), "text/html; charset=utf-8")
             if parts[:2] == ["api", "librarian"]:
                 return self._json(_librarian_get(parts[2:], parse_qs(url.query)))
+            if parts == ["me.js"]:
+                return self._send(files("amocr").joinpath("me.js").read_bytes(), "text/javascript; charset=utf-8")
             if parts == ["theme.css"]:
                 return self._send(files("amocr").joinpath("theme.css").read_bytes(), "text/css; charset=utf-8")
             if parts == ["api", "catalog"]:
@@ -432,6 +496,10 @@ class Handler(BaseHTTPRequestHandler):
 
     def _do_post(self):
         parts = [p for p in urlparse(self.path).path.split("/") if p]
+        if parts[:2] == ["api", "auth"]:
+            if not self.hosted:
+                return self._err("signing in is only for a hosted server", HTTPStatus.NOT_FOUND)
+            return self._auth_post(parts)
         if parts == ["api", "librarian", "import"]:
             try:
                 _librarian()

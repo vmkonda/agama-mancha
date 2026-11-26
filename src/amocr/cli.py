@@ -875,22 +875,28 @@ def cmd_serve(args) -> None:
 
 
 def cmd_member(args) -> None:
-    """Members of a hosted server: add (prints their token and sign-in link once), list, remove."""
+    """Members of a hosted server: add (an invite link to choose a password), invite (a new link, for a
+    forgotten password), token (a listener token for their machine), list, remove."""
     from . import members
 
+    link = lambda code: f"http://HOST:{args.port}/invite?code={code}"
+    if args.action in ("add", "invite", "token", "remove") and not args.name:
+        raise SystemExit(f'member {args.action} needs a name, e.g. amocr member {args.action} "Anna"')
     if args.action == "add":
-        if not args.name:
-            raise SystemExit('member add needs a name: amocr member add "Anna" --role proofreader')
-        tok = members.add(args.name, args.role)
-        print(f"{args.name} ({args.role}) added. Their token, shown only now (it is stored only as a hash):\n  {tok}")
-        print(f"Sign-in link (replace HOST with the server's address):\n  http://HOST:{args.port}/login?token={tok}")
-        print("A listener on their machine uses the same token: AGAMA_SERVER=http://HOST:PORT AGAMA_TOKEN=<token>")
+        code = members.add(args.name, args.role)
+        print(f"{args.name} ({args.role}) added. Send them this invite link (replace HOST with the server's address);")
+        print(f"it works once, for {members.INVITE_DAYS} days, to choose their password:\n  {link(code)}")
+    elif args.action == "invite":
+        print(f"A new invite link for {args.name} (to set a new password; works once, {members.INVITE_DAYS} days):\n  {link(members.invite(args.name))}")
+    elif args.action == "token":
+        print(f"A new listener token for {args.name} (the old one stops working). Shown only now; it goes in")
+        print(f"~/.config/agama-mancha/hosted.env on their machine, nowhere else:\n  {members.issue_token(args.name)}")
     elif args.action == "remove":
-        print("removed" if members.remove(args.name or "") else f"no member {args.name!r}")
+        print("removed (and signed out)" if members.remove(args.name) else f"no member {args.name!r}")
     else:
         for name, m in sorted(members.load()["members"].items()):
-            print(f"  {name:24} {m['role']:12} added {m['added'][:10]}")
-
+            state = "password set" if m.get("password") else "invited" if m.get("invite") else "no password yet"
+            print(f"  {name:24} {m['role']:12} {state:16} {'listener token' if m.get('token_sha256') else ''}")
 
 def main(argv: list[str] | None = None) -> None:
     ap = argparse.ArgumentParser(prog="amocr", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -1031,11 +1037,11 @@ def main(argv: list[str] | None = None) -> None:
     book_cmd("render", cmd_render, pages=True)
     book_cmd("checksum", cmd_checksum)
     plain_cmd("duplicates", cmd_duplicates, "books on this machine twice (same PDF, two ids)")
-    p = plain_cmd("member", cmd_member, "members of a hosted server: add, list, remove")
-    p.add_argument("action", choices=["add", "list", "remove"])
+    p = plain_cmd("member", cmd_member, "members of a hosted server: add, invite, token, list, remove")
+    p.add_argument("action", choices=["add", "invite", "token", "list", "remove"])
     p.add_argument("name", nargs="?")
     p.add_argument("--role", default="proofreader", choices=["reader", "proofreader", "validator", "coordinator", "admin"])
-    p.add_argument("--port", type=int, default=8770, help="for the sign-in link it prints")
+    p.add_argument("--port", type=int, default=8770, help="for the invite link it prints")
     p = plain_cmd("merge", cmd_merge, "merge a duplicate book into another: copy what's missing, then move it to data/trash")
     p.add_argument("dup", help="the book id to merge away")
     p.add_argument("keep", help="the book id to keep")

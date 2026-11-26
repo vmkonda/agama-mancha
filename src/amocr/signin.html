@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sign in · Agama Mancha</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%276%27 fill=%27%23812911%27/%3E%3Ctext x=%2716%27 y=%2723%27 font-size=%2720%27 text-anchor=%27middle%27 fill=%27%23f0e1da%27 font-family=%27serif%27%3E%E0%A4%86%3C/text%3E%3C/svg%3E">
+<style>
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { color: var(--text); font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; min-height: 100vh; }
+main { max-width: 420px; margin: 48px auto; padding: 0 16px; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 22px 24px; }
+h1 { font-family: Raleway, sans-serif; font-size: 20px; margin: 0 0 4px; }
+p { margin: 6px 0 14px; color: var(--muted); font-size: 14px; }
+label { display: block; font-size: 13px; color: var(--muted); margin: 12px 0 4px; }
+input { width: 100%; font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; }
+button { font: inherit; margin-top: 16px; padding: 8px 16px; border-radius: 6px; border: 1px solid var(--accent); background: var(--accent); color: var(--panel); cursor: pointer; }
+button.quiet { background: transparent; color: var(--accent); }
+.err { color: #a3301b; font-size: 14px; margin-top: 12px; min-height: 1em; }
+.ok { color: #1d7a34; font-size: 14px; margin-top: 12px; }
+.token { font-family: ui-monospace, monospace; font-size: 12px; background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 8px; overflow-wrap: anywhere; margin-top: 8px; }
+section + section { margin-top: 18px; }
+.brand nav[hidden] { display: none; }
+</style>
+<link rel="stylesheet" href="/theme.css">
+</head>
+<body>
+<div class="brand">
+  <a class="mark" href="/library" title="Agama Mancha">
+    <span class="name">Agama Mancha</span><span class="deva" lang="sa">आगम मञ्च</span>
+  </a>
+  <span class="by">Vimarsha Foundation · members only</span>
+  <nav aria-label="Sections" id="nav" hidden><a href="/library">Library</a><a href="/proofread">Proofreading</a><a href="/librarian">Librarian</a></nav>
+</div>
+<main id="main"></main>
+<script>
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const post = async (u, body) => { const r = await fetch(u, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body || {}) });
+  const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || r.status); return j; };
+const q = new URLSearchParams(location.search);
+const next = () => { const n = q.get("next") || "/library"; return n.startsWith("/") && !n.startsWith("//") ? n : "/library"; };
+
+function login() {
+  document.title = "Sign in · Agama Mancha";
+  $("main").innerHTML = `<form class="card" id="f"><h1>Sign in</h1><p>For members of Vimarsha.</p>
+    <label for="n">Name</label><input id="n" autocomplete="username" required autofocus>
+    <label for="p">Password</label><input id="p" type="password" autocomplete="current-password" required>
+    <button>Sign in</button><div class="err" id="e"></div>
+    <p style="margin-top:16px">New, or forgot your password? Ask the coordinator for an invite link.</p></form>`;
+  $("f").onsubmit = async (ev) => { ev.preventDefault(); $("e").textContent = "";
+    try { await post("/api/auth/login", { name: $("n").value, password: $("p").value }); location.replace(next()); }
+    catch (err) { $("e").textContent = err.message; $("p").value = ""; $("p").focus(); } };
+}
+
+function invite() {
+  document.title = "Choose your password · Agama Mancha";
+  $("main").innerHTML = `<form class="card" id="f"><h1>Welcome</h1><p>Choose a password (at least 10 characters). The link works once.</p>
+    <label for="p">Password</label><input id="p" type="password" autocomplete="new-password" minlength="10" required autofocus>
+    <label for="p2">Again</label><input id="p2" type="password" autocomplete="new-password" minlength="10" required>
+    <button>Set password and sign in</button><div class="err" id="e"></div></form>`;
+  $("f").onsubmit = async (ev) => { ev.preventDefault(); $("e").textContent = "";
+    if ($("p").value !== $("p2").value) { $("e").textContent = "The two passwords differ."; return; }
+    try { const r = await post("/api/auth/invite", { code: q.get("code") || "", password: $("p").value });
+      history.replaceState(null, "", "/invite"); location.replace("/library"); }
+    catch (err) { $("e").textContent = err.message; } };
+}
+
+async function account() {
+  document.title = "Account · Agama Mancha";
+  const me = await (await fetch("/api/me")).json();
+  if (!me.name) { location.replace("/login?next=/account"); return; }
+  $("nav").hidden = false;
+  $("main").innerHTML = `<div class="card"><h1>${esc(me.name)}</h1><p>${esc(me.role)}</p>
+    <section><form id="pw"><label for="c">Current password</label><input id="c" type="password" autocomplete="current-password" required>
+      <label for="n1">New password</label><input id="n1" type="password" autocomplete="new-password" minlength="10" required>
+      <button>Change password</button><div class="err" id="pe"></div></form></section>
+    <section><label>Listener token, for Claude Code on your own machine</label>
+      <p>A new token replaces the old one. It is shown once: put it in <code>~/.config/agama-mancha/hosted.env</code> on your machine, nowhere else.</p>
+      <button class="quiet" id="tok" type="button">Issue a new listener token</button><div id="tout"></div></section>
+    <section><button class="quiet" id="out" type="button">Sign out</button></section></div>`;
+  $("pw").onsubmit = async (ev) => { ev.preventDefault(); $("pe").className = "err"; $("pe").textContent = "";
+    try { await post("/api/auth/password", { current: $("c").value, new: $("n1").value }); $("pe").className = "ok"; $("pe").textContent = "Password changed."; $("c").value = $("n1").value = ""; }
+    catch (err) { $("pe").textContent = err.message; } };
+  $("tok").onclick = async () => {
+    if (!confirm("Issue a new listener token? The old one stops working.")) return;
+    try { const r = await post("/api/auth/token"); $("tout").innerHTML = `<div class="token">${esc(r.token)}</div><p>Copy it now; it won't be shown again.</p>`; }
+    catch (err) { $("tout").innerHTML = `<div class="err">${esc(err.message)}</div>`; } };
+  $("out").onclick = async () => { await post("/api/auth/logout"); location.replace("/login"); };
+}
+
+({ "/login": login, "/invite": invite, "/account": account }[location.pathname] || login)();
+</script>
+</body>
+</html>
