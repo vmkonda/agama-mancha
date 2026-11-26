@@ -362,6 +362,20 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json({"ok": True})
             if act == "token":
                 return self._json({"token": members.issue_token(name)})
+            if act == "helper":                       # the member's Claude helper, with a fresh helper token inside
+                from . import helper
+
+                proto = (self.headers.get("X-Forwarded-Proto") or "http").split(",")[0].strip()
+                base = f"{proto}://{self.headers.get('Host')}"
+                body = helper.download(base, members.issue_token(name, "helper"))
+                self.send_response(HTTPStatus.OK)
+                self.send_header("Content-Type", "application/octet-stream")
+                self.send_header("Content-Disposition", 'attachment; filename="Agama Mancha Claude helper.cmd"')
+                self.send_header("Content-Length", str(len(body)))
+                self.send_header("Cache-Control", "no-store")
+                self.end_headers()
+                self.wfile.write(body)
+                return
         except PermissionError as e:
             return self._err(str(e), HTTPStatus.TOO_MANY_REQUESTS)
         except ValueError as e:
@@ -429,6 +443,13 @@ class Handler(BaseHTTPRequestHandler):
                 me = members.who() if self.hosted else None
                 return self._json({"messages": chat.thread(work, me)[-200:], "listening": chat.listening(work, me),
                                    "applied": sorted(chat.applied(work)), "me": me})
+            if parts[:3] == ["api", "helper", "next"]:  # a member's Claude helper: their next question, as a task
+                from . import helper
+
+                q = parse_qs(url.query)
+                t = helper.next_task(self.works, members.who() if self.hosted else None,
+                                     timeout=min(float((q.get("timeout") or ["25"])[0] or 25), 55))
+                return self._json({"task": t})
             if parts[:3] == ["api", "chat", "next"]:   # a member's listener, long-polling for their proofreading questions
                 return self._json(self._chat_next(parse_qs(url.query)))
             if parts[0] == "api" and len(parts) == 5 and parts[2:4] == ["chat", "image"]:
@@ -596,6 +617,13 @@ class Handler(BaseHTTPRequestHandler):
         parts = [p for p in urlparse(self.path).path.split("/") if p]
         if parts[:2] == ["api", "ocr"]:
             return self._ocr_post(parts[2:])
+        if parts == ["api", "helper", "answer"]:          # a member's Claude helper, answering their question
+            from . import helper
+
+            try:
+                return self._json(helper.submit(self.works, members.who() if self.hosted else None, self._body()))
+            except (ValueError, LookupError, json.JSONDecodeError) as e:
+                return self._err(str(e))
         if parts[:2] == ["api", "auth"]:
             if not self.hosted:
                 return self._err("signing in is only for a hosted server", HTTPStatus.NOT_FOUND)

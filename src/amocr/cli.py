@@ -318,7 +318,7 @@ def _chat_remote(args) -> None:
         end = _time.time() + args.timeout
         print(f"listening on {srv} for {'all your books' if not book else book} ...", flush=True)
         while _time.time() < end:
-            r = remote.call(srv, "/api/chat/next", args.token, query={"work": book, "timeout": 25}, timeout=60)
+            r = remote.call_waiting(srv, "/api/chat/next", args.token, query={"work": book, "timeout": 25}, timeout=60)
             m = r.get("message")
             if not m:
                 continue

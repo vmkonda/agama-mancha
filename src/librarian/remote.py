@@ -7,6 +7,7 @@ import json
 import os
 import shutil
 import sys
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -68,10 +69,35 @@ def check(base: str | None, token: str | None = None) -> str:
         # macOS blocks Python here but lets curl through: the calls below go through curl.
     try:
         r = call(base, "/api/librarian/study", token, timeout=10)
+    except Unreachable as e:
+        return (f"can't reach {base} ({str(e).split('(', 1)[-1].rstrip(')')}). Is the server running and awake, "
+                "on the same network, and allowed through its firewall?")
     except SystemExit as e:
         return f"reached {base}, but it refused: {e}"
     return f"connected to {base} as {r.get('me') or '(local server, no members)'}; " + \
         ("a listener is already active for you" if r.get("listening") else "no listener active yet")
+
+
+class Unreachable(SystemExit):
+    """The server couldn't be reached (down, restarting, asleep): worth trying again later, unlike a refusal."""
+
+
+def call_waiting(base: str, path: str, token: str | None = None, *, log=None, **kw) -> dict:
+    """`call`, but riding out a server that is restarting or briefly unreachable: tries again every 15 s
+    (saying so once), while a refusal (a wrong token, say) still stops at once."""
+    log = log or (lambda m: print(m, flush=True))
+    told = False
+    while True:
+        try:
+            r = call(base, path, token, **kw)
+            if told:
+                log(f"{base} is back")
+            return r
+        except Unreachable as e:
+            if not told:
+                log(f"{e}; trying again every 15 s (Ctrl-C to stop)")
+                told = True
+            time.sleep(15)
 
 
 def _blocked(e: BaseException) -> bool:
@@ -122,8 +148,11 @@ def call(base: str, path: str, token: str | None = None, body: dict | None = Non
         raise SystemExit(f"{base}: {msg}") from None
     except (urllib.error.URLError, OSError) as e:
         if not (_blocked(e) and shutil.which("curl")):
-            raise SystemExit(f"{base}: can't connect ({getattr(e, 'reason', e)})") from None
-    code, out = _via_curl("POST" if body is not None else "GET", url, tok, data, timeout)
+            raise Unreachable(f"{base}: can't connect ({getattr(e, 'reason', e)})") from None
+    try:
+        code, out = _via_curl("POST" if body is not None else "GET", url, tok, data, timeout)
+    except OSError as e:
+        raise Unreachable(f"{base}: can't connect ({e})") from None
     try:
         payload = json.loads(out or b"{}")
     except ValueError:

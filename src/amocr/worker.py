@@ -39,7 +39,7 @@ def run(server: str, token: str | None = None, engines: list[str] | None = None,
     done = 0
     try:
         while True:
-            jobs = remote.call(server, "/api/ocr/lease", token, body={"engines": list(engs), "n": batch, "host": host}).get("jobs", [])
+            jobs = remote.call_waiting(server, "/api/ocr/lease", token, log=log, body={"engines": list(engs), "n": batch, "host": host}).get("jobs", [])
             if not jobs:
                 if once:
                     break

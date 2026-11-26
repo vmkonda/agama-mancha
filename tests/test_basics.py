@@ -1068,3 +1068,112 @@ def test_hosted_proofreading_chat(tmp_path, monkeypatch):
     finally:
         httpd.shutdown()
         server.Handler.hosted = False
+
+
+def _helper_server(tmp_path, monkeypatch):
+    """A hosted test server with one book whose page 1 has a line, two members and a question from Anna."""
+    import json
+    import socket
+    import threading
+    from http.server import ThreadingHTTPServer
+
+    from amocr import chat, members, server
+    from amocr.catalog import load_works
+
+    monkeypatch.setenv("AMOCR_DATA", str(tmp_path))
+    w = _queue_book(tmp_path)
+    (w.page_dir(1) / "ocr").mkdir(parents=True, exist_ok=True)
+    (w.page_dir(1) / "ocr" / "surya-2.5-0.24.0.json").write_text(json.dumps(
+        {"text": "rama vanam\n", "lines": [{"text": "rama vanam", "bbox": [2, 2, 30, 15]}]}), encoding="utf-8")
+    members.add("Anna", "proofreader"); members.add("Bala", "proofreader")
+    q = chat.post(w, "user", "Is this right?", page=1, n=1, by="Anna")
+    server.Handler.hosted, server.Handler.works = True, load_works()
+    with socket.socket() as s_:
+        s_.bind(("127.0.0.1", 0)); port = s_.getsockname()[1]
+    httpd = ThreadingHTTPServer(("127.0.0.1", port), server.Handler)
+    threading.Thread(target=httpd.serve_forever, daemon=True).start()
+    return w, q, httpd, f"http://127.0.0.1:{port}"
+
+
+def test_claude_helper_tasks(tmp_path, monkeypatch):
+    """The helper's server side: a separate helper token, the member's own question as a complete task
+    (rules, the line, its image), the answer checked and posted with its fix, the download filled in."""
+    import pytest
+
+    pytest.importorskip("lancedb")
+    from amocr import chat, members, server
+    from librarian import remote
+
+    w, q, httpd, base = _helper_server(tmp_path, monkeypatch)
+    try:
+        listener = members.issue_token("Anna")
+        helper_tok = members.issue_token("Anna", "helper")
+        assert members.check(listener) == ("Anna", "proofreader") == members.check(helper_tok)   # both work
+        bala = members.issue_token("Bala", "helper")
+        assert remote.call(base, "/api/helper/next", bala, query={"timeout": 1})["task"] is None   # not Bala's
+        t = remote.call(base, "/api/helper/next", helper_tok, query={"timeout": 1})["task"]
+        assert t["kind"] == "proofread" and t["id"] == q["id"] and "page 1 line 1: rama vanam" in t["prompt"]
+        assert "{IMAGE1}" in t["prompt"] and remote.fetch(base, t["images"][0], helper_tok)[:4] == b"\x89PNG"
+        assert "Transcribe what is printed" in t["prompt"] and t["schema"]["required"] == ["answer", "fixes"]
+        assert chat.listening(w, "Anna") and not chat.listening(w, "Chitra")      # Chitra has no helper running
+        with pytest.raises(SystemExit, match="no such question of yours"):
+            remote.call(base, "/api/helper/answer", bala, body={"kind": "proofread", "work": w.id, "id": q["id"], "answer": "x"})
+        r = remote.call(base, "/api/helper/answer", helper_tok, body={"kind": "proofread", "work": w.id, "id": q["id"],
+                        "answer": "Printed rāma vanaṃ.", "fixes": [{"page": 1, "line": 1, "to": "rama vanam."}]})
+        assert r["reply_to"] == q["id"] and r["actions"][0]["to"] == "rama vanam."
+        assert remote.call(base, "/api/helper/next", helper_tok, query={"timeout": 1})["task"] is None   # answered
+        from amocr import helper
+
+        f = helper.download(base, helper_tok).decode()
+        assert f.startswith("@echo off\r\n") and f'$Server = "{base}"' in f and f'$Token = "{helper_tok}"' in f
+        assert "__TOKEN__" not in f and "\r\n" in f and "\n" not in f.replace("\r\n", "")
+    finally:
+        httpd.shutdown()
+        server.Handler.hosted = False
+
+
+def test_claude_helper_runs_on_windows(tmp_path, monkeypatch):
+    """The downloaded helper file itself, in Windows PowerShell, against a test server, with a stand-in
+    `claude` that answers the way Claude Code does (-p --output-format json --json-schema)."""
+    import os
+    import subprocess
+    import sys
+    import time
+
+    import pytest
+
+    if sys.platform != "win32":
+        pytest.skip("the helper is a Windows file")
+    pytest.importorskip("lancedb")
+    from amocr import chat, helper, members, server
+
+    w, q, httpd, base = _helper_server(tmp_path, monkeypatch)
+    fake = tmp_path / "bin"
+    fake.mkdir()
+    (fake / "claude.cmd").write_text(
+        "@echo off\r\n"
+        'if "%1"=="auth" (echo {"loggedIn": true}& exit /b 0)\r\n'
+        'more > "%~dp0prompt.txt"\r\n'
+        'echo {"type":"result","is_error":false,"result":"","structured_output":'
+        '{"answer":"Printed with a danda.","fixes":[{"page":1,"line":1,"to":"rama vanam |"}]}}\r\n', encoding="ascii")
+    f = tmp_path / "Agama Mancha Claude helper.cmd"
+    f.write_bytes(helper.download(base, members.issue_token("Anna", "helper")))
+    env = dict(os.environ, PATH=f"{fake};{os.environ['PATH']}")
+    p = subprocess.Popen(["cmd", "/c", str(f)], env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    try:
+        end = time.time() + 90
+        while time.time() < end:
+            got = [m for m in chat.load(w) if m.get("reply_to") == q["id"]]
+            if got:
+                break
+            time.sleep(1)
+        else:
+            p.kill()
+            pytest.fail("no answer from the helper:\n" + p.communicate(timeout=10)[0].decode(errors="replace"))
+        assert got[0]["text"] == "Printed with a danda." and got[0]["actions"][0]["to"] == "rama vanam |"
+        prompt = (fake / "prompt.txt").read_text(encoding="utf-8", errors="replace")
+        assert "rama vanam" in prompt and "image1.png" in prompt and "{IMAGE1}" not in prompt
+    finally:
+        p.kill()
+        httpd.shutdown()
+        server.Handler.hosted = False

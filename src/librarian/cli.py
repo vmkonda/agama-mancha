@@ -158,7 +158,7 @@ def _remote(a, srv: str) -> None:
     elif a.action == "wait":
         end = time.time() + a.timeout
         while time.time() < end:
-            r = remote.call(srv, "/api/librarian/study/next", a.token, query={"timeout": 25}, timeout=60)
+            r = remote.call_waiting(srv, "/api/librarian/study/next", a.token, query={"timeout": 25}, timeout=60)
             m = r.get("message")
             if not m:
                 continue

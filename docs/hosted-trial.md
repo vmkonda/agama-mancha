@@ -157,6 +157,25 @@ answers with `uv run amocr chat <book> reply <id> --hosted --text "…" --fix PA
 fixes are checked on the server (pages you've proofread or validated stay locked), and you apply them in
 the panel as before. Restricted books are never handed to the listener.
 
+## The Claude helper: Claude for volunteers, with no setup
+
+Volunteers don't use Claude Code or a terminal. On their **Account** page they click *Download my
+Claude helper (Windows)* and get a file made for them: the server's address and a fresh personal
+helper token are already inside (separate from a listener token, so it never breaks one). They
+double-click it whenever they want Claude's help:
+
+- the first time, it offers to install Claude Code (Anthropic's installer) and opens the Claude
+  sign-in page: they sign in with their claude.ai account (a paid plan, Pro or higher);
+- then it says *Claude is ready to help you on Agama Mancha*, and the panels show *Claude is
+  listening*. Questions from *Check with Claude*, the Proofread chat and *Study with Claude* are
+  answered inline, with *Apply* buttons as before; closing the window stops it.
+
+The server builds each task (the rules, the lines or passages, links to the images, the shape of
+the answer), so improving the prompts reaches every helper without a new download. The helper runs
+`claude -p` allowed to read that image and nothing else (no commands, no other files). Downloading
+again replaces the file; a coordinator can turn a member's access off. If Windows shows *Windows
+protected your PC* the first time, choose *More info* → *Run anyway*.
+
 ## OCR workers: your Mac reads pages for the server
 
 The server keeps a queue of pages waiting for an engine; a **worker** on a member's machine leases a
