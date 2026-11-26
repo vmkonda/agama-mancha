@@ -1404,3 +1404,32 @@ def test_english_needs_the_english_model(tmp_path):
     eng = Tesseract(langs="eng").run(tmp_path / "line.png").text.strip()
     mixed = Tesseract(langs="san+hin+eng").run(tmp_path / "line.png").text.strip()
     assert cer(eng, text) < 0.05 and cer(mixed, text) < 0.1
+
+
+def test_ocr_queue_report(tmp_path, monkeypatch):
+    """What the Library page and Pages map show: progress per book, speed, time left, set-aside pages."""
+    import json
+    from datetime import datetime, timedelta, timezone
+
+    from amocr import ocrqueue
+
+    monkeypatch.setenv("AMOCR_DATA", str(tmp_path))
+    now = datetime.now(timezone.utc)
+    at = lambda m: (now - timedelta(minutes=m)).isoformat(timespec="seconds")
+    jobs = {}
+    for p in range(1, 7):        # book A: 4 read in the last 20 min, 1 waiting, 1 set aside
+        st = "done" if p <= 4 else "queued" if p == 5 else "failed"
+        jobs[f"A-{p}"] = {"book": "B-a", "page": p, "engine": "surya", "state": st, "queued_at": at(60),
+                          **({"done_at": at(20 - 5 * p)} if st == "done" else {}), **({"last_error": "boom"} if st == "failed" else {})}
+    for p in range(1, 4):        # book B, behind A in line: 3 waiting
+        jobs[f"B-{p}"] = {"book": "B-b", "page": p, "engine": "surya", "state": "queued", "queued_at": at(30)}
+    ocrqueue.path().parent.mkdir(parents=True, exist_ok=True)
+    ocrqueue.path().write_text(json.dumps({"jobs": jobs}), encoding="utf-8")
+
+    q = {r["book"]: r for r in ocrqueue.status()["queue"]}
+    a, b = q["B-a"], q["B-b"]
+    assert (a["total"], a["done"], a["left"], a["failed"]) == (6, 4, 1, 1)
+    assert a["failed_pages"] == [{"page": 6, "error": "boom"}]
+    assert a["per_hour"] and a["eta_minutes"] is not None
+    assert b["eta_minutes"] > a["eta_minutes"]      # B waits for A's pages first
+    assert ocrqueue.book_pages("B-a")[5] == {"surya": "queued"} and ocrqueue.book_pages("B-a")[6] == {"surya": "failed"}

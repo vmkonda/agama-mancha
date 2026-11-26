@@ -442,7 +442,7 @@ class Handler(BaseHTTPRequestHandler):
             if parts == ["api", "ocr", "queue"]:
                 from . import ocrqueue
 
-                return self._json(ocrqueue.status())
+                return self._json(ocrqueue.status(self.works))
             if parts == ["api", "version"]:              # which code this server is running (redeploy checks it)
                 return self._json({"code": CODE_VERSION})
             if parts == ["api", "me"]:
@@ -508,7 +508,10 @@ class Handler(BaseHTTPRequestHandler):
                     return self._json({str(k): v for k, v in grid.warnings(work).items()})
                 from . import presence
 
-                return self._json(grid.pages(work) | {"busy": {str(k): v for k, v in presence.busy(work.id, members.who()).items()}})
+                from . import ocrqueue
+
+                return self._json(grid.pages(work) | {"busy": {str(k): v for k, v in presence.busy(work.id, members.who()).items()},
+                                                      "ocr": {str(k): v for k, v in ocrqueue.book_pages(work.id).items()}})
             if parts[0] == "api" and len(parts) == 3 and parts[2] == "patterns":
                 from . import patterns as pat
 

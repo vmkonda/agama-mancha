@@ -251,6 +251,13 @@ pages leased over HTTP, read at about 12 s a page, and the readings were byte fo
 docs/engines.md), so a worker reads an English book with `eng` and a Devanagari one with `san+hin`.
 Workers need those models installed (`uv run amocr setup-models` installs san, hin and eng).
 
+**Seeing the queue.** The **Library** page shows, in each queued book's row, how far OCR has got and
+roughly how long is left (*OCR · Surya: 200/460 read · 10 being read on <machine> · 249 waiting · about
+52 min left*), worked out from the last hour's speed and the books ahead of it in line, plus any pages
+set aside (hover for why). Its status line names the workers online, or says *no OCR worker online*.
+A book's **Pages** map marks each page in the queue with a dot: hollow while waiting, filled while being
+read, red if set aside. On the server, `uv run amocr queue` prints the same.
+
 ## What this shows
 
 - **Members only:** every page, scan and API call needs a signed-in session (name and password) or,
