@@ -118,3 +118,90 @@ First build of the pilot (from Surya, unproofread): 23 chapters, 1,317 verse uni
 - Claims are **whole books** first.
 - **Anyone** may release a claim that has been stale for 14 days; the release is recorded.
 - Material folder: `[OCR Mirror]/Agama Mancha`; legible names; Vimarsha's internal use.
+
+## Proposed: a hosted version (design, not decided)
+
+*Written 2026-11-25 from a discussion with the owner. Nothing here is built yet; the open
+decisions at the end come first.*
+
+### Goal
+
+One Agama Mancha server that the team (and later a small circle of scholars) use from a
+browser: the Library, Proofreading, the Librarian (works, search, read in context, study,
+evaluation), each person with **their own Claude**. Not one server per person.
+
+### Why today's setup doesn't carry over as it is
+
+Today the app and a person's Claude Code session meet through files on the same machine (the
+proofreading chat and the study chat: `amocr chat wait`, `librarian study wait`). A hosted
+version replaces that bridge; it does not copy it per person.
+
+### How each person's Claude is reached
+
+A web page can't use someone's Claude **subscription** (Pro, Max): subscriptions work only in
+Anthropic's own apps (claude.ai, Claude Desktop, Claude Code). Three routes, all answering under
+the same librarian rules (they live in the tool's instructions and CLAUDE.md, not in a route):
+
+| Route | Who writes the answer | Needs | In the app |
+|---|---|---|---|
+| **1. Listener** | the person's Claude Code on their own machine, connected to the server | their Pro/Max plan; Claude Code running while they study | ask in the panel, the answer appears there |
+| **2. Own API key** | the server, calling Claude with the person's key | an API key, billed per use | ask in the panel, the answer appears there; nothing to install |
+| **3. Connector** | the person's claude.ai / Claude Desktop, with the Agama Mancha connector added | their Pro/Max plan | they ask in Claude; the cited answer is saved to their study thread and shows in the panel |
+
+Recommendation: routes 1 and 2 in the panel, route 3 for people who live in Claude. The server
+never sees subscription credentials. For route 2, keys stay in the browser session and are never
+stored.
+
+### The listener needs no access to anyone's network
+
+Every connection starts on the person's side, like a browser or Claude Code itself:
+
+1. The person runs a listener in their Claude Code with a personal token from their account.
+2. It asks the server over HTTPS for their pending questions (a long-held request) and reconnects.
+3. A question asked in the panel goes to that person's waiting listener only.
+4. Claude reads the passages (through the hosted librarian), answers, and the listener posts the
+   answer back over HTTPS; the panel shows it.
+
+Only outbound HTTPS from the person's machine; no inbound access, VPN or port forwarding; the
+server needs only its public HTTPS port. A token sees only its owner's questions and can be
+revoked.
+
+### Architecture
+
+| Part | Today | Hosted |
+|---|---|---|
+| Web app | `amocr serve` on 127.0.0.1, one person | the same pages behind accounts and HTTPS |
+| Librarian | MCP over stdio for the local Claude Code | the same tools over HTTP (MCP streamable HTTP), per-user auth: for listeners and connectors |
+| Library and index | `data/library/` (e-texts, units, LanceDB) on each machine | one copy on the server; imports and rebuilds there |
+| Scans and page readings | each volunteer's `data/works/`, shared through Proton | on the server, synced from the material folder |
+| Board, claims, proofreading saves, history, study chats, evaluation | files, merged through Proton | a small database with per-user records (the ladder, page grid and history carry over as they are) |
+| Identity | the `operator` name in `data/config.toml` | accounts; the operator name becomes the account |
+
+### Privacy, rights, access
+
+- **Internal use stays the rule.** The scans and the printed books' text are for Vimarsha only:
+  accounts by invitation, roles (proofreader, validator, coordinator, reader).
+- **Restricted works** (design doc's access tier): readable and searchable on the server, but never
+  sent to an external model by any route; the server enforces it, not the person's Claude.
+- **Licences travel with each work** (GRETIL's CC BY-NC-SA: non-commercial, share-alike if shared).
+  Opening the library to outside scholars is a sharing act: check each work's licence first.
+
+### What changes in the code (when it's decided)
+
+1. Accounts, sessions, roles; the operator name from the login.
+2. A database for the board, claims, ladder, history, study and evaluation, replacing the files
+   (and Proton as the coordination channel).
+3. The librarian MCP server over HTTP with per-user tokens; the study queue as an HTTP API that
+   listeners long-poll; `librarian study wait --server …` on the person's side.
+4. Route 2: an optional per-person API key in the browser session; the server calls Claude with it.
+5. Route 3: a connector tool that saves an answer to the person's study thread.
+6. Sync of the library and the material folder to the server; backups.
+
+### Open decisions
+
+1. **Where it runs** (a VPS, a Vimarsha machine) and who administers it.
+2. **Who gets accounts** at first: the team only, or scholars too (and then, which works).
+3. **Which Claude routes** to offer at launch (1 and 3 cost Vimarsha nothing; 2 bills each person).
+4. **Proton's role**: remains the store of originals with the server syncing from it, or the
+   server becomes the store and Proton the backup.
+5. **When**: after Mālinī is finished end to end, or alongside it.
