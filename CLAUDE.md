@@ -63,10 +63,12 @@ When a person is proofreading in the viewer and asks for help:
 
 ## Studying with the librarian (the reader's study chat)
 
-When asked to "listen to the study chat on the hosted server": the same, with `AGAMA_SERVER` and
-`AGAMA_TOKEN` set (the person's own token; never ask for it in the chat, they set it in the
-environment): `librarian study wait`, `get`, `search` and `reply` then talk to that server, and you
-answer only that person's questions with their own Claude (docs/hosted-trial.md).
+When asked to "listen to the study chat on the hosted server": first `uv run librarian hosted check`;
+if it isn't "connected", tell the person what it says (docs/hosted-trial.md has the fixes). The server
+and token live in `~/.config/agama-mancha/hosted.env`, which the person writes themselves: never ask
+for the token in the chat, never print or log it. Then the same loop as below with `--hosted`:
+`librarian --hosted study wait` (background), `librarian --hosted get` / `search`,
+`librarian --hosted study reply …`. You answer only that person's questions, with their own Claude.
 
 When asked to "listen to the study chat": run `uv run librarian study wait` in the background; it
 exits with the person's question, the passage they are reading (with its commentary and
