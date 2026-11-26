@@ -857,3 +857,21 @@ def test_hosted_members_only(tmp_path, monkeypatch):
     study.post("user", "Bala's question", by="Bala")
     assert [m["text"] for m in study.thread("Anna")] == ["Anna's question"]
     assert [m["text"] for m in study.pending("Bala")] == ["Bala's question"] and len(study.thread(None)) == 2
+
+
+def test_windows_scripts_parse():
+    """The Windows serve/redeploy scripts are at least valid PowerShell (checked on the Windows CI runner)."""
+    import shutil
+    import subprocess
+    from pathlib import Path
+
+    import pytest
+
+    ps = shutil.which("powershell") or shutil.which("pwsh")
+    if not ps:
+        pytest.skip("no PowerShell here (the Windows CI runner has it)")
+    for f in sorted((Path(__file__).parent.parent / "scripts" / "windows").glob("*.ps1")):
+        cmd = ("$e=$null; [System.Management.Automation.Language.Parser]::ParseFile('%s',[ref]$null,[ref]$e) | Out-Null; "
+               "if ($e) { $e | ForEach-Object { $_.ToString() }; exit 1 }" % str(f).replace("'", "''"))
+        r = subprocess.run([ps, "-NoProfile", "-Command", cmd], capture_output=True, text=True)
+        assert r.returncode == 0, f"{f.name}: {r.stdout}{r.stderr}"
