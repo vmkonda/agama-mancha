@@ -247,6 +247,13 @@ that fails three times is set aside. A reading is saved exactly like `amocr ocr`
 existing one, and credited to the member whose worker read it. Rehearsed on the Mac with real Surya: three
 pages leased over HTTP, read at about 12 s a page, and the readings were byte for byte the ones made locally.
 
+**Seeing the queue.** The **Library** page shows, in each queued book's row, how far OCR has got and
+roughly how long is left (*OCR · Surya: 200/460 read · 10 being read on <machine> · 249 waiting · about
+52 min left*), worked out from the last hour's speed and the books ahead of it in line, plus any pages
+set aside (hover for why). Its status line names the workers online, or says *no OCR worker online*.
+A book's **Pages** map marks each page in the queue with a dot: hollow while waiting, filled while being
+read, red if set aside. On the server, `uv run amocr queue` prints the same.
+
 ## What this shows
 
 - **Members only:** every page, scan and API call needs a signed-in session (name and password) or,

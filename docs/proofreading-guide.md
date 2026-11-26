@@ -38,6 +38,9 @@ suggested fixes, is shown on that page in Proofread.
   proofread* and *Next to validate* jump to the next page that needs you.
   Front matter and the indexes at the back are grouped separately and get no
   warnings, since they aren't verse and commentary.
+  A page still waiting for OCR has a hollow dot in its corner, a filled one while
+  a machine is reading it, and a red one if it was set aside; the Library page
+  shows how far the book's OCR has got and roughly how long is left.
 
 - **View** shows one reading of the page. Choose which one in the menu:
   - `claude-code-…`: Claude's reading, with verses, commentary and footnotes

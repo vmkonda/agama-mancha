@@ -156,15 +156,69 @@ def release(who: str, jid: str, key: str, error: str = "") -> dict:
     return {"state": j["state"]}
 
 
-def status() -> dict:
+def _t(iso: str | None) -> float | None:
+    try:
+        return datetime.fromisoformat(iso).timestamp() if iso else None
+    except ValueError:
+        return None
+
+
+def status(works: dict | None = None) -> dict:
+    """The queue as people want to see it: per book and engine, how far it is and roughly how long
+    is left; and which workers are online. `books` (counts by "book · engine") is kept for the CLI."""
     with _LOCK:
         d = _load()
         _expire(d)
+    jobs = list(d["jobs"].values())
+    now = time.time()
     books: dict[str, dict] = {}
-    for j in d["jobs"].values():
+    rows: dict[tuple[str, str], dict] = {}
+    for j in jobs:
         b = books.setdefault(f"{j['book']} · {j['engine']}", {"queued": 0, "leased": 0, "done": 0, "failed": 0})
         b[j["state"]] += 1
-    now = time.time()
+        r = rows.setdefault((j["book"], j["engine"]), {"book": j["book"], "engine": j["engine"], "queued": 0, "leased": 0,
+                                                       "done": 0, "failed": 0, "failed_pages": [], "reading_on": set(),
+                                                       "queued_at": j.get("queued_at"), "last_done_at": None})
+        r[j["state"]] += 1
+        if j.get("queued_at") and (not r["queued_at"] or j["queued_at"] < r["queued_at"]):
+            r["queued_at"] = j["queued_at"]
+        if j["state"] == "done" and (not r["last_done_at"] or (j.get("done_at") or "") > r["last_done_at"]):
+            r["last_done_at"] = j.get("done_at")
+        if j["state"] == "failed":
+            r["failed_pages"].append({"page": j["page"], "error": j.get("last_error", "")})
+        if j["state"] == "leased":
+            r["reading_on"].add(j["lease"].get("host") or j["lease"].get("by") or "")
+    # Speed per engine over the last hour (workers take a book at a time, in page order), and so
+    # how long until each book is done: its own pages plus those of the books ahead of it.
+    rate = {}
+    for eng in {j["engine"] for j in jobs}:
+        recent = sorted(t for j in jobs if j["engine"] == eng and j["state"] == "done"
+                        and (t := _t(j.get("done_at"))) and now - t < 3600)
+        if len(recent) >= 3:
+            rate[eng] = len(recent) / max((now - recent[0]) / 60, 5)        # pages per minute
+    out, ahead = [], {}
+    for (book, eng), r in sorted(rows.items()):
+        left = r["queued"] + r["leased"]
+        ahead[eng] = ahead.get(eng, 0) + left
+        w = (works or {}).get(book)
+        r.update(title=getattr(w, "title", "") or book, total=r["queued"] + r["leased"] + r["done"] + r["failed"],
+                 left=left, reading_on=sorted(x for x in r["reading_on"] if x),
+                 per_hour=round(rate[eng] * 60) if eng in rate else None,
+                 eta_minutes=round(ahead[eng] / rate[eng]) if left and eng in rate else None)
+        r["failed_pages"].sort(key=lambda x: x["page"])
+        out.append(r)
     workers = {w: {"engines": s["engines"], "host": s["host"], "seconds_ago": int(now - s["at"])}
                for w, s in _SEEN.items() if now - s["at"] < 180}
-    return {"books": books, "workers": workers}
+    return {"books": books, "queue": out, "workers": workers}
+
+
+def book_pages(book: str) -> dict[int, dict[str, str]]:
+    """For one book: page -> {engine: queued | leased | done | failed}, for the Pages map."""
+    with _LOCK:
+        d = _load()
+        _expire(d)
+    out: dict[int, dict[str, str]] = {}
+    for j in d["jobs"].values():
+        if j["book"] == book:
+            out.setdefault(j["page"], {})[j["engine"]] = j["state"]
+    return out
