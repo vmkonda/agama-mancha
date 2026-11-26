@@ -33,7 +33,8 @@ It is never published or exposed on the network: the scans are copyrighted.
   reviewer's name, a note, and a status on the ladder (draft, proofread, validated by a
   second person, problem, no text); proofread and validated mean every
   line has been checked against the print.
-- **Suggestions**: fixes learned from corrections, offered across the book (see CLAUDE.md).
+- **Suggested fixes**: rules learned from every save (and added by Claude) are offered on their pages in Proofread,
+  with Apply, Reject and Never (see CLAUDE.md). There is no separate Suggestions tab.
 - **Chat**: a panel where the proofreader talks to this Claude session. See below.
 
 ## "Listen to the viewer chat"

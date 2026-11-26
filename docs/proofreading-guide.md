@@ -25,12 +25,11 @@ with Proofreading one click away in the title band). When you're done for the da
 
 ## The viewer
 
-The scanned page is on the left and the text on the right. Along the top come
-the two modes you use most, **Proofread** and **Pages**, then **More tools ▸**.
-Proofreaders and validators start with only those two; **More tools ▸** opens
-**View**, **Compare** and **Suggestions** next to them (and **Fewer tools ◂**
-closes them again). The viewer remembers your choice. The viewer opens in
-Proofread, on the next page nobody has finished.
+The scanned page is on the left and the text on the right. Along the top:
+**Proofread**, **Pages**, **View** and **Compare**. The viewer opens in
+Proofread (for proofreaders and validators, on the next page nobody has
+finished). Everything that concerns one page, its warnings, scores and
+suggested fixes, is shown on that page in Proofread.
 
 - **Proofread** is where you correct the page.
 - **Pages** shows every page of the book as a small square in its status
@@ -39,8 +38,6 @@ Proofread, on the next page nobody has finished.
   proofread* and *Next to validate* jump to the next page that needs you.
   Front matter and the indexes at the back are grouped separately and get no
   warnings, since they aren't verse and commentary.
-
-Under **More tools**:
 
 - **View** shows one reading of the page. Choose which one in the menu:
   - `claude-code-…`: Claude's reading, with verses, commentary and footnotes
@@ -51,7 +48,6 @@ Under **More tools**:
   - `ground truth`: the proofread text, once someone has saved it.
 - **Compare** shows two readings with the differences marked: struck-through
   red text is in the first reading only, green text is in the second only.
-- **Suggestions** lists fixes learned from corrections, across the book.
 
 Use ◀ ▶ (or the arrow keys) to move between pages and the zoom slider to
 enlarge the scan.
@@ -198,25 +194,28 @@ For typing longer passages, turn on a Devanagari keyboard in your computer's
 settings (on a Mac: System Settings → Keyboard → Input Sources → Devanagari –
 QWERTY) and switch to it while you type.
 
-## Suggestions: fix a mistake once, everywhere
+## Suggested fixes: a mistake fixed once is suggested everywhere
 
 The reading engine (Surya) makes the same mistakes again and again: in this
-typeface आ often comes out as भ (भाता for आता), -त्व as -स्व, a reph (र्) gets
-dropped. Once you've corrected a few pages, the **Suggestions** tab finds the
-same mistake on every other page that isn't verified yet.
+typeface आ often comes out as भ (भाता for आता), ी as ो (उसो for उसी), -त्व as -स्व,
+a reph (र्) gets dropped. Every time a page is saved, the viewer compares it with
+what the engine read and learns each fix as a rule. From then on, Proofread shows
+the same fix on every other page where it applies, as you open it:
 
-1. Press **Learn from corrections**. It compares your corrected pages with what
-   the engine read and turns each fix into a rule.
-2. Go through the list. Each suggestion shows the line from the scan, the text
-   with the change marked, and the page highlighted on the left.
-   **a** accepts, **r** rejects, **j**/**k** move, **o** opens the page in Proofread.
-3. Reject anything that is printed that way: a misprint stays a misprint.
-   Accepting changes only that page's draft. The page still needs its full
-   line-by-line check before you save it as *proofread*.
+1. **Below the page bar**, *N suggested fixes on this page* lists each one: the
+   line, the change, and why (corrected on how many pages, or the book's usual
+   spelling). Click the line to go to it. The word is underlined in green in the
+   text, with a *fix* mark beside the line's tag, and the line under the text
+   offers **Apply** when your cursor is on it.
+2. **Apply** makes the change in the text, as if you had typed it (**Apply all**
+   does every one on the page). Nothing is saved until you save, and the page
+   still needs its full line-by-line check before you save it as *proofread*.
+3. **Reject** means "not here: the print has it this way" (a misprint stays a
+   misprint); it isn't suggested on this line again. **Never** switches the fix
+   off for the whole book.
 
-Rules that could do harm start switched off, such as a short word that is
-usually right as read, or a fix inside words. The rule list at the bottom of
-the tab shows them, with a note, and lets you switch any rule on or off.
+Fixes that could do harm start switched off, such as a short word that is usually
+right as read, or a fix inside words, and are never suggested.
 
 ## Working with Claude while you proofread
 
@@ -224,8 +223,7 @@ The **Chat** button (top right of the viewer) opens a panel for talking to your
 own Claude Code session. Start it once: in your Claude Code session, say
 **listen to the viewer chat**. The panel then shows "Claude is listening".
 
-- Questions are about the line your cursor is on in Proofread (or the current
-  suggestion); untick "about …" to ask about the book in general.
+- Questions are about the line your cursor is on in Proofread; untick "about …" to ask about the book in general.
 - **⌘/Ctrl ↵** sends. Answers appear in the panel within a few seconds.
 - **Check with Claude** (next to Save in Proofread, or **⌘/Ctrl K**) asks Claude to
   compare the line your cursor is on with the print. Select several lines to check
@@ -234,7 +232,7 @@ own Claude Code session. Start it once: in your Claude Code session, say
   **Apply to the draft** (or **Apply all** when there are several), and
   **⌘/Ctrl ⇧ ↵** applies Claude's latest proposal from the keyboard. Nothing changes until you press it, and the page still
   needs your full check before you save it as proofread. A rule Claude adds has a button
-  that opens its matches in Suggestions.
+  that opens the first page where it suggests a fix.
 - **Answer with: Claude · Local AI**, above the text box, picks who answers your next message;
   it's one conversation either way, each answer labelled with who gave it. With **Local AI** you
   describe a change so you don't have to retype the line: select the line(s) in the text, type
@@ -251,11 +249,11 @@ You can also type the same requests into the Claude Code session directly:
 
 - **"What does line 12 on page 240 say?"** Claude looks at just that line of the
   scan (`amocr line`) and tells you its reading. Line numbers count lines of text,
-  as in the Suggestions tab.
+  as in Proofread.
 - **"I keep fixing भ to आ at the start of words. Can you make a rule?"** Claude
   looks at your corrections (`amocr patterns`), writes a general rule, and adds
-  it (`amocr rule add`). Its suggestions appear in the Suggestions tab for you to
-  accept or reject; Claude never changes the text itself.
+  it (`amocr rule add`). Its fixes appear on their pages in Proofread for you
+  to apply or reject; Claude never changes the text itself.
 - **"Are there other mistakes like these?"** Claude reads the rule list and the
   pending suggestions, and proposes rules or switches off bad ones.
 

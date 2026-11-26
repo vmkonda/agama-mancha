@@ -6,7 +6,7 @@ listening), answers with `amocr chat reply`, and waits again.
 
 Claude's answers can carry actions, which the person applies (or not) in the viewer:
   {"type": "line", "page": 240, "n": 12, "from": "...", "to": "..."}  replace the nth line of text
-  {"type": "rule", "id": "r1a2b3c4d"}                                   review a rule in Suggestions
+  {"type": "rule", "id": "r1a2b3c4d"}                                   a rule; its fixes show on their pages in Proofread
 Claude never changes page text itself.
 """
 

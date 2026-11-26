@@ -1316,3 +1316,20 @@ def test_page_suspects_score_the_text_being_edited(tmp_path, monkeypatch):
     assert [x["line"] for x in got] == [2]  # line numbers count lines of text, as in Proofread
     assert got[0]["words"] == ["उसो"] and got[0]["score"] >= 3 and "उसो → उसी" in got[0]["notes"][0]
     assert sus.page_suspects(w, 1, "उसी तरह है ।\n") == []
+
+
+def test_page_fixes_on_the_page_being_edited(tmp_path, monkeypatch):
+    from amocr import patterns as pat
+    from amocr.catalog import Work
+
+    monkeypatch.setenv("AMOCR_DATA", str(tmp_path))
+    w = Work(id="B-fix", title="t", languages=["hin"], sha256="x")
+    w.workdir.mkdir(parents=True, exist_ok=True)
+    pat.add_rule(w, "word", "उसो", "उसी", source="scorer")
+    pat.add_rule(w, "regex", r"उसो(?= तरह)", "उसी", source="scorer")  # a second rule for the same place
+    text = "उसो तरह है ।\n\nयह उसी का है ।\n"
+    fx = pat.page_fixes(w, 7, text)
+    assert [(f["n"], f["from"], f["to"]) for f in fx] == [(1, "उसो", "उसी")]  # one fix, shown once
+    pat.decide(w, fx[0], accept=False)  # Reject: not suggested on this line again
+    assert pat.page_fixes(w, 7, text) == []
+    assert len(pat.page_fixes(w, 7, "उसो दिन ।\n")) == 1  # elsewhere it still is
