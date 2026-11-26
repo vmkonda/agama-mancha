@@ -456,6 +456,15 @@ function positionLines() {
 // Same order as patterns.DRAFT_ORDER on the server, so Proofread, Suggestions and chat fixes
 // all start from the same text: Claude's reading, else Surya, else Tesseract.
 const DRAFT_ORDER = ["claude-code-review-", "claude-code-screen-", "claude-code-correct-", "claude-code-direct-", "surya-2.5-", "tesseract-"];
+// Readings in the Start from menu: in the same order as the default choice, with plain names.
+const readingRank = (l) => { const i = DRAFT_ORDER.findIndex((p) => l.startsWith(p)); return i < 0 ? 99 : i; };
+function readingName(l) {
+  const m = l.match(/^claude-code-(review|screen|correct|direct)-/);
+  if (m) return `Claude (${m[1]})`;
+  if (l.startsWith("surya")) return "Surya";
+  if (l.startsWith("tesseract")) { const t = l.match(/^tesseract-([a-z+]+)/); return `Tesseract${t ? " (" + t[1] + ")" : ""}`; }
+  return l;
+}
 function bestReading(res) {
   const labels = Object.keys(res).filter((l) => l !== "groundtruth");
   for (const p of DRAFT_ORDER) { const hit = labels.filter((l) => l.startsWith(p)).sort().pop(); if (hit) return hit; }
@@ -489,13 +498,16 @@ const STATUS_LABEL = { none: "not proofread", draft: "draft", proofread: "proofr
 function renderEdit() {
   const res = S.data.results;
   const L = S.data.ladder || { status: res.groundtruth ? "draft" : "none", can_validate: false, why_not: "" };
-  const src = res.groundtruth ? "groundtruth" : bestReading(res);
+  // Before the first save, the proofreader may start from any reading of the page (Start from);
+  // the best one is the default. After a save everyone works on the saved text.
+  const startKey = `start:${S.work}/${S.page}`, best = bestReading(res), picked = store.get(startKey);
+  const src = res.groundtruth ? "groundtruth" : (picked && picked !== "groundtruth" && res[picked] ? picked : best);
   const draftKey = `draft:${S.work}/${S.page}`;
   let draft = null; try { draft = JSON.parse(store.get(draftKey) || "null"); } catch {}
   const rv = (res.groundtruth && res.groundtruth.review) || {};
   const restored = draft && draft.text !== res[src].text;
   $("textpane").innerHTML = `
-    <div class="meta"><span class="stchip st-${esc(L.status)}">${esc(STATUS_LABEL[L.status] || L.status)}</span><span>${res.groundtruth ? "Editing the saved text" : `No saved text yet; starting from <b>${esc(src)}</b>`}</span>${L.proofread_by ? `<span class="muted">proofread by ${esc(L.proofread_by)}</span>` : ""}${L.validated_by ? `<span class="muted">validated by ${esc(L.validated_by)}</span>` : ""}<span id="others" class="others" role="status"></span></div>
+    <div class="meta"><span class="stchip st-${esc(L.status)}">${esc(STATUS_LABEL[L.status] || L.status)}</span><span>${res.groundtruth ? "Editing the saved text" : `No saved text yet; <label>start from <select id="startfrom" title="The reading to start correcting from (until the first save)">${Object.keys(res).filter((l) => l !== "groundtruth").sort((a, b) => readingRank(a) - readingRank(b) || a.localeCompare(b)).map((l) => `<option value="${esc(l)}"${l === src ? " selected" : ""}>${esc(readingName(l))}${l === best ? " (best)" : ""}</option>`).join("")}</select></label>`}</span>${L.proofread_by ? `<span class="muted">proofread by ${esc(L.proofread_by)}</span>` : ""}${L.validated_by ? `<span class="muted">validated by ${esc(L.validated_by)}</span>` : ""}<span id="others" class="others" role="status"></span></div>
     <p class="muted" style="font-size:13px;margin-top:0">Type what is printed, one printed line per line, blank line between paragraphs. Keep headers, footnote markers and signature marks.</p>
     ${restored ? `<div class="draftnote">Restored your unsaved edits from ${esc(new Date(draft.at).toLocaleString())}. <button id="discard">Discard them</button></div>` : ""}
     <div class="pal" id="pal">${PALETTE.map((c) => `<button class="deva" data-c="${c}" title="insert ${c}">${c}</button>`).join("")}</div>
@@ -703,12 +715,18 @@ function renderEdit() {
   $("save").onclick = () => save(false);
   $("savenext").onclick = () => save(true);
   if (restored) $("discard").onclick = () => { store.del(draftKey); renderEdit(); };
-  const dirty = () => ta.value !== res[src].text;
+  if ($("startfrom")) $("startfrom").onchange = () => {
+    const want = $("startfrom").value;
+    if (ta.value !== res[src].text && !confirm(`Start again from ${readingName(want)}? Your unsaved edits on this page will be replaced.`)) { $("startfrom").value = src; return; }
+    if (want === best) store.del(startKey); else store.set(startKey, want);
+    store.del(draftKey); renderEdit();
+  };
+  const dirty = () => ta.value !== res[src].text || (!res.groundtruth && src !== best);
   async function saveQuiet() { // save the editor's text without leaving the page, so Claude and Apply see it
     const r = await api(`/api/${S.work}/${S.page}/groundtruth`, { method: "POST", headers: { "Content-Type": "application/json" },
       // A quiet save (before Claude checks a line) never claims a step: it keeps the page's status,
       // except that a validated page whose text changed needs validating again.
-      body: JSON.stringify({ text: fixVerseDigits(ta.value), status: L.status === "none" ? "draft" : L.status === "validated" ? "proofread" : L.status, note: $("note").value, rev: S.data.rev || "" }) });
+      body: JSON.stringify({ text: fixVerseDigits(ta.value), status: L.status === "none" ? "draft" : L.status === "validated" ? "proofread" : L.status, note: $("note").value, base: res.groundtruth ? undefined : src, rev: S.data.rev || "" }) });
     S.data.rev = r.rev;
     store.del(draftKey);
   }

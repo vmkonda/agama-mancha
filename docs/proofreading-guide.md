@@ -54,9 +54,17 @@ enlarge the scan.
 
 ## How to proofread a page
 
+**Which text you start from.** Until someone saves the page, the top of Proofread says
+*No saved text yet; start from* with a menu of the page's readings. The best one is chosen
+for you, in this order: Claude's review, Claude's other readings, Surya, Tesseract. Pick
+another if it looks closer to the print (compare them in **Compare** first). If you have
+already typed on the page, it asks before replacing your edits. The choice is kept in your
+browser until you save; the save records which reading the page started from, and from
+then on everyone works on the saved text. The outline on the scan follows Surya's lines,
+so starting from Tesseract, which splits lines differently, can put it a line off.
+
 1. Open the page and choose **Proofread**. The box starts from the best
-   reading available, always in this order: your saved text, else Claude's
-   reading, else Surya's, else Tesseract's. The line above the box names which.
+   reading available (your saved text, else the reading in **Start from**).
 2. Read the scan line by line and correct the text in the box.
 3. Choose what the save means, under **Save as** (the status ladder, below).
 4. Use the note field for anything the next person should know ("verse 36
@@ -83,7 +91,8 @@ Every save is kept in **History**, so even a mistake can be undone.
 Proofread looks and works the same in every book, so nothing has to be
 relearned from one book to the next. From top to bottom:
 
-1. **Where the text came from** (saved text, or the reading it starts from), and, in red, **who else
+1. **Where the text came from**: the saved text, or, before the first save, a **Start from** menu
+   with the reading it starts from (see "How to proofread a page"), and, in red, **who else
    is on this page** and whether someone saved it after you opened it.
 2. **The button row** of hard characters and the **romanised typing** box.
 3. **The page bar:** chapter, printed page number, the verses on the page, the
