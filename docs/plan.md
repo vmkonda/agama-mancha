@@ -119,6 +119,31 @@ First build of the pilot (from Surya, unproofread): 23 chapters, 1,317 verse uni
 - **Anyone** may release a claim that has been stale for 14 days; the release is recorded.
 - Material folder: `[OCR Mirror]/Agama Mancha`; legible names; Vimarsha's internal use.
 
+## Decided: releasing the team's books as editions
+
+Agreed 2026-11-26. During proofreading a book lives in the library as **live assembled units**
+(draft, proofread, validated); there is no export and re-import on every save. When a book (or a
+chapter) is fully **validated**, the team **releases an edition**:
+
+- **An export in TEI** (the format GRETIL uses) that keeps what makes the team's text richer than
+  external e-texts: every passage's page, line and box on the scan (`pb`, `lb`, `facs`); verse numbers;
+  each commentary as its own layer, linked to the verses it explains; footnotes and variant readings
+  with their markers; per-passage status and who validated it; the exact printed copy (checksum).
+- **A pinned version** like an imported external text: never edited, with version, date and checksum.
+  Citations to "Mālinī, team edition v1" stay stable while corrections go on towards v2.
+- **The team's output**: archived, shared with scholars, or contributed to GRETIL or Muktabodha if the
+  rights allow (the modern commentary's copyright checked first).
+
+| | During proofreading | Released |
+|---|---|---|
+| In the library | live units (draft / proofread / validated) | a pinned edition, versioned |
+| Citations point to | the current build | the release (stable) |
+| Format | units | TEI export, plus the same units |
+
+The team's books are the master copies; external e-texts serve as references (the GRETIL
+cross-check). To build: a *Release edition* step (validated build → TEI → pinned version), after
+Mālinī's first chapters are validated.
+
 ## Proposed: a hosted version (design, not decided)
 
 *Written 2026-11-25 from a discussion with the owner. Nothing here is built yet; the open
