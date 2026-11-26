@@ -1,0 +1,14 @@
+# Agama Mancha behind Caddy (HTTPS certificates are automatic). Replace the host name.
+# Caddy sends X-Forwarded-Proto, so the session cookie is marked Secure.
+agama.example.org {
+	encode gzip
+	request_body {
+		max_size 20MB
+	}
+	reverse_proxy 127.0.0.1:8770 {
+		# listeners and workers hold a request open for up to 55 s
+		transport http {
+			read_timeout 120s
+		}
+	}
+}

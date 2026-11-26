@@ -1,0 +1,8 @@
+# One `amocr sync` with the material folder on Proton Drive (started by agama-mancha-sync.timer).
+[Unit]
+Description=Agama Mancha: sync with Proton Drive
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/agama-mancha
+ExecStart=%h/.local/bin/uv run --extra librarian amocr sync

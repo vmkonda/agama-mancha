@@ -1,0 +1,20 @@
+# Agama Mancha, hosted (members only), as a systemd *user* service: no root needed to restart it.
+# Install (as the user that owns the checkout; see docs/deploy-vps.md):
+#   mkdir -p ~/.config/systemd/user && cp scripts/linux/agama-mancha*.{service,timer} ~/.config/systemd/user/
+#   systemctl --user daemon-reload && systemctl --user enable --now agama-mancha
+#   sudo loginctl enable-linger $USER      # keep it running without anyone logged in
+# It listens on 127.0.0.1 only; the web server in front (Caddy or nginx) adds HTTPS.
+[Unit]
+Description=Agama Mancha (hosted, members only)
+After=network-online.target
+
+[Service]
+WorkingDirectory=%h/agama-mancha
+# Ollama with bge-m3, for the library's search (fine on CPU). Ollama's own port is 11434.
+Environment=AMOCR_OLLAMA=http://127.0.0.1:11434
+ExecStart=%h/.local/bin/uv run --extra librarian amocr serve --hosted --host 127.0.0.1 --port 8770 --no-browser
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target
