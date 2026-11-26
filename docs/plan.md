@@ -321,7 +321,9 @@ the server only; invite links to choose a password; 30-day sessions; lockout aft
 listener tokens; refuses to listen beyond this machine without it), `amocr member add|invite|token|list|remove`,
 per-member study threads, and the listener side (`librarian --server … study wait|reply`, `get`,
 `search`; or `AGAMA_SERVER` / `AGAMA_TOKEN`). Windows as the server, the Mac as a member's machine:
-docs/hosted-trial.md (PR #25).
+docs/hosted-trial.md (PR #25). OCR workers built (2026-11-26): `amocr queue <book> --engine surya` on the
+server, `amocr worker` on a member's machine (leases, 15-minute expiry, three tries, readings saved like
+local ones and credited to the member); readers can't run workers.
 
 ### What changes in the code (when it's decided)
 

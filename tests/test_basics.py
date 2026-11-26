@@ -930,3 +930,92 @@ def test_hosted_config_file(tmp_path, monkeypatch):
     monkeypatch.setenv("AGAMA_SERVER", "http://env:2")
     assert remote.server(hosted=True) == "http://env:2"
     assert "own address" in remote.check("http://127.0.0.1:8770")
+
+
+def _queue_book(tmp_path, pages=3):
+    import json
+
+    from amocr.catalog import Work
+    from PIL import Image
+
+    w = Work(id="B-test000006", title="t", languages=["san"], sha256="0" * 64)
+    w.save()
+    (w.workdir / "inventory.jsonl").write_text(
+        "".join(json.dumps({"page": p, "text_layer": "text" if p == 2 else "none"}) + "\n" for p in range(1, pages + 1)))
+    for p in range(1, pages + 1):
+        w.page_dir(p).mkdir(parents=True, exist_ok=True)
+        Image.new("L", (40, 20), 255).save(w.page_dir(p) / "image.png")
+    return w
+
+
+def test_ocr_queue(tmp_path, monkeypatch):
+    """Queue the pages that need an engine; lease to one worker; save the reading; retries, then set aside."""
+    import json
+
+    import pytest
+
+    from amocr import ocrqueue
+
+    monkeypatch.setenv("AMOCR_DATA", str(tmp_path))
+    w = _queue_book(tmp_path)
+    assert ocrqueue.add(w, "tesseract") == 2                          # p2 has a usable text layer
+    assert ocrqueue.add(w, "tesseract") == 0                          # already queued
+    got = ocrqueue.lease("anna", ["tesseract"], n=5, host="mac")
+    assert [j["page"] for j in got] == [1, 3] and ocrqueue.lease("bala", ["tesseract"]) == []
+    with pytest.raises(ValueError, match="isn't leased to you"):
+        ocrqueue.complete({w.id: w}, "bala", got[0]["job"], got[0]["key"], "tesseract-san+hin-psm3-5.5.4", {"text": "x"})
+    with pytest.raises(ValueError, match="wants tesseract"):
+        ocrqueue.complete({w.id: w}, "anna", got[0]["job"], got[0]["key"], "surya-2.5-0.24.0", {"text": "x"})
+    ocrqueue.complete({w.id: w}, "anna", got[0]["job"], got[0]["key"], "tesseract-san+hin-psm3-5.5.4", {"text": "क\n", "lines": []})
+    saved = json.loads((w.page_dir(1) / "ocr" / "tesseract-san+hin-psm3-5.5.4.json").read_text(encoding="utf-8"))
+    assert saved["text"] == "क\n" and saved["operator"] == "anna" and saved["worker"] == "mac"
+    for _ in range(3):                                                # fails three times: set aside
+        j = got[1] if _ == 0 else ocrqueue.lease("anna", ["tesseract"])[0]
+        ocrqueue.release("anna", j["job"], j["key"], "boom")
+    st = ocrqueue.status()["books"][f"{w.id} · tesseract"]
+    assert st == {"queued": 0, "leased": 0, "done": 1, "failed": 1}
+
+
+def test_ocr_worker_end_to_end(tmp_path, monkeypatch):
+    """A worker leases pages over HTTP from a hosted server, reads them with its engine, returns the readings."""
+    import json
+    import socket
+    import threading
+    from http.server import ThreadingHTTPServer
+
+    import pytest
+
+    pytest.importorskip("lancedb")
+    from amocr import members, ocrqueue, server, worker
+    from amocr.catalog import load_works
+    from amocr.engines.base import Engine, OcrResult
+
+    monkeypatch.setenv("AMOCR_DATA", str(tmp_path))
+    w = _queue_book(tmp_path)
+    members.add("Anna", "proofreader")
+    tok = members.issue_token("Anna")
+    ocrqueue.add(w, "tesseract")
+
+    class Fake(Engine):
+        name, label = "tesseract", "tesseract-fake"
+        def version(self): return "1.0"
+        def config(self): return {}
+        def run(self, image):
+            assert image.read_bytes()[:4] == b"\x89PNG"             # the page image came over HTTP
+            return OcrResult(text="पठितम्\n", confidence=90.0, engine="tesseract", engine_version="1.0", config={})
+    monkeypatch.setattr(worker, "available", lambda wanted=None: {"tesseract": Fake()})
+
+    server.Handler.hosted, server.Handler.works = True, load_works()
+    with socket.socket() as s_:
+        s_.bind(("127.0.0.1", 0)); port = s_.getsockname()[1]
+    httpd = ThreadingHTTPServer(("127.0.0.1", port), server.Handler)
+    threading.Thread(target=httpd.serve_forever, daemon=True).start()
+    try:
+        assert worker.run(f"http://127.0.0.1:{port}", tok, once=True, log=lambda *a: None) == 2
+    finally:
+        httpd.shutdown()
+        server.Handler.hosted = False
+    for p in (1, 3):
+        rec = json.loads((w.page_dir(p) / "ocr" / "tesseract-fake-1.0.json").read_text(encoding="utf-8"))
+        assert rec["text"] == "पठितम्\n" and rec["operator"] == "Anna" and rec["via"] == "ocr-worker"
+    assert ocrqueue.status()["books"][f"{w.id} · tesseract"]["done"] == 2

@@ -874,6 +874,37 @@ def cmd_serve(args) -> None:
     serve(port=args.port, open_browser=not args.no_browser, page=args.open, host=args.host, hosted=args.hosted)
 
 
+def cmd_worker(args) -> None:
+    """An OCR worker: lease pages from a hosted server's queue and read them with the engines here."""
+    from librarian import remote
+
+    from .worker import run
+
+    srv = remote.server(args.server, hosted=True)
+    if not srv:
+        raise SystemExit("which server? --server, or AGAMA_SERVER in ~/.config/agama-mancha/hosted.env")
+    run(srv, args.token, [e.strip() for e in args.engines.split(",")] if args.engines else None, args.batch, args.once)
+
+
+def cmd_queue(args) -> None:
+    """On the server: queue a book's pages for an engine, or show the queue."""
+    from . import ocrqueue
+
+    if args.book:
+        works = load_works()
+        wid = resolve(works, args.book)
+        if wid not in works:
+            raise SystemExit(f"unknown book {args.book!r}")
+        rows = _inventory(works[wid])
+        pages = parse_pages(args.pages, len(rows)) if args.pages else None
+        print(f"{wid}: {ocrqueue.add(works[wid], args.engine, pages)} page(s) queued for {args.engine}")
+    st = ocrqueue.status()
+    for b, c in sorted(st["books"].items()):
+        print(f"  {b}: {c['queued']} waiting, {c['leased']} being read, {c['done']} done, {c['failed']} set aside")
+    for w, x in st["workers"].items():
+        print(f"  worker {w} on {x['host']} ({', '.join(x['engines'])}), seen {x['seconds_ago']}s ago")
+
+
 def cmd_member(args) -> None:
     """Members of a hosted server: add (an invite link to choose a password), invite (a new link, for a
     forgotten password), token (a listener token for their machine), list, remove."""
@@ -1037,6 +1068,16 @@ def main(argv: list[str] | None = None) -> None:
     book_cmd("render", cmd_render, pages=True)
     book_cmd("checksum", cmd_checksum)
     plain_cmd("duplicates", cmd_duplicates, "books on this machine twice (same PDF, two ids)")
+    p = plain_cmd("worker", cmd_worker, "OCR worker: read queued pages from a hosted server with the engines on this machine")
+    p.add_argument("--server", help="the hosted server (default: AGAMA_SERVER in ~/.config/agama-mancha/hosted.env)")
+    p.add_argument("--token", help="your listener token (default: AGAMA_TOKEN in that file)")
+    p.add_argument("--engines", help="which engines to offer, e.g. surya or tesseract,surya (default: all installed)")
+    p.add_argument("--batch", type=int, default=10, help="pages leased at a time")
+    p.add_argument("--once", action="store_true", help="stop when the queue is empty instead of waiting")
+    p = plain_cmd("queue", cmd_queue, "on the server: queue a book for OCR workers, or show the queue")
+    p.add_argument("book", nargs="?", help="the book to queue (omit to just show the queue)")
+    p.add_argument("--engine", default="surya", choices=["tesseract", "surya"])
+    p.add_argument("--pages", help="e.g. 221-238 (default: every page that needs it)")
     p = plain_cmd("member", cmd_member, "members of a hosted server: add, invite, token, list, remove")
     p.add_argument("action", choices=["add", "invite", "token", "list", "remove"])
     p.add_argument("name", nargs="?")

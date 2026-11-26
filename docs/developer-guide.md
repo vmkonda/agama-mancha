@@ -26,6 +26,9 @@ src/amocr/
   ladder.py          a page's status: draft, proofread, validated (second person), problem, no text
   grid.py            the Pages view: every page's status, grouped by chapter, with warning counts
   history.py         every save of a page's text (groundtruth/pNNNN.history.jsonl)
+  members.py         hosted members: passwords (scrypt), invites, sessions, listener tokens
+  ocrqueue.py        hosted OCR queue: pages leased to workers, readings saved back
+  worker.py          `amocr worker`: a member's machine reading queued pages with its own engines
   book.py            volunteer ops: add, fetch, export, merge results, push, pull
   proton.py          wrapper around the official proton-drive CLI
   metrics.py         normalisation + character error rate

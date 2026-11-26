@@ -243,6 +243,39 @@ class Handler(BaseHTTPRequestHandler):
             self.end_headers()
         return False
 
+    def _role(self) -> str:
+        """The member's role; on a local (not hosted) server, the one person there can do everything."""
+        return self._member[1] if self._member else ("admin" if not self.hosted else "")
+
+    def _ocr_post(self, parts: list[str]) -> None:
+        """OCR queue: coordinators queue books; workers (any member but a reader) lease, return, release."""
+        from . import ocrqueue
+
+        try:
+            b = self._body()
+            who = members.who() or "worker"
+            if parts == ["queue"]:
+                if self._role() not in ("coordinator", "admin"):
+                    return self._err("only a coordinator queues books for OCR", HTTPStatus.FORBIDDEN)
+                work, _ = self._work_page([str(b.get("book", ""))])
+                pages = [int(x) for x in b.get("pages") or []] or None
+                return self._json({"added": ocrqueue.add(work, str(b.get("engine", "")), pages)})
+            if self._role() == "reader":
+                return self._err("readers don't run OCR workers", HTTPStatus.FORBIDDEN)
+            if parts == ["lease"]:
+                return self._json({"jobs": ocrqueue.lease(who, [str(e) for e in b.get("engines") or []],
+                                                          int(b.get("n") or 10), str(b.get("host") or ""))})
+            if parts == ["result"]:
+                return self._json(ocrqueue.complete(self.works, who, str(b.get("job")), str(b.get("key")),
+                                                    str(b.get("label")), b.get("record") or {}))
+            if parts == ["release"]:
+                return self._json(ocrqueue.release(who, str(b.get("job")), str(b.get("key")), str(b.get("error") or "")))
+        except LookupError as e:
+            return self._err(str(e), HTTPStatus.NOT_FOUND)
+        except (ValueError, TypeError, json.JSONDecodeError) as e:
+            return self._err(str(e))
+        self._err("not found", HTTPStatus.NOT_FOUND)
+
     def _session_cookie(self, sid: str | None) -> str:
         if not sid:
             return "am_session=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0"
@@ -326,6 +359,10 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(HOME, "text/html; charset=utf-8")
             if parts in (["login"], ["invite"], ["account"]):
                 return self._send(files("amocr").joinpath("signin.html").read_bytes(), "text/html; charset=utf-8")
+            if parts == ["api", "ocr", "queue"]:
+                from . import ocrqueue
+
+                return self._json(ocrqueue.status())
             if parts == ["api", "me"]:
                 m = self._member
                 return self._json({"hosted": self.hosted, "name": m[0] if m else None, "role": m[1] if m else None})
@@ -496,6 +533,8 @@ class Handler(BaseHTTPRequestHandler):
 
     def _do_post(self):
         parts = [p for p in urlparse(self.path).path.split("/") if p]
+        if parts[:2] == ["api", "ocr"]:
+            return self._ocr_post(parts[2:])
         if parts[:2] == ["api", "auth"]:
             if not self.hosted:
                 return self._err("signing in is only for a hosted server", HTTPStatus.NOT_FOUND)
