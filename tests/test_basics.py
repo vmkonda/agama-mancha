@@ -800,8 +800,9 @@ def test_gretil_catalogue_and_upload_checks():
 
 
 def test_hosted_members_only(tmp_path, monkeypatch):
-    """Hosted mode: no token, no access; the sign-in link sets a cookie; a bearer token works; the server
-    refuses the network without --hosted; each member sees only their own study thread."""
+    """Hosted mode: an invite sets the password; sign in with name and password (a session cookie);
+    wrong passwords refused and locked out after five; pages without a session go to the login page;
+    sign out ends the session; a listener token works as Bearer; only hashes are stored."""
     import json
     import socket
     import threading
@@ -818,9 +819,8 @@ def test_hosted_members_only(tmp_path, monkeypatch):
         server.serve(port=1, open_browser=False, host="0.0.0.0", hosted=False)
     with pytest.raises(SystemExit, match="needs members"):
         server.serve(port=1, open_browser=False, host="0.0.0.0", hosted=True)
-    anna, bala = members.add("Anna", "proofreader"), members.add("Bala", "reader")
-    assert members.check(anna) == ("Anna", "proofreader") and members.check("am_wrong") is None
-    assert anna not in json.dumps(members.load())                    # only a hash is stored
+    code = members.add("Anna", "proofreader")
+    members.add("Bala", "reader")
 
     server.Handler.hosted, server.Handler.works = True, {}
     with socket.socket() as s_:
@@ -834,22 +834,42 @@ def test_hosted_members_only(tmp_path, monkeypatch):
             return None
     opener = urllib.request.build_opener(NoRedirect)
 
-    def get(path, token=None):
-        req = urllib.request.Request(base + path, headers={"Authorization": f"Bearer {token}"} if token else {})
+    def req(path, body=None, cookie=None, token=None):
+        h = {"Content-Type": "application/json"}
+        if cookie:
+            h["Cookie"] = cookie
+        if token:
+            h["Authorization"] = f"Bearer {token}"
+        r = urllib.request.Request(base + path, data=json.dumps(body).encode() if body is not None else None, headers=h)
         try:
-            r = opener.open(req, timeout=5)
-            return r.status, r.headers, r.read()
+            resp = opener.open(r, timeout=10)
+            return resp.status, resp.headers, resp.read()
         except urllib.error.HTTPError as e:
             return e.code, e.headers, e.read()
     try:
-        assert get("/library")[0] == 401 and get("/api/works")[0] == 401 and get("/theme.css")[0] == 401
-        assert get("/api/works", "am_wrong")[0] == 401
-        code, headers, _ = get(f"/login?token={anna}")
-        assert code == 303 and "am_token=" in headers["Set-Cookie"] and "HttpOnly" in headers["Set-Cookie"]
-        assert get("/api/works", anna)[0] == 200
+        code_, hdr, _ = req("/library")
+        assert code_ == 303 and hdr["Location"] == "/login?next=%2Flibrary"
+        assert req("/api/works")[0] == 401 and req("/login")[0] == 200 and req("/theme.css")[0] == 200
+        assert req("/api/auth/invite", {"code": code, "password": "short"})[0] == 400          # too short
+        st, hdr, _ = req("/api/auth/invite", {"code": code, "password": "a long passphrase"})
+        assert st == 200 and "am_session=" in hdr["Set-Cookie"] and "HttpOnly" in hdr["Set-Cookie"]
+        assert req("/api/auth/invite", {"code": code, "password": "another passphrase"})[0] == 400   # used up
+        assert req("/api/auth/login", {"name": "Anna", "password": "wrong password!"})[0] == 401
+        st, hdr, _ = req("/api/auth/login", {"name": "Anna", "password": "a long passphrase"})
+        cookie = hdr["Set-Cookie"].split(";")[0]
+        assert st == 200 and req("/api/works", cookie=cookie)[0] == 200
+        assert json.loads(req("/api/me", cookie=cookie)[2]) == {"hosted": True, "name": "Anna", "role": "proofreader"}
+        tok = json.loads(req("/api/auth/token", {}, cookie=cookie)[2])["token"]
+        assert req("/api/works", token=tok)[0] == 200 and req("/api/works", token="am_wrong")[0] == 401
+        assert req("/api/auth/logout", {}, cookie=cookie)[0] == 200 and req("/api/works", cookie=cookie)[0] == 401
+        for _ in range(5):
+            req("/api/auth/login", {"name": "Bala", "password": "not the password"})
+        assert req("/api/auth/login", {"name": "Bala", "password": "not the password"})[0] == 429      # locked out
     finally:
         httpd.shutdown()
         server.Handler.hosted = False
+    stored = (tmp_path / "hosted" / "members.json").read_text() + (tmp_path / "hosted" / "sessions.json").read_text()
+    assert "a long passphrase" not in stored and tok not in stored and code not in stored and cookie.split("=")[1] not in stored
 
     pytest.importorskip("lancedb")
     from librarian import study
@@ -857,7 +877,6 @@ def test_hosted_members_only(tmp_path, monkeypatch):
     study.post("user", "Bala's question", by="Bala")
     assert [m["text"] for m in study.thread("Anna")] == ["Anna's question"]
     assert [m["text"] for m in study.pending("Bala")] == ["Bala's question"] and len(study.thread(None)) == 2
-
 
 def test_windows_scripts_parse():
     """The Windows serve/redeploy scripts are at least valid PowerShell (checked on the Windows CI runner)."""

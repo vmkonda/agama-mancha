@@ -27,7 +27,7 @@ uv sync --extra librarian
 scp vijaymohankonda@Vijaymohans-Mac-Studio.local:Projects/agama-mancha-ocr/data/hosted-bundle.tar.gz .
 tar -xzf hosted-bundle.tar.gz
 
-# 4. Yourself as the first member (the token is shown once; keep it)
+# 4. Yourself as the first member: it prints a one-time invite link to choose your password
 uv run amocr member add "Vijay" --role admin
 
 # 5. Start it, members only, reachable from the home network
@@ -38,9 +38,26 @@ uv run --extra librarian amocr serve --hosted --host 0.0.0.0 --port 8770
 When Windows asks whether to allow it through the firewall, allow it on **private networks** only.
 Find the machine's address with `ipconfig` (the IPv4 address, e.g. 192.168.1.20).
 
-Open the sign-in link that step 4 printed, with `HOST` replaced by `localhost` on the Windows machine
-itself (or by its address from another device): `http://localhost:8770/login?token=…`. Without the
-link (or after signing out of the browser) every page says *members only*.
+Open the invite link that step 4 printed, with `HOST` replaced by `localhost` on the Windows machine
+itself (or by its address from another device): `http://localhost:8770/invite?code=…`. Choose a
+password (10 characters or more); the link works once, for 7 days. From then on
+`http://localhost:8770` shows the **sign-in page** (name and password) until you sign in, and the title
+band shows your name with *Sign out*; your name opens *Account* (change password, issue a listener token).
+
+**Members, on the server:**
+
+| Command | What it does |
+|---|---|
+| `amocr member add "Anna" --role proofreader` | adds Anna; prints her invite link to send her |
+| `amocr member invite "Anna"` | a new invite link, for a forgotten password |
+| `amocr member token "Anna"` | a new listener token for her own machine (or she issues one under *Account*) |
+| `amocr member list` / `remove "Anna"` | who's there, and whether they've set a password; remove (signs them out) |
+
+Passwords are kept only as salted scrypt hashes, sessions and tokens only as hashes, all in
+`data\hosted\` on the server: never in the shared drive, whose editors could change them.
+
+*If you set up the trial before the login page existed:* your member record and the Mac's listener
+token still work; run `amocr member invite "Vijay"` and open the link to choose a password.
 
 ### Running it in the background, and redeploying when the code changes
 
@@ -126,8 +143,9 @@ under System Settings → Privacy & Security → Local Network also works.
 
 ## What this shows
 
-- **Members only:** every page, scan and API call needs your token (a cookie after the sign-in link,
-  or `Authorization: Bearer` for the listener). Only a hash of the token is stored on the server.
+- **Members only:** every page, scan and API call needs a signed-in session (name and password) or,
+  for the listener, your token (`Authorization: Bearer`). Pages without one go to the sign-in page.
+  Only hashes are stored on the server.
 - **The listener needs no access to the Mac's network:** the Mac makes all the connections, out to the
   Windows server; the Windows server never connects to the Mac.
 - **Your Claude stays yours:** the listener answers only your own questions, with your Claude plan.
