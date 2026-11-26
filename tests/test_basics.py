@@ -1100,7 +1100,6 @@ def test_claude_helper_tasks(tmp_path, monkeypatch):
     (rules, the line, its image), the answer checked and posted with its fix, the download filled in."""
     import pytest
 
-    pytest.importorskip("lancedb")
     from amocr import chat, members, server
     from librarian import remote
 
@@ -1144,7 +1143,6 @@ def test_claude_helper_runs_on_windows(tmp_path, monkeypatch):
 
     if sys.platform != "win32":
         pytest.skip("the helper is a Windows file")
-    pytest.importorskip("lancedb")
     from amocr import chat, helper, members, server
 
     w, q, httpd, base = _helper_server(tmp_path, monkeypatch)
