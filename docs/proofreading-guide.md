@@ -25,7 +25,22 @@ with Proofreading one click away in the title band). When you're done for the da
 
 ## The viewer
 
-The scanned page is on the left and the text on the right. Along the top:
+The scanned page is on the left and the text on the right. Along the top come
+the two modes you use most, **Proofread** and **Pages**, then **More tools ▸**.
+Proofreaders and validators start with only those two; **More tools ▸** opens
+**View**, **Compare** and **Suggestions** next to them (and **Fewer tools ◂**
+closes them again). The viewer remembers your choice. The viewer opens in
+Proofread, on the next page nobody has finished.
+
+- **Proofread** is where you correct the page.
+- **Pages** shows every page of the book as a small square in its status
+  colour, grouped by chapter, with a count of warnings on each page and how
+  much of each chapter is done. Click a page to proofread it; *Next to
+  proofread* and *Next to validate* jump to the next page that needs you.
+  Front matter and the indexes at the back are grouped separately and get no
+  warnings, since they aren't verse and commentary.
+
+Under **More tools**:
 
 - **View** shows one reading of the page. Choose which one in the menu:
   - `claude-code-…`: Claude's reading, with verses, commentary and footnotes
@@ -36,14 +51,7 @@ The scanned page is on the left and the text on the right. Along the top:
   - `ground truth`: the proofread text, once someone has saved it.
 - **Compare** shows two readings with the differences marked: struck-through
   red text is in the first reading only, green text is in the second only.
-- **Proofread** is where you correct the page.
 - **Suggestions** lists fixes learned from corrections, across the book.
-- **Pages** shows every page of the book as a small square in its status
-  colour, grouped by chapter, with a count of warnings on each page and how
-  much of each chapter is done. Click a page to proofread it; *Next to
-  proofread* and *Next to validate* jump to the next page that needs you.
-  Front matter and the indexes at the back are grouped separately and get no
-  warnings, since they aren't verse and commentary.
 
 Use ◀ ▶ (or the arrow keys) to move between pages and the zoom slider to
 enlarge the scan.
@@ -98,6 +106,10 @@ line with a warning.
 What a book brings is only data that fills these same places: its brief and
 glossary, its look-alike profile, and the rules learned from corrections.
 A book never gets its own layout, buttons or colours.
+
+With fewer tools (the start for proofreaders and validators), the page bar
+leaves out two notes for experts: which e-text the verses were checked
+against, and that the tags are guessed. Everything else is the same.
 
 ### The status ladder: two pairs of eyes
 

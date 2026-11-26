@@ -32,6 +32,10 @@ body { background: var(--bg); color: var(--text); font: 14px/1.45 -apple-system,
 .deva { font-family: "Kohinoor Devanagari", "Devanagari Sangam MN", "Nirmala UI", "Mangal", "Noto Sans Devanagari", "Lohit Devanagari", sans-serif; font-size: 17px; line-height: 1.8; }
 header { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; padding: 8px 16px; border-bottom: 1px solid var(--line); background: var(--panel); }
 header h1 { font-size: 15px; margin: 0 8px 0 0; font-weight: 600; }
+/* The simple view (proofreaders and validators, unless they ask for more tools): only what proofreading needs. */
+body.simple #m-view, body.simple #m-diff, body.simple #m-sugg, body.simple #engA, body.simple #vs, body.simple #engB,
+body.simple #status, body.simple .expert { display: none !important; }
+#moretools { font-size: 12px; }
 select, button, input { font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 4px 8px; }
 button { cursor: pointer; }
 button:hover { border-color: var(--accent); }
@@ -180,15 +184,16 @@ i.wn { position: absolute; top: -6px; right: -6px; min-width: 15px; height: 15px
   <button id="next" title="Next page (→)">▶</button>
   <span class="muted">zoom</span><input id="zoom" type="range" min="40" max="250" value="100" aria-label="Image zoom">
   <span class="grow"></span>
-  <button id="chatbtn" title="Talk to Claude in your Claude Code session">Chat</button>
+  <button id="chatbtn" title="Ask Claude, or have the local AI make a change you describe">Chat</button>
   <button id="theme" title="Toggle theme">◐</button>
 </header>
 <header>
-  <button id="m-view" class="on">View</button>
-  <button id="m-diff">Compare</button>
-  <button id="m-edit">Proofread</button>
-  <button id="m-sugg" title="Fixes learned from corrections, suggested across the book">Suggestions</button>
+  <button id="m-edit" class="on">Proofread</button>
   <button id="m-grid" title="Every page of the book, coloured by status">Pages</button>
+  <button id="moretools" aria-expanded="false" title="Show the expert tools too (View, Compare, Suggestions, engine details)">More tools ▸</button>
+  <button id="m-view">View</button>
+  <button id="m-diff">Compare</button>
+  <button id="m-sugg" title="Fixes learned from corrections, suggested across the book">Suggestions</button>
   <select id="engA" aria-label="Output"></select>
   <span id="vs" class="muted">vs</span>
   <select id="engB" aria-label="Compare against"></select>
@@ -213,7 +218,7 @@ i.wn { position: absolute; top: -6px; right: -6px; min-width: 15px; height: 15px
 </main>
 <script>
 const $ = (id) => document.getElementById(id);
-const S = { work: null, page: null, pages: [], data: null, mode: "view" };
+const S = { work: null, page: null, pages: [], data: null, mode: "edit", simple: false };
 const store = { get(k) { try { return localStorage.getItem(k); } catch { return null; } }, set(k, v) { try { localStorage.setItem(k, v); } catch {} }, del(k) { try { localStorage.removeItem(k); } catch {} } };
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 // Devanagari text with footnote markers shown as raised, coloured digits (योगी२ → योगी^२), so a marker
@@ -235,7 +240,14 @@ $("zoom").oninput = applyZoom; applyZoom();
 
 async function init() {
   const works = await api("/api/works");
-  $("work").innerHTML = works.map((w) => `<option value="${esc(w.id)}">${esc(w.id)} · ${esc(w.title)}</option>`).join("");
+  // Simple for proofreaders and validators on a hosted server; everyone can switch with More tools.
+  let me = {};
+  try { me = await api("/api/me"); } catch {}
+  const pref = store.get("moretools");
+  S.simple = pref ? pref === "simple" : !!me.hosted && ["proofreader", "validator", "reader"].includes(me.role);
+  applySimple();
+  $("moretools").onclick = () => { S.simple = !S.simple; store.set("moretools", S.simple ? "simple" : "more"); applySimple(); if (S.pages.length) { pageOptions(); render(); } };
+  $("work").innerHTML = works.map((w) => `<option value="${esc(w.id)}" title="${esc(w.id)}">${esc(S.simple ? w.title : w.id + " · " + w.title)}</option>`).join("");
   const [hw, hp, hbox] = location.hash.slice(1).split("/");
   // A citation link can name lines to outline on the scan: #book/page/box=x0,y0,x1,y1
   if (hbox && hbox.startsWith("box=")) { const b = hbox.slice(4).split(",").map(Number); if (b.length === 4 && b.every((x) => !isNaN(x))) S.hintBox = b; }
@@ -247,7 +259,15 @@ async function loadWork(page) {
   S.work = $("work").value;
   S.pages = await api(`/api/${S.work}/pages`);
   if (!S.pages.length) { $("textpane").innerHTML = `<p class="muted">No OCR results yet. Run <code>uv run amocr ocr ${esc(S.work)} --pages 51</code>.</p>`; return; }
-  $("page").innerHTML = S.pages.map((p) => `<option value="${p.page}">p${p.page} · ${p.engines.length} output${p.engines.length === 1 ? "" : "s"}${p.groundtruth ? " · GT" : ""}</option>`).join("");
+  pageOptions();
+  // The simple view starts where there's work: the next page nobody has finished proofreading.
+  if (page == null && S.simple) {
+    try {
+      const g = await api(`/api/${S.work}/grid`);
+      const r = g.pages.find((x) => (x.status === "none" || x.status === "draft") && !(g.busy || {})[x.page]);
+      if (r) page = r.page;
+    } catch {}
+  }
   const want = S.pages.find((p) => p.page === page) ? page : S.pages[0].page;
   await loadPage(want);
 }
@@ -275,6 +295,19 @@ async function loadPage(page) {
   render();
 }
 
+function pageOptions() {
+  $("page").innerHTML = S.pages.map((p) => `<option value="${p.page}">${S.simple
+    ? `Page ${p.page}${p.groundtruth ? " · saved" : ""}`
+    : `p${p.page} · ${p.engines.length} output${p.engines.length === 1 ? "" : "s"}${p.groundtruth ? " · GT" : ""}`}</option>`).join("");
+  if (S.page) $("page").value = S.page;
+}
+function applySimple() {
+  document.body.classList.toggle("simple", S.simple);
+  $("moretools").textContent = S.simple ? "More tools ▸" : "Fewer tools ◂";
+  $("moretools").setAttribute("aria-expanded", String(!S.simple));
+  $("moretools").title = S.simple ? "Show the expert tools too (View, Compare, Suggestions, engine details)" : "Only what proofreading needs";
+  if (S.simple && !["edit", "grid"].includes(S.mode)) setMode("edit");
+}
 function setMode(m) { S.mode = m; for (const k of ["view", "diff", "edit", "sugg", "grid"]) $("m-" + k).classList.toggle("on", k === m); render(); }
 $("m-view").onclick = () => setMode("view");
 $("m-diff").onclick = () => setMode("diff");
@@ -515,8 +548,8 @@ function renderEdit() {
     if (ST.printed_page) bits.push(`<span>printed p. <b>${esc(ST.printed_page)}</b></span>`);
     bits.push(`<span>verses <b>${esc(span(ST.verses))}</b></span>`);
     bits.push(`<span>commentary on <b>${esc(ST.commentary.length ? ST.commentary.join(", ") : "none closing here")}</b></span>`);
-    if (ST.reference) bits.push(`<span>verses checked against <b>${esc(ST.reference)}</b></span>`);
-    bits.push(`<span class="muted">tags are guessed from the text, as the assembler will${ST.build ? "; context from build " + esc(ST.build) : ""}</span>`);
+    if (ST.reference) bits.push(`<span class="expert">verses checked against <b>${esc(ST.reference)}</b></span>`);
+    bits.push(`<span class="muted expert">tags are guessed from the text, as the assembler will${ST.build ? "; context from build " + esc(ST.build) : ""}</span>`);
     $("pagebar").innerHTML = bits.join("");
     $("pwarn").innerHTML = ST.warnings.map((w) => `<button data-line="${w.line}" title="${w.ref ? "reference: " + esc(w.ref) + " · " : ""}go to line ${w.line}">line ${w.line}: ${esc(w.text)}</button>`).join("");
     $("pwarn").querySelectorAll("button").forEach((b) => b.onclick = () => {
