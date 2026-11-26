@@ -1363,12 +1363,15 @@ def test_book_languages(tmp_path, monkeypatch):
     job = ocrqueue.lease("anna", ["tesseract"], n=1)[0]
     assert job["langs"] == "san+hin+eng"
 
-    class Tess:            # what `available()` gives a worker: Tesseract with the default models
-        langs = "san+hin"
-    engs = {"tesseract": Tess()}
+    class Tess:            # stands in for Tesseract (not installed on CI)
+        def __init__(self, langs="san+hin", **_):
+            self.langs = langs
+    monkeypatch.setattr("amocr.engines.get_engine", lambda name, **kw: Tess(**kw))
+    engs = {"tesseract": Tess()}  # what `available()` gives a worker: the default models
     assert worker._for_book(engs, {"engine": "tesseract", "langs": "san+hin"}) is engs["tesseract"]
     other = worker._for_book(engs, job)
-    assert other.langs == "san+hin+eng" and other.label == "tesseract-san+hin+eng-psm3"
+    assert other is not engs["tesseract"] and other.langs == "san+hin+eng"
+    assert worker._for_book(engs, job) is other  # made once per set of models
 
 
 def test_english_needs_the_english_model(tmp_path):
