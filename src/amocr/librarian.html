@@ -391,7 +391,9 @@ const fmt = (t) => esc(t).replace(/\*\*(.+?)\*\*/g, "<b>$1</b>");
 async function studyLoad() {
   let d; try { d = await api("/api/librarian/study"); } catch (e) { $("sstate").textContent = e.message; return; }
   $("sdot").classList.toggle("on", d.listening);
-  $("sstate").textContent = d.listening ? "Claude is listening" : "Claude isn't listening: in Claude Code, say “listen to the study chat”";
+  $("sstate").textContent = d.listening ? "Claude is listening" : d.me
+    ? `Claude isn't listening: on your own machine, set AGAMA_SERVER to this server and AGAMA_TOKEN to your token, and in Claude Code say “listen to the study chat on the hosted server”`
+    : "Claude isn't listening: in Claude Code, say “listen to the study chat”";
   const work = (ST.focus || "").split("/")[0];
   const key = d.messages.length + "|" + work + "|" + ST.all;
   if (key === ST.seen) return;

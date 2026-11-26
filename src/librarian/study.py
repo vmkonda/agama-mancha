@@ -64,31 +64,55 @@ def post(role: str, text: str, unit: str | None = None, reply_to: str | None = N
     return msg
 
 
-def pending() -> list[dict]:
+def thread(who: str | None = None) -> list[dict]:
+    """The conversation a person sees: on a hosted server, only their own questions and the answers to
+    them (a personal listener answers with its owner's Claude); locally, everything."""
     msgs = load()
+    if who is None:
+        return msgs
+    mine = {m["id"] for m in msgs if m["role"] == "user" and m.get("by") == who}
+    return [m for m in msgs if m["id"] in mine or m.get("reply_to") in mine]
+
+
+def pending(who: str | None = None) -> list[dict]:
+    msgs = thread(who)
     answered = {m.get("reply_to") for m in msgs if m["role"] == "claude"}
     return [m for m in msgs if m["role"] == "user" and m["id"] not in answered]
+
+
+# Listening: locally a heartbeat file next to the chat; on a hosted server, when each member's listener
+# last asked for questions (remote listeners long-poll, so a recent poll means they're there).
+_LAST_POLL: dict[str, float] = {}
 
 
 def _beat() -> Path:
     return study_dir() / "listening"
 
 
-def listening() -> bool:
+def listening(who: str | None = None) -> bool:
+    if who is not None:
+        return time.time() - _LAST_POLL.get(who, 0) < LISTEN_FRESH + 30
     p = _beat()
     return p.exists() and time.time() - p.stat().st_mtime < LISTEN_FRESH
 
 
-def wait(timeout: float = 1800, poll: float = 2.0) -> dict | None:
+def wait(timeout: float = 1800, poll: float = 2.0, who: str | None = None) -> dict | None:
+    """Block until a question arrives (for `who` on a hosted server, else anyone's) or timeout."""
     end = time.time() + timeout
     study_dir().mkdir(parents=True, exist_ok=True)
     try:
         while time.time() < end:
-            _beat().write_text(_now(), encoding="utf-8")
-            todo = pending()
+            if who is None:
+                _beat().write_text(_now(), encoding="utf-8")
+            else:
+                _LAST_POLL[who] = time.time()
+            todo = pending(who)
             if todo:
                 return todo[0]
             time.sleep(poll)
         return None
     finally:
-        _beat().unlink(missing_ok=True)
+        if who is None:
+            _beat().unlink(missing_ok=True)
+        else:
+            _LAST_POLL[who] = time.time()

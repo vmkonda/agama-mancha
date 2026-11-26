@@ -871,7 +871,25 @@ def cmd_start(args) -> None:
 def cmd_serve(args) -> None:
     from .server import serve
 
-    serve(port=args.port, open_browser=not args.no_browser, page=args.open)
+    serve(port=args.port, open_browser=not args.no_browser, page=args.open, host=args.host, hosted=args.hosted)
+
+
+def cmd_member(args) -> None:
+    """Members of a hosted server: add (prints their token and sign-in link once), list, remove."""
+    from . import members
+
+    if args.action == "add":
+        if not args.name:
+            raise SystemExit('member add needs a name: amocr member add "Anna" --role proofreader')
+        tok = members.add(args.name, args.role)
+        print(f"{args.name} ({args.role}) added. Their token, shown only now (it is stored only as a hash):\n  {tok}")
+        print(f"Sign-in link (replace HOST with the server's address):\n  http://HOST:{args.port}/login?token={tok}")
+        print("A listener on their machine uses the same token: AGAMA_SERVER=http://HOST:PORT AGAMA_TOKEN=<token>")
+    elif args.action == "remove":
+        print("removed" if members.remove(args.name or "") else f"no member {args.name!r}")
+    else:
+        for name, m in sorted(members.load()["members"].items()):
+            print(f"  {name:24} {m['role']:12} added {m['added'][:10]}")
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -933,6 +951,8 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--open", help="start at a page")
     p = plain_cmd("serve", cmd_serve, "side-by-side viewer at http://127.0.0.1:8791")
     p.add_argument("--port", type=int, default=8791)
+    p.add_argument("--host", default="127.0.0.1", help="address to listen on; anything beyond this machine needs --hosted")
+    p.add_argument("--hosted", action="store_true", help="members only: every request needs a member's token")
     p.add_argument("--no-browser", action="store_true")
     p.add_argument("--open", help="start at a page, e.g. B-1a2b3c4d5e/231")
 
@@ -1011,6 +1031,11 @@ def main(argv: list[str] | None = None) -> None:
     book_cmd("render", cmd_render, pages=True)
     book_cmd("checksum", cmd_checksum)
     plain_cmd("duplicates", cmd_duplicates, "books on this machine twice (same PDF, two ids)")
+    p = plain_cmd("member", cmd_member, "members of a hosted server: add, list, remove")
+    p.add_argument("action", choices=["add", "list", "remove"])
+    p.add_argument("name", nargs="?")
+    p.add_argument("--role", default="proofreader", choices=["reader", "proofreader", "validator", "coordinator", "admin"])
+    p.add_argument("--port", type=int, default=8770, help="for the sign-in link it prints")
     p = plain_cmd("merge", cmd_merge, "merge a duplicate book into another: copy what's missing, then move it to data/trash")
     p.add_argument("dup", help="the book id to merge away")
     p.add_argument("keep", help="the book id to keep")

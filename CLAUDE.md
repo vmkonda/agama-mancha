@@ -63,6 +63,11 @@ When a person is proofreading in the viewer and asks for help:
 
 ## Studying with the librarian (the reader's study chat)
 
+When asked to "listen to the study chat on the hosted server": the same, with `AGAMA_SERVER` and
+`AGAMA_TOKEN` set (the person's own token; never ask for it in the chat, they set it in the
+environment): `librarian study wait`, `get`, `search` and `reply` then talk to that server, and you
+answer only that person's questions with their own Claude (docs/hosted-trial.md).
+
 When asked to "listen to the study chat": run `uv run librarian study wait` in the background; it
 exits with the person's question, the passage they are reading (with its commentary and
 neighbours) and the recent conversation. Answer with

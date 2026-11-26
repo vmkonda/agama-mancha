@@ -21,7 +21,7 @@ from pathlib import Path
 
 from amocr.catalog import data_dir
 
-OLLAMA = "http://127.0.0.1:11435"
+OLLAMA = __import__("os").environ.get("AMOCR_OLLAMA", "http://127.0.0.1:11435")   # Ollama's own default is 11434
 MODEL = "bge-m3"
 RRF_K = 60
 
