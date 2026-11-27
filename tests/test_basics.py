@@ -1490,3 +1490,81 @@ def test_helpers_offers_what_this_machine_can_run(monkeypatch, capsys):
     tags = {"models": []}                                 # the model isn't pulled: only OCR
     main(["helpers"])
     assert ran == ["ocr"] and "isn't in Ollama" in capsys.readouterr().out
+
+
+def test_help_requests(tmp_path, monkeypatch):
+    """Ask someone: a question about a line, for named people; they see it, answer on the line; the
+    person who asked sees the answer and closes it."""
+    import pytest
+
+    from amocr import help as hlp
+    from amocr.catalog import Work
+
+    monkeypatch.setenv("AMOCR_DATA", str(tmp_path))
+    w = Work(id="B-help", title="Mālinī", languages=["san"], sha256="0" * 64)
+    w.save()
+    works = {w.id: w}
+    with pytest.raises(ValueError, match="at least one other"):
+        hlp.ask(w, 5, 3, "ी or ो?", "Anna", ["Anna"])
+    with pytest.raises(ValueError, match="not members"):
+        hlp.ask(w, 5, 3, "ी or ो?", "Anna", ["Nobody"], members={"Anna", "Bala"})
+    q = hlp.ask(w, 5, 3, "ी or ो in the third word?", "Anna", ["Bala", "Chitra"], line="उसो तरह", members={"Anna", "Bala", "Chitra"})
+    assert [r["id"] for r in hlp.for_person(works, "Bala")["asked"]] == [q["id"]]
+    assert hlp.for_person(works, "Anna") == {"asked": [], "answered": []}
+
+    hlp.answer(w, q["id"], "Bala", "The print has ी; the type makes it look like ो.", "उसी तरह")
+    assert hlp.for_person(works, "Bala")["asked"] == []                 # answered: off Bala's list
+    assert [r["id"] for r in hlp.for_person(works, "Chitra")["asked"]] == [q["id"]]   # Chitra hasn't answered
+    assert hlp.for_person(works, "Anna")["answered"][0]["answers"] == 1  # Anna is told
+    hlp.seen(w, q["id"], "Anna")
+    assert hlp.for_person(works, "Anna")["answered"] == []
+    assert hlp.on_page(w, 5)[0]["answers"][0]["reading"] == "उसी तरह"
+
+    with pytest.raises(PermissionError):
+        hlp.close(w, q["id"], "Bala")                                    # only the person who asked
+    hlp.close(w, q["id"], "Anna")
+    assert hlp.on_page(w, 5) == [] and hlp.for_person(works, "Chitra")["asked"] == []
+
+
+def test_help_requests_over_http(tmp_path, monkeypatch):
+    """The same through a hosted server, as two members."""
+    import json
+    import socket
+    import threading
+    import urllib.request
+    from http.server import ThreadingHTTPServer
+
+    from amocr import members, server
+    from amocr.catalog import load_works
+
+    monkeypatch.setenv("AMOCR_DATA", str(tmp_path))
+    w = _queue_book(tmp_path)
+    members.add("Anna", "proofreader"); members.add("Bala", "validator")
+    tok = {n: members.issue_token(n) for n in ("Anna", "Bala")}
+    server.Handler.hosted, server.Handler.works = True, load_works()
+    with socket.socket() as s_:
+        s_.bind(("127.0.0.1", 0)); port = s_.getsockname()[1]
+    httpd = ThreadingHTTPServer(("127.0.0.1", port), server.Handler)
+    threading.Thread(target=httpd.serve_forever, daemon=True).start()
+
+    def call(who, path, body=None):
+        req = urllib.request.Request(f"http://127.0.0.1:{port}{path}", None if body is None else json.dumps(body).encode(),
+                                     {"Authorization": f"Bearer {tok[who]}", "Content-Type": "application/json"})
+        try:
+            return json.load(urllib.request.urlopen(req, timeout=10))
+        except urllib.error.HTTPError as e:
+            return {"status": e.code, **json.load(e)}
+    try:
+        assert call("Anna", "/api/members/names") == ["Anna", "Bala"]
+        q = call("Anna", f"/api/{w.id}/help", {"page": 1, "n": 2, "question": "Is this २ or र?", "to": ["Bala"], "line": "x"})
+        assert q["by"] == "Anna" and q["to"] == ["Bala"]
+        assert call("Bala", "/api/help/mine")["asked"][0]["question"] == "Is this २ or र?"
+        call("Bala", f"/api/{w.id}/help/{q['id']}/answer", {"text": "र, a letter", "reading": "x र"})
+        assert call("Anna", "/api/help/mine")["answered"][0]["id"] == q["id"]
+        assert call("Bala", f"/api/{w.id}/help/{q['id']}/close", {})["status"] == 403
+        assert call("Anna", f"/api/{w.id}/help?page=1")[0]["answers"][0]["by"] == "Bala"
+        call("Anna", f"/api/{w.id}/help/{q['id']}/close", {})
+        assert call("Anna", f"/api/{w.id}/help?page=1") == []
+    finally:
+        httpd.shutdown()
+        server.Handler.hosted = False

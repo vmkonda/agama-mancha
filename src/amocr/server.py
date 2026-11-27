@@ -448,6 +448,12 @@ class Handler(BaseHTTPRequestHandler):
             if parts == ["api", "me"]:
                 m = self._member
                 return self._json({"hosted": self.hosted, "name": m[0] if m else None, "role": m[1] if m else None})
+            if parts == ["api", "help", "mine"]:          # the title band: asked of me, answers to my questions
+                from . import help as hlp
+
+                return self._json(hlp.for_person(self.works, members.who()))
+            if parts == ["api", "members", "names"]:      # whom a question can go to
+                return self._json(sorted(members.load()["members"]) if self.hosted else [])
             if parts == ["proofread"]:
                 return self._send(files("amocr").joinpath("viewer.html").read_bytes(), "text/html; charset=utf-8")
             if parts == ["library"]:
@@ -519,6 +525,11 @@ class Handler(BaseHTTPRequestHandler):
                 data, n = pat.load(work), pat.counts(work)
                 return self._json({"rules": [r | {"pending": n.get(r["id"], 0)} for r in data["rules"]],
                                    "decided": len(data["decisions"])})
+            if parts[0] == "api" and len(parts) == 3 and parts[2] == "help":      # questions on a page, for Proofread
+                from . import help as hlp
+
+                work, _ = self._work_page(parts[1:2])
+                return self._json(hlp.on_page(work, int(parse_qs(url.query).get("page", ["0"])[0] or 0)))
             if parts[0] == "api" and len(parts) == 3 and parts[2] == "suggestions":
                 from . import patterns as pat
 
@@ -673,6 +684,22 @@ class Handler(BaseHTTPRequestHandler):
 
             return self._json(chat.apply(work, str(body.get("msg", "")), int(body.get("index", -1)),
                                          who=members.who() if Handler.hosted else None))
+        if parts[2] == "help":
+            from . import help as hlp
+
+            who = members.who()
+            if len(parts) == 3:                          # ask: {page, n, question, to: [names], line}
+                known = set(members.load()["members"]) if Handler.hosted else None
+                return self._json(hlp.ask(work, int(body.get("page") or 0), int(body.get("n") or 0), str(body.get("question", "")),
+                                          who, list(body.get("to") or []), str(body.get("line", "")), known))
+            if len(parts) == 5 and parts[4] == "answer":
+                return self._json(hlp.answer(work, parts[3], who, str(body.get("text", "")), str(body.get("reading", ""))))
+            if len(parts) == 5 and parts[4] == "close":
+                return self._json(hlp.close(work, parts[3], who))
+            if len(parts) == 5 and parts[4] == "seen":
+                hlp.seen(work, parts[3], who)
+                return self._json({"ok": True})
+            raise LookupError("not found")
         if parts[2:] == ["suggestions", "decide"]:
             items = body.get("items") or []
             if not isinstance(items, list) or not items or len(items) > 500:
@@ -764,11 +791,13 @@ class Handler(BaseHTTPRequestHandler):
                 return self._err(str(e), HTTPStatus.NOT_FOUND)
             except (ValueError, json.JSONDecodeError) as e:
                 return self._err(str(e))
-        if len(parts) >= 3 and parts[0] == "api" and parts[2] in ("patterns", "suggestions", "chat", "structure"):
+        if len(parts) >= 3 and parts[0] == "api" and parts[2] in ("patterns", "suggestions", "chat", "structure", "help"):
             try:
                 return self._post_patterns(parts)
             except LookupError as e:
                 return self._err(str(e), HTTPStatus.NOT_FOUND)
+            except PermissionError as e:
+                return self._err(str(e), HTTPStatus.FORBIDDEN)
             except (ValueError, KeyError, TypeError, json.JSONDecodeError) as e:
                 return self._err(str(e))
         # Otherwise only writes ground truth for a known work and page: POST /api/<work>/<page>/groundtruth

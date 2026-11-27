@@ -131,6 +131,14 @@ i.wn { position: absolute; top: -6px; right: -6px; min-width: 15px; height: 15px
 #hl .fixw { box-shadow: inset 0 -3px 0 color-mix(in srgb, var(--fix) 75%, transparent); }
 #gut .fx { float: right; margin: 7px 3px 0 0; line-height: 14px; font-size: 10px; font-weight: 600; padding: 0 3px; border-radius: 7px; color: #fff; background: var(--fix); }
 .pfix { margin: 6px 0; font-size: 13px; }
+/* Questions to people about lines (Ask someone): a mark beside the tag, the questions under the page bar. */
+#gut .hq { float: right; margin: 7px 3px 0 0; line-height: 14px; min-width: 14px; text-align: center; font-size: 10px; font-weight: 700; border-radius: 7px; color: #fff; background: var(--accent); }
+#gut .hq.ans { background: var(--fix); }
+.phelp { margin: 6px 0; font-size: 13px; }
+.phelp .hqbox { border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; margin: 4px 0; }
+.phelp .hqbox .ans { border-left: 3px solid var(--fix); padding-left: 8px; margin: 4px 0; }
+.phelp textarea, .phelp input[type=text] { width: 100%; box-sizing: border-box; margin: 4px 0; }
+.phelp .who label { margin-right: 10px; white-space: nowrap; }
 .pfix .fxrow { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 6px; padding: 2px 0; }
 .pfix .fxrow .go { background: none; border: 0; padding: 0; color: var(--text); cursor: pointer; }
 .pfix .fxrow .go:hover { text-decoration: underline; }
@@ -259,15 +267,29 @@ async function init() {
   // Plain names for proofreaders, validators and readers on a hosted server (no engine details).
   let me = {};
   try { me = await api("/api/me"); } catch {}
+  S.me = me;
   S.simple = !!me.hosted && ["proofreader", "validator", "reader"].includes(me.role);
   document.body.classList.toggle("simple", S.simple);
   $("work").innerHTML = works.map((w) => `<option value="${esc(w.id)}" title="${esc(w.id)}">${esc(S.simple ? w.title : w.id + " · " + w.title)}</option>`).join("");
   const [hw, hp, hbox] = location.hash.slice(1).split("/");
   // A citation link can name lines to outline on the scan: #book/page/box=x0,y0,x1,y1
   if (hbox && hbox.startsWith("box=")) { const b = hbox.slice(4).split(",").map(Number); if (b.length === 4 && b.every((x) => !isNaN(x))) S.hintBox = b; }
+  // A question about a line (the title band's help list) opens it in Proofread: #book/page/line=N
+  if (hbox && hbox.startsWith("line=")) S.hintLine = +hbox.slice(5) || null;
   if (hw && works.some((w) => w.id === hw)) $("work").value = hw;
   await loadWork(hp ? +hp : null);
 }
+
+// The address changed while the viewer is open (a link from the title band's help list, say).
+window.addEventListener("hashchange", async () => {
+  const [hw, hp, hx] = location.hash.slice(1).split("/");
+  if (!hx || !hx.startsWith("line=")) return;          // our own page changes rewrite the address too
+  S.hintLine = +hx.slice(5) || null;
+  if (S.mode !== "edit") setMode("edit");
+  if (hw && hw !== S.work && [...$("work").options].some((o) => o.value === hw)) { $("work").value = hw; await loadWork(+hp); }
+  else if (+hp && +hp !== S.page) await loadPage(+hp);
+  else if (S.edit && S.hintLine) { S.edit.goLine(S.hintLine); S.hintLine = null; }
+});
 
 async function loadWork(page) {
   S.work = $("work").value;
@@ -515,7 +537,7 @@ function renderEdit() {
     ${restored ? `<div class="draftnote">Restored your unsaved edits from ${esc(new Date(draft.at).toLocaleString())}. <button id="discard">Discard them</button></div>` : ""}
     <div class="pal" id="pal">${PALETTE.map((c) => `<button class="deva" data-c="${c}" title="insert ${c}">${c}</button>`).join("")}</div>
     <div class="rom"><input id="rom" placeholder="romanised (IAST kṛṣṇa or Harvard-Kyoto kRSNa), Enter inserts" autocomplete="off" spellcheck="false"><span id="romout" class="deva"></span></div>
-    <div class="pagebar" id="pagebar"></div><div class="pwarn" id="pwarn"></div><div class="pfix" id="pfix"></div>
+    <div class="pagebar" id="pagebar"></div><div class="pwarn" id="pwarn"></div><div class="pfix" id="pfix"></div><div class="phelp" id="phelp"></div>
     <div class="ed withgut"><div id="gut" aria-hidden="true"></div><div id="hl" class="deva" aria-hidden="true"></div><textarea id="gt" class="deva" spellcheck="false" wrap="off"></textarea></div>
     <p class="sushint muted" id="sushint" role="status"></p>
     <p class="keys muted"><span class="ln low" style="padding:0 4px">yellow</span> Tesseract was unsure · <span class="ln" style="padding:0 4px;background:color-mix(in srgb, var(--sus) 30%, transparent)">orange</span> worth a second look (the number beside the tag: darker and higher, more likely misread) · <span style="box-shadow:inset 0 -3px 0 var(--fix);padding:0 2px">green</span> a suggested fix (Apply or Reject it below the page bar) · <kbd>F2</kbd> or <kbd>Alt ↓</kbd> next unsure or orange line, with <kbd>Shift</kbd> / <kbd>Alt ↑</kbd> previous · <kbd>⌘/Ctrl S</kbd> save · <kbd>⌘/Ctrl ↵</kbd> save and next page · <kbd>⌘/Ctrl K</kbd> Claude checks the line(s) · <kbd>⌘/Ctrl ⇧ ↵</kbd> apply Claude's latest fix · edits are kept in this browser until saved</p>
@@ -529,7 +551,7 @@ function renderEdit() {
       <label class="st-problem"><input type="radio" name="st" value="problem"> <b>Problem</b> <span>needs an expert, or the print is damaged</span></label>
       <label class="st-blank"><input type="radio" name="st" value="blank"> <b>No text</b> <span>blank page or plate</span></label>
     </fieldset>
-    <div style="display:flex;gap:8px;margin-top:8px;align-items:center"><button id="save">Save</button><button id="savenext">Save and next ▶</button><button id="checkline" title="Claude checks the selected line(s) against the print and proposes fixes (⌘/Ctrl K)">Check with Claude</button><span id="saved" class="muted">${esc(S.flash || "")}</span></div>
+    <div style="display:flex;gap:8px;margin-top:8px;align-items:center"><button id="save">Save</button><button id="savenext">Save and next ▶</button><button id="checkline" title="Claude checks the selected line(s) against the print and proposes fixes (⌘/Ctrl K)">Check with Claude</button><button id="asksomeone" title="Ask a person about the selected line(s): they see it in the title band and answer on the line">Ask someone</button><span id="saved" class="muted">${esc(S.flash || "")}</span></div>
     ${rv.saved ? `<p class="muted" style="font-size:13px">Last saved by ${esc(rv.reviewer || "unknown")} on ${esc(rv.saved.slice(0, 10))}${rv.note ? " · note: " + esc(rv.note) : ""}</p>` : ""}
     ${res.groundtruth ? `<details class="hist" id="hist"><summary>History and changes since the OCR</summary><div id="histbody" class="muted">Loading…</div></details>` : ""}`;
   S.flash = "";
@@ -568,8 +590,8 @@ function renderEdit() {
       if (r.k == null) return "<div></div>";
       const t = ST.lines[r.k];
       const su = susAt(r.k + 1);
-      const fx = fixesAt(r.k + 1);
-      return `<div class="t-${esc(t ? t.type : "")}${warnAt.has(r.k + 1) ? " warn" : ""}" title="${esc(TAG(t))}${su ? " · worth a second look (" + su.score + "): " + esc(su.notes.join("; ")) : ""}${fx.length ? " · suggested: " + esc(fx.map((f) => f.from + " → " + f.to).join(", ")) : ""}">${su ? `<span class="sc ${susLevel(su)}">${su.score}</span>` : ""}${fx.length ? `<span class="fx">fix</span>` : ""}${esc(TAG(t))}</div>`;
+      const fx = fixesAt(r.k + 1), hq = helpAt(r.k + 1);
+      return `<div class="t-${esc(t ? t.type : "")}${warnAt.has(r.k + 1) ? " warn" : ""}" title="${esc(TAG(t))}${su ? " · worth a second look (" + su.score + "): " + esc(su.notes.join("; ")) : ""}${fx.length ? " · suggested: " + esc(fx.map((f) => f.from + " → " + f.to).join(", ")) : ""}">${su ? `<span class="sc ${susLevel(su)}">${su.score}</span>` : ""}${fx.length ? `<span class="fx">fix</span>` : ""}${hq.length ? `<span class="hq${hq.some((q) => q.status === "answered") ? " ans" : ""}" title="${esc(hq.map((q) => q.by + ": " + q.question).join("\n"))}">${hq.some((q) => q.status === "answered") ? "✓" : "?"}</span>` : ""}${esc(TAG(t))}</div>`;
     }).join("");
     sync();
     const span = (a) => a.length ? (a.length === 1 ? a[0] : `${a[0].split("-")[0]}–${a[a.length - 1].split("-").pop()}`) : "none";
@@ -591,6 +613,83 @@ function renderEdit() {
       ta.scrollTop = Math.max(0, i * parseFloat(getComputedStyle(ta).lineHeight) - ta.clientHeight / 3);
       paint();
     });
+  }
+  let HELP = [];
+  const helpAt = (n) => HELP.filter((q) => q.n === n);
+  async function loadHelp() {
+    try { HELP = await api(`/api/${encodeURIComponent(S.work)}/help?page=${S.page}`); } catch { HELP = []; }
+    drawHelp(); drawStructure(); paint(false);
+  }
+  const post = (u, body) => api(u, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const me = (S.me && S.me.name) || "";
+  function drawHelp(form) {
+    const box = $("phelp");
+    if (!HELP.length && !form) { box.innerHTML = ""; return; }
+    let h = HELP.length ? `<div><b>${HELP.length} question${HELP.length === 1 ? "" : "s"} to people on this page</b></div>` : "";
+    h += HELP.map((q) => {
+      const mine = q.by === me, askedMe = q.to.includes(me);
+      const now = (rows().find((r) => r.k === q.n - 1) || {}).t;
+      return `<div class="hqbox" data-q="${esc(q.id)}">
+        <button class="go deva" data-go="${q.n}" style="background:none;border:0;padding:0;color:inherit;cursor:pointer"><b>line ${q.n}</b></button>
+        · <b>${esc(q.by)}</b> asked ${esc(q.to.join(", "))} · ${esc(q.at.slice(0, 10))}
+        <div class="deva">${esc(q.question)}</div>
+        ${now !== undefined && q.line && now !== q.line ? `<div class="muted">the line has changed since: it was <span class="deva">${esc(q.line)}</span></div>` : ""}
+        ${q.answers.map((a, i) => `<div class="ans"><b>${esc(a.by)}</b>: <span class="deva">${esc(a.text)}</span>
+          ${a.reading ? `<div class="deva">reads: ${esc(a.reading)} <button data-apply="${esc(q.id)}:${i}" title="Put this reading in the text (then check and save)">Apply</button></div>` : ""}</div>`).join("")}
+        <div>${askedMe || !mine ? `<button data-ans="${esc(q.id)}">Answer</button>` : ""}${mine ? ` <button data-close="${esc(q.id)}" title="Settled: take it off the list">Close</button>` : ""}</div>
+      </div>`;
+    }).join("");
+    if (form) h += form;
+    box.innerHTML = h;
+    box.querySelectorAll("button[data-go]").forEach((b) => (b.onclick = () => goLine(+b.dataset.go)));
+    box.querySelectorAll("button[data-close]").forEach((b) => (b.onclick = () => helpAct(() => post(`/api/${S.work}/help/${b.dataset.close}/close`, {}))));
+    box.querySelectorAll("button[data-apply]").forEach((b) => (b.onclick = () => {
+      const [id, i] = b.dataset.apply.split(":"), q = HELP.find((x) => x.id === id), a = q && q.answers[+i];
+      const rs = rows(), at = rs.findIndex((r) => r.k === q.n - 1);
+      if (!a || at < 0) return;
+      const lines = ta.value.split("\n"); lines[at] = a.reading; ta.value = lines.join("\n"); onInput();
+      $("saved").textContent = `Line ${q.n} now reads as ${a.by} suggested: check it against the scan, then save.`;
+    }));
+    box.querySelectorAll("button[data-ans]").forEach((b) => (b.onclick = () => {
+      const q = HELP.find((x) => x.id === b.dataset.ans), cur = (rows().find((r) => r.k === q.n - 1) || {}).t || "";
+      const el = b.closest(".hqbox");
+      el.insertAdjacentHTML("beforeend", `<div class="ansform"><textarea rows="2" placeholder="Your answer: what the print has, and why"></textarea>
+        <input type="text" class="deva" value="${esc(cur)}" title="Optional: the whole line as you read it (the person who asked can apply it)">
+        <button data-send="1">Send answer</button> <button data-cancel="1">Cancel</button></div>`);
+      b.disabled = true;
+      const f = el.querySelector(".ansform");
+      f.querySelector("[data-cancel]").onclick = () => { f.remove(); b.disabled = false; };
+      f.querySelector("[data-send]").onclick = () => helpAct(() => post(`/api/${S.work}/help/${q.id}/answer`, {
+        text: f.querySelector("textarea").value, reading: f.querySelector("input").value.trim() === cur.trim() ? "" : f.querySelector("input").value }));
+    }));
+    // The person who asked has now seen the answers on this page.
+    for (const q of HELP) if (q.by === me && q.status === "answered") post(`/api/${S.work}/help/${q.id}/seen`, {}).then(() => window.amHelpRefresh && window.amHelpRefresh()).catch(() => {});
+  }
+  async function helpAct(fn) {
+    try { await fn(); await loadHelp(); window.amHelpRefresh && window.amHelpRefresh(); }
+    catch (e) { $("saved").textContent = "Not done: " + e.message; }
+  }
+  async function askSomeone() {
+    const r = selectedLines();
+    if (!r) { $("saved").textContent = "Put the cursor on a line of text (or select several) first."; return; }
+    let names = [];
+    try { names = (await api("/api/members/names")).filter((n) => n !== me); } catch {}
+    if (!names.length) { $("saved").textContent = "Asking someone works on the team's server, where there are other members to ask."; return; }
+    const lines = r[0] === r[1] ? `line ${r[0]}` : `lines ${r[0]}–${r[1]}`;
+    drawHelp(`<div class="hqbox"><b>Ask about ${lines}</b> · they'll see it in the title band
+      <div class="who">${names.map((n) => `<label><input type="checkbox" value="${esc(n)}"> ${esc(n)}</label>`).join("")}</div>
+      <textarea rows="2" class="deva" placeholder="Your question, e.g. ी or ो in the third word?"></textarea>
+      <button data-askgo="1">Ask</button> <button data-askno="1">Cancel</button></div>`);
+    const box = $("phelp");
+    box.querySelector("[data-askno]").onclick = () => drawHelp();
+    box.querySelector("[data-askgo]").onclick = () => {
+      const to = [...box.querySelectorAll(".who input:checked")].map((x) => x.value);
+      const text = box.querySelector("textarea[placeholder^='Your question']").value;
+      const at = rows().find((x) => x.k === r[0] - 1);
+      if (!to.length) { $("saved").textContent = "Tick at least one person to ask."; return; }
+      helpAct(() => post(`/api/${S.work}/help`, { page: S.page, n: r[0], question: r[0] === r[1] ? text : `(lines ${r[0]}–${r[1]}) ${text}`, to, line: at ? at.t : "" }));
+      $("saved").textContent = `Asked ${to.join(", ")} about ${lines}.`;
+    };
   }
   function drawFixes() {
     const fx = (ST && ST.fixes) || [];
@@ -749,8 +848,11 @@ function renderEdit() {
     } catch (e) { $("saved").textContent = "Not sent: " + e.message; }
   }
   $("checkline").onclick = check;
-  S.edit = { save, jump, curN, dirty, saveQuiet, check, lines: selectedLines };
+  $("asksomeone").onclick = askSomeone;
+  S.edit = { save, jump, curN, dirty, saveQuiet, check, lines: selectedLines, goLine };
   paint(false);
+  loadHelp();
+  if (S.hintLine) { const n = S.hintLine; S.hintLine = null; setTimeout(() => goLine(n), 0); }
 }
 
 document.addEventListener("keydown", (e) => {

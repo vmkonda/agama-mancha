@@ -30,6 +30,7 @@ src/amocr/
   history.py         every save of a page's text (groundtruth/pNNNN.history.jsonl)
   members.py         hosted members: passwords (scrypt), invites, sessions, listener tokens
   presence.py        who has which page open (hosted), so two people don't proofread one page
+  help.py            Ask someone: questions about a line for named members, answered on the line
   ocrqueue.py        hosted OCR queue: pages leased to workers, readings saved back, progress and time left
   worker.py          `amocr worker` (and `amocr helpers`): a member's machine reading queued pages
   languages.py       a book's languages: the Tesseract models every reading of it uses

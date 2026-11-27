@@ -102,7 +102,7 @@ relearned from one book to the next. From top to bottom:
    commentary that closes on it.
 4. **Warnings**, if any: verse numbers the assembler can't use. Each jumps to its line.
 5. **The text**, with a **tag beside every line** and the scan beside it.
-6. The note, **Save as** (the page's status), **Save**, **Save and next**, **Check with Claude**.
+6. The note, **Save as** (the page's status), **Save**, **Save and next**, **Check with Claude**, **Ask someone**.
 
 The tags are always one of: `header` (with `ch N` on a chapter heading),
 `verse` (with its number on the last line), `comm.` (with `→ N`, the verse it
@@ -110,7 +110,10 @@ explains, on its last line), `footnote N`, `colophon`, `signature`. The
 highlights are always: the current line (a bar at the left), yellow for an
 unsure line, orange for a line worth a second look (darker for a higher score,
 with the score beside its tag and the suspect words underlined), an outlined box
-for a footnote marker, and a yellow tag for a line with a warning.
+for a footnote marker, a yellow tag for a line with a warning, a green *fix* mark
+(and the word underlined in green) for a suggested fix, and **?** or **✓** for a
+question to a person, waiting or answered. Under the page bar: the warnings, the
+page's suggested fixes, and its questions to people.
 
 What a book brings is only data that fills these same places: its brief and
 glossary, its look-alike profile, and the rules learned from corrections.
@@ -229,6 +232,26 @@ the same fix on every other page where it applies, as you open it:
 
 Fixes that could do harm start switched off, such as a short word that is usually
 right as read, or a fix inside words, and are never suggested.
+
+## Asking a person about a line
+
+When you're unsure of a line and want someone's eyes on it (a scholar, the validator, a colleague who
+knows the text), ask them, on the line:
+
+1. Put the cursor on the line (or select several) and press **Ask someone**, next to *Check with
+   Claude*. Tick the people to ask, write the question ("ी or ो in the third word?") and press **Ask**.
+   You can save the page and carry on; the question stays on the line.
+2. **They're told** in the title band, on every page of the app: *Asked for help: 1*. Clicking it lists
+   the questions; each opens the page in Proofread with the cursor on the line.
+3. **They answer on the line**: what the print has and why, and, if they like, the whole line as they
+   read it. An answer never changes the text.
+4. **You're told** in the same place: *Answers: 1*. On the page, each answer is under its question;
+   **Apply** puts a suggested reading in the text (then check it against the scan and save). Press
+   **Close** when it's settled.
+
+Lines with a question have a mark beside their tag: **?** waiting, **✓** answered. Asking works on the
+team's server, where there are other members to ask; there is no email yet, so people see questions
+when they open the app.
 
 ## Working with Claude while you proofread
 
