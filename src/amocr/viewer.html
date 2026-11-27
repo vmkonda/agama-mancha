@@ -82,6 +82,12 @@ sup.fn { color: var(--accent); font-weight: 700; font-size: .72em; line-height: 
 #gut .t-footnote { font-style: italic; }
 #gut .t-colophon { color: var(--accent); font-style: italic; }
 #gut .warn { background: var(--low); color: var(--low-text); border-radius: 3px; }
+/* The note, Save as and the buttons stay in view at the bottom of the text pane while the text scrolls. */
+.actbar { position: sticky; bottom: -40px;   /* the pane's bottom padding: flush with its edge */ z-index: 3; background: var(--panel); border-top: 1px solid var(--line);
+  margin: 10px -20px 0; padding: 8px 20px 10px; box-shadow: 0 -6px 12px -8px rgba(0,0,0,.25); }
+.actbar .ladder { margin-top: 0; padding: 2px 8px 4px; gap: 2px 12px; align-items: baseline; }
+.actbar .ladder label > span { display: none; }   /* explained on hover, and the chosen one below */
+.actbar .stwhy { flex-basis: 100%; font-size: 12px; }
 .ladder { border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px 8px; margin: 8px 0 0; display: flex; flex-wrap: wrap; gap: 4px 16px; }
 .ladder legend { font-size: 12px; color: var(--muted); padding: 0 4px; }
 .ladder label { font-size: 13px; display: flex; align-items: baseline; gap: 5px; }
@@ -541,17 +547,17 @@ function renderEdit() {
     <div class="ed withgut"><div id="gut" aria-hidden="true"></div><div id="hl" class="deva" aria-hidden="true"></div><textarea id="gt" class="deva" spellcheck="false" wrap="off"></textarea></div>
     <p class="sushint muted" id="sushint" role="status"></p>
     <p class="keys muted"><span class="ln low" style="padding:0 4px">yellow</span> Tesseract was unsure · <span class="ln" style="padding:0 4px;background:color-mix(in srgb, var(--sus) 30%, transparent)">orange</span> worth a second look (the number beside the tag: darker and higher, more likely misread) · <span style="box-shadow:inset 0 -3px 0 var(--fix);padding:0 2px">green</span> a suggested fix (Apply or Reject it below the page bar) · <kbd>F2</kbd> or <kbd>Alt ↓</kbd> next unsure or orange line, with <kbd>Shift</kbd> / <kbd>Alt ↑</kbd> previous · <kbd>⌘/Ctrl S</kbd> save · <kbd>⌘/Ctrl ↵</kbd> save and next page · <kbd>⌘/Ctrl K</kbd> Claude checks the line(s) · <kbd>⌘/Ctrl ⇧ ↵</kbd> apply Claude's latest fix · edits are kept in this browser until saved</p>
-    <div style="display:flex;flex-wrap:wrap;gap:8px 14px;margin-top:8px;align-items:center">
-      <input id="note" placeholder="note for the next reviewer (a problem page must say what)" style="flex:1;min-width:200px">
-    </div>
+    <div class="actbar" id="actbar">
     <fieldset class="ladder" id="ladder"><legend>Save as</legend>
-      <label class="st-draft"><input type="radio" name="st" value="draft"> <b>Draft</b> <span>not every line checked yet</span></label>
-      <label class="st-proofread"><input type="radio" name="st" value="proofread"> <b>Proofread</b> <span>I checked every line against the print</span></label>
-      <label class="st-validated" title="${esc(L.why_not || "")}"><input type="radio" name="st" value="validated" ${L.can_validate ? "" : "disabled"}> <b>Validated</b> <span>${L.can_validate ? "I checked every line again, after someone else proofread it" : esc(L.why_not)}</span></label>
-      <label class="st-problem"><input type="radio" name="st" value="problem"> <b>Problem</b> <span>needs an expert, or the print is damaged</span></label>
-      <label class="st-blank"><input type="radio" name="st" value="blank"> <b>No text</b> <span>blank page or plate</span></label>
+      <label class="st-draft" title="not every line checked yet"><input type="radio" name="st" value="draft"> <b>Draft</b> <span>not every line checked yet</span></label>
+      <label class="st-proofread" title="I checked every line against the print"><input type="radio" name="st" value="proofread"> <b>Proofread</b> <span>I checked every line against the print</span></label>
+      <label class="st-validated" title="${esc(L.can_validate ? "I checked every line again, after someone else proofread it" : L.why_not || "")}"><input type="radio" name="st" value="validated" ${L.can_validate ? "" : "disabled"}> <b>Validated</b> <span>${L.can_validate ? "I checked every line again, after someone else proofread it" : esc(L.why_not)}</span></label>
+      <label class="st-problem" title="needs an expert, or the print is damaged"><input type="radio" name="st" value="problem"> <b>Problem</b> <span>needs an expert, or the print is damaged</span></label>
+      <label class="st-blank" title="blank page or plate"><input type="radio" name="st" value="blank"> <b>No text</b> <span>blank page or plate</span></label>
+      <span class="stwhy muted" id="stwhy"></span>
     </fieldset>
-    <div style="display:flex;gap:8px;margin-top:8px;align-items:center"><button id="save">Save</button><button id="savenext">Save and next ▶</button><button id="checkline" title="Claude checks the selected line(s) against the print and proposes fixes (⌘/Ctrl K)">Check with Claude</button><button id="asksomeone" title="Ask a person about the selected line(s): they see it in the title band and answer on the line">Ask someone</button><span id="saved" class="muted">${esc(S.flash || "")}</span></div>
+    <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:6px;align-items:center"><input id="note" placeholder="note for the next reviewer (a problem page must say what)" style="flex:1;min-width:180px"><button id="save">Save</button><button id="savenext">Save and next ▶</button><button id="checkline" title="Claude checks the selected line(s) against the print and proposes fixes (⌘/Ctrl K)">Check with Claude</button><button id="asksomeone" title="Ask a person about the selected line(s): they see it in the title band and answer on the line">Ask someone</button><span id="saved" class="muted">${esc(S.flash || "")}</span></div>
+    </div>
     ${rv.saved ? `<p class="muted" style="font-size:13px">Last saved by ${esc(rv.reviewer || "unknown")} on ${esc(rv.saved.slice(0, 10))}${rv.note ? " · note: " + esc(rv.note) : ""}</p>` : ""}
     ${res.groundtruth ? `<details class="hist" id="hist"><summary>History and changes since the OCR</summary><div id="histbody" class="muted">Loading…</div></details>` : ""}`;
   S.flash = "";
@@ -804,7 +810,10 @@ function renderEdit() {
   ta.addEventListener("click", () => paint());
   ta.addEventListener("scroll", sync);
   structure();
-  document.querySelectorAll("#ladder input").forEach((r) => (r.onchange = keepDraft));
+  // The chosen status, explained in words under the compact choices.
+  const why = () => { const r = document.querySelector("#ladder input:checked"); $("stwhy").textContent = r ? r.closest("label").title : ""; };
+  document.querySelectorAll("#ladder input").forEach((r) => (r.onchange = () => { keepDraft(); why(); }));
+  why();
   if ($("hist")) $("hist").ontoggle = () => { if ($("hist").open) renderHistory(); };
   $("note").oninput = keepDraft;
   $("pal").addEventListener("mousedown", (e) => e.preventDefault()); // keep the cursor in the text

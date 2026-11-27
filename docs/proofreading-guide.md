@@ -102,7 +102,9 @@ relearned from one book to the next. From top to bottom:
    commentary that closes on it.
 4. **Warnings**, if any: verse numbers the assembler can't use. Each jumps to its line.
 5. **The text**, with a **tag beside every line** and the scan beside it.
-6. The note, **Save as** (the page's status), **Save**, **Save and next**, **Check with Claude**, **Ask someone**.
+6. **Save as** (the page's status; hover a status for what it means, and the chosen one is explained under
+   it), the note, **Save**, **Save and next**, **Check with Claude**, **Ask someone**. This bar stays at the
+   bottom of the text pane while you scroll, so you never have to scroll down to save.
 
 The tags are always one of: `header` (with `ch N` on a chapter heading),
 `verse` (with its number on the last line), `comm.` (with `→ N`, the verse it
