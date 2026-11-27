@@ -500,7 +500,7 @@ def cmd_suspects(work: Work, args) -> None:
                          note=f"{r['from']} {r['next']} → {r['to']} {r['next']}: '{r['to']} {r['next']}' {r['seen']}x in this book, "
                               f"'{r['from']} {r['next']}' {r['count']}x ({r['why']})")
             n_ctx += 1
-        print(f"added {len(added)} look-alike rules and {n_ctx} context rules to Suggestions")
+        print(f"added {len(added)} look-alike rules and {n_ctx} context rules as suggested fixes (shown on their pages in Proofread)")
 
 
 def cmd_brief(work: Work, args) -> None:
@@ -1272,7 +1272,7 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--min-score", type=int, default=2)
     p.add_argument("--limit", type=int, default=40)
     p.add_argument("--eval", action="store_true", help="measure against the lines already corrected")
-    p.add_argument("--add-rules", action="store_true", help="send confident look-alike fixes to Suggestions")
+    p.add_argument("--add-rules", action="store_true", help="add confident look-alike fixes as rules, suggested on their pages in Proofread")
     p = book_cmd("brief", cmd_brief, pages=True, help="the book's brief and glossary (or --sources to write them)")
     p.add_argument("--sources", action="store_true", help="collect structure, frequent words and the given pages' text")
     p = book_cmd("assemble", cmd_assemble, pages=True,

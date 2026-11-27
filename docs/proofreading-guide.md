@@ -116,9 +116,10 @@ What a book brings is only data that fills these same places: its brief and
 glossary, its look-alike profile, and the rules learned from corrections.
 A book never gets its own layout, buttons or colours.
 
-With fewer tools (the start for proofreaders and validators), the page bar
-leaves out two notes for experts: which e-text the verses were checked
-against, and that the tags are guessed. Everything else is the same.
+For proofreaders, validators and readers on the hosted server, the page bar
+leaves out two notes meant for experts (which e-text the verses were checked
+against, and that the tags are guessed), and book and page names are plain.
+Everything else is the same for everyone.
 
 ### The status ladder: two pairs of eyes
 

@@ -82,7 +82,7 @@ Measured on the Mālinīvijayottara pilot, against the 42 lines corrected so far
 | score ≥ 3 (look-alike, verse number) | 9 of 42 | 18 of 219, half of them real errors |
 | score ≥ 2 (adds Tesseract disagreement) | 36 of 42 | 117 of 219 |
 
-So the confident look-alikes are good Suggestions (`--add-rules`), and score ≥ 2
+So the confident look-alikes make good suggested fixes (`--add-rules`; they show on their pages in Proofread), and score ≥ 2
 roughly halves the lines that need an image check while keeping most errors. It
 doesn't replace reading: the misses are single wrong letters that form valid
 words, and footnote markers. These numbers come from one book; measure again on

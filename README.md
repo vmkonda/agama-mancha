@@ -16,7 +16,13 @@ accurate, checkable text, page by page, assembled into citable units.
 - **Assembly** turns proofread pages into citable units (work/chapter/verse/layer), with
   commentary linked to its verses (`amocr assemble`).
 - **Checks that cost nothing:** suspect-line scores, rules learned from corrections, and
-  another edition's e-text (e.g. GRETIL) compared with every verse line (`amocr reference`).
+  another edition's e-text (e.g. GRETIL) compared with every verse line (`amocr reference`), all
+  shown on each page in Proofread.
+- **The Librarian** searches and reads the library in context, and answers study questions from it
+  with each reader's own Claude (docs/librarian.md).
+- **A hosted server** (members only) lets the team work from a browser: a trial at home today, moving
+  to a VPS deployed from `main` (docs/hosted-trial.md, docs/deploy-vps.md). Members' machines do the
+  OCR (`amocr helpers`) and answer their own questions with their own Claude (`amocr listen`).
 
 ## Which guide is for you
 
@@ -25,7 +31,9 @@ accurate, checkable text, page by page, assembled into citable units.
 | A volunteer who wants to OCR books (no programming needed) | [Volunteer guide](docs/volunteer-guide.md) |
 | A scholar or paṇḍita checking text against the print | [Proofreading guide](docs/proofreading-guide.md) |
 | Owner of the team's Proton Drive folders: setup, trust model, decisions | [Drive setup](docs/drive-setup.md) |
-| Coordinating the team: access, assigning books, restricted texts | [Coordinator guide](docs/coordinator-guide.md) |
+| Coordinating the team: access, assigning books, restricted texts, the hosted server | [Coordinator guide](docs/coordinator-guide.md) |
+| Running the hosted server: at home (trial), on the VPS | [Hosted trial](docs/hosted-trial.md), [VPS deployment](docs/deploy-vps.md) |
+| Reading and studying the library | [Librarian](docs/librarian.md) |
 | A developer working on the code | [Developer guide](docs/developer-guide.md) |
 | Choosing or installing an OCR engine (Tesseract, Surya, Claude), and their licences | [Engines](docs/engines.md) |
 | What the OCR produces for Agama Mancha, and where it goes on the drive | [Material folder](docs/material-folder.md) |
@@ -71,7 +79,8 @@ signal, not a result.
 
 - No book scans or text in git (`data/` is ignored); books live on Proton Drive.
 - Restricted texts (`--restricted`) never go to Claude.
-- The viewer listens on 127.0.0.1 only; over SSH use a tunnel.
+- On your own machine the viewer listens on 127.0.0.1 only (over SSH use a tunnel). A hosted server
+  (`--hosted`) serves members only, and on the VPS only behind HTTPS.
 - Transcribe what is printed. Variants stay in footnotes. Misprints stay, with a note.
 
 ## License
