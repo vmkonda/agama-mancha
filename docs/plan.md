@@ -144,10 +144,14 @@ The team's books are the master copies; external e-texts serve as references (th
 cross-check). To build: a *Release edition* step (validated build → TEI → pinned version), after
 Mālinī's first chapters are validated.
 
-## Proposed: a hosted version (design, not decided)
+## A hosted version (design 2026-11-25; partly built and decided 2026-11-26)
 
-*Written 2026-11-25 from a discussion with the owner. Nothing here is built yet; the open
-decisions at the end come first.*
+*Written 2026-11-25 from a discussion with the owner. **Status, 2026-11-26:** a members-only server
+runs at home on Windows (docs/hosted-trial.md) and is moving to a teammate's VPS, deployed from
+`main` by GitHub Actions (docs/deploy-vps.md). Built: sign-in and members, per-member Claude
+listeners (route 1), the OCR queue and workers, the shared local AI, sync with Proton, the deploy
+workflow. Not built: the gate (Cloudflare Access or Tailscale), a database, routes 2 and 3, backups
+beyond Proton. The sections below are the design; "As built" notes say where it went differently.*
 
 ### Goal
 
@@ -258,6 +262,13 @@ results arrive as they do now; the server hosts, searches and coordinates, so it
 | Watching it | an uptime check and the container logs; an alert to the coordinator if it goes down |
 | Cost | roughly €15–40 a month for the VPS; Cloudflare and Tailscale free at this size |
 
+**As built (2026-11-26), simpler than the table:** no containers, database or new web server yet.
+The app runs as a systemd user service with `uv`, on 127.0.0.1 behind the VPS's existing Caddy or
+nginx, which provides HTTPS; its data stays in files (`data/`), as on a member's machine; `amocr sync`
+keeps the books in step with Proton every 30 minutes; a merge to `main` runs the tests and then
+`scripts/linux/deploy.sh` over a deploy-only SSH key (docs/deploy-vps.md). The table remains the
+direction if the team or the load grows.
+
 **Getting the library onto it:** the e-texts and index are rebuilt there (`librarian ingest`,
 `build`); books' page readings and proofreading come from the material folder, synced from Proton
 (a member signs the Proton CLI in on the server once) or pushed by volunteers as today.
@@ -271,7 +282,7 @@ route 2 (per-person API keys); (H3) the connector for claude.ai and, if decided,
 | Work | Browser only | Needs a Claude route (listener or own key) | Needs a worker (below) |
 |---|---|---|---|
 | Library: catalog, claims, board, inventory | yes | | |
-| Proofreading: Proofread, ladder, page grid, history, Suggestions, structure warnings, GRETIL cross-check | yes | | |
+| Proofreading: Proofread (with each page's scores and suggested fixes), ladder, page grid, history, structure warnings, GRETIL cross-check | yes | | |
 | Validating another person's pages | yes | | |
 | Librarian: works, search, read in context with scans, import e-texts, evaluation review | yes | | |
 | Coordinating: members, stale claims, assembling a book | yes | | |
@@ -341,7 +352,11 @@ what to change; qwen3.8:27b on the Mac Studio returns the edited lines as propos
 exactly right, Hindi instructions included, nothing else touched; 2–8 s), shared by all members through
 `amocr fix-worker`; Claude never receives these requests.
 
-### What changes in the code (when it's decided)
+### What changes in the code
+
+*Status 2026-11-26: 3 and 8 are built (listeners long-poll the server; `amocr worker` and
+`amocr helpers`); 6 is built for books (`amocr sync`); members have passwords of our own until a gate
+exists (1). The rest is open.*
 
 1. Accounts and roles from the gate's verified identity (no passwords of our own); the operator
    name from the login; personal tokens; an audit log.
@@ -358,12 +373,15 @@ exactly right, Hindi instructions included, nothing else touched; 2–8 s), shar
 
 ### Open decisions
 
-1. **Where it runs** (a VPS, a Vimarsha machine) and who administers it.
+1. **Where it runs** (a VPS, a Vimarsha machine) and who administers it. *Decided 2026-11-26: a
+   teammate's VPS (it also hosts Bindu); they administer it; deploys from `main` by GitHub Actions.*
 2. **The gate:** Cloudflare Access or Tailscale; and who keeps the member list.
 3. **Who gets accounts** at first: the team only, or scholars too (and then, which works).
 4. **Which Claude routes** to offer at launch (1 and 3 cost Vimarsha nothing; 2 bills each person).
 5. **Proton's role**: remains the store of originals with the server syncing from it, or the
-   server becomes the store and Proton the backup.
+   server becomes the store and Proton the backup. *Decided 2026-11-26: Proton stays the store; the
+   server works on its own copy and syncs with the material folder (`amocr sync`). Members and tokens
+   never go to Proton.*
 6. **When**: after Mālinī is finished end to end, or alongside it.
 Decided (2026-11-26): **Claude listeners are personal**: a member's Claude answers only that
 member's questions, never shared. **Local AI may be shared**: a member can run a worker with local

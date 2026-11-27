@@ -13,10 +13,12 @@ src/amocr/
   engines/           OCR engines: tesseract.py (TSV → lines with confidence + bbox), surya.py
   claude_session.py  Claude as an engine inside Claude Code: packets, result.json schema, import
   claude_review.py   review and screen modes: numbered line sheets, apply corrections
-  patterns.py        rules learned from corrections; suggestions across the book
+  patterns.py        rules learned from corrections (on every save); fixes suggested on their pages in Proofread
   suspects.py        lines worth a second look, scored from the text alone
   brief.py           the book's brief and glossary
   chat.py            the viewer's chat panel, answered from a Claude Code session
+  fixer.py           Local AI: a local model (Ollama) makes the edits a proofreader describes
+  helper.py          the Claude helper a member downloads to answer their own panel questions
   assemble.py        page texts → units (work/chapter/verse/layer); the structure Proofread shows
   reference.py       another edition's e-text (GRETIL) compared with verse lines
   library.py         the catalog of every PDF in the library, with safe refresh
@@ -27,12 +29,19 @@ src/amocr/
   grid.py            the Pages view: every page's status, grouped by chapter, with warning counts
   history.py         every save of a page's text (groundtruth/pNNNN.history.jsonl)
   members.py         hosted members: passwords (scrypt), invites, sessions, listener tokens
-  ocrqueue.py        hosted OCR queue: pages leased to workers, readings saved back
-  worker.py          `amocr worker`: a member's machine reading queued pages with its own engines
+  presence.py        who has which page open (hosted), so two people don't proofread one page
+  ocrqueue.py        hosted OCR queue: pages leased to workers, readings saved back, progress and time left
+  worker.py          `amocr worker` (and `amocr helpers`): a member's machine reading queued pages
+  languages.py       a book's languages: the Tesseract models every reading of it uses
+  sync.py            `amocr sync`: a server's books in step with the material folder on Proton
   book.py            volunteer ops: add, fetch, export, merge results, push, pull
   proton.py          wrapper around the official proton-drive CLI
   metrics.py         normalisation + character error rate
-  server.py          local viewer API (127.0.0.1 only); viewer.html, library.html, theme.css
+  server.py          the app's API: local (127.0.0.1) or hosted (--hosted: members only); viewer.html, library.html, librarian.html, theme.css
+src/librarian/       the Librarian: works, index and search, read in context, study chat, evaluation (docs/librarian.md)
+scripts/windows/     the home server: serve, redeploy, sync, and their scheduled tasks (docs/hosted-trial.md)
+scripts/linux/       the VPS: deploy.sh, systemd units, Caddy/nginx examples (docs/deploy-vps.md)
+.github/workflows/   tests.yml (every push, three OSes); deploy.yml (merges to main → the VPS, once switched on)
 tests/               pytest; fake_proton.py stands in for the Proton CLI
 .claude/skills/      setup (new machine), ocr-book (volunteer flow), ocr-view (viewer, chat)
 CLAUDE.md            reading rules every Claude session follows

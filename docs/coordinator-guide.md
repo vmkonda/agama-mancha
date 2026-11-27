@@ -105,6 +105,31 @@ It is separate from the team's `[OCR Mirror]` PDFs (from ocrmypdf) and doesn't
 replace them. The planned layout, by work, for Agama Mancha is in
 [material-folder.md](material-folder.md).
 
+## The hosted server: a coordinator's jobs
+
+With the hosted server (at home for now, then the VPS: [hosted-trial.md](hosted-trial.md),
+[deploy-vps.md](deploy-vps.md)), most of the team works from a browser. These commands run **on the
+server**, in the `agama-mancha` folder:
+
+| Job | Command |
+|---|---|
+| Add someone (prints a one-time invite link to send them) | `uv run amocr member add "Name" --role proofreader` |
+| A new link for a forgotten password | `uv run amocr member invite "Name"` |
+| Who's there; remove someone (signs them out) | `uv run amocr member list` / `uv run amocr member remove "Name"` |
+| Check a book's languages before OCR (English? add `eng`) | `uv run amocr languages <book>` / `uv run amocr languages <book> san hin eng` |
+| Queue a book for OCR on members' machines | `uv run amocr queue <book> --engine tesseract`, then `--engine surya` |
+| See the queue and the workers online | `uv run amocr queue` (or the Library page) |
+| Bring the books in step with Proton now | `uv run amocr sync` (it also runs on a schedule) |
+
+Roles: **reader** (reads and studies), **proofreader**, **validator** (checks someone else's
+proofread pages), **coordinator** (also queues books for OCR), **admin** (everything). Over the
+network the server lets only a coordinator or admin queue books; the commands above run on the server
+itself, so whoever can sign in to that machine can run them.
+
+Members' passwords, sessions and tokens stay on the server (`data/hosted/`): never in Proton, GitHub
+or a chat. A member's machine that helps (OCR, the local AI, their own Claude) uses a listener token
+they keep in their own `~/.config/agama-mancha/hosted.env`.
+
 ## Quality: what to watch
 
 - **Proofread a sample.** Ask a scholar to fully verify about 10 pages of
